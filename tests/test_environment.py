@@ -58,5 +58,12 @@ def test_coolant_fluid_string_defined_in_assumptions_only() -> None:
     """
     from cdu_simul import fluid
 
-    assert fluid.coolant_density_kgm3.__defaults__[-1] == SCENARIO.coolant_coolprop_id
-    assert fluid.coolant_cp_Jkg_K.__defaults__[-1] == SCENARIO.coolant_coolprop_id
+    # `__defaults__` 의 타입은 `tuple[Any, ...] | None` 이라 그대로 첨자하면
+    # 타입검사에 걸린다. None 여부를 먼저 단언해 좁힌다 — 판정 내용은 그대로다.
+    density_defaults = fluid.coolant_density_kgm3.__defaults__
+    cp_defaults = fluid.coolant_cp_Jkg_K.__defaults__
+    assert density_defaults is not None
+    assert cp_defaults is not None
+
+    assert density_defaults[-1] == SCENARIO.coolant_coolprop_id
+    assert cp_defaults[-1] == SCENARIO.coolant_coolprop_id

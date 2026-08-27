@@ -64,18 +64,21 @@ class ScenarioConditions:
     cdu_design_margin_percent: float = 20.0
     cdu_rated_capacity_kW: float = 750.0
 
-    # 냉각액 PG25 (25wt% 프로필렌글리콜 수용액) [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
+    # 냉각액 PG25 (25wt% 프로필렌글리콜 수용액)
+    # [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
     coolant_label: str = "PG25 (25wt% 프로필렌글리콜 수용액)"
     #: CoolProp 유체 문자열 — **여기 한 곳에서만 정의한다** (collaboration.md ④).
     #: 다른 파일은 이 상수를 참조한다. fluid.py 는 이것을 import 해서 쓴다.
     coolant_coolprop_id: str = "INCOMP::MPG-25%"
 
-    # 1차측 공급/환수 온도 32℃ / 42℃ (ΔT 10℃) [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
+    # 1차측 공급/환수 온도 32℃ / 42℃ (ΔT 10℃)
+    # [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
     T_primary_supply_C: float = 32.0
     T_primary_return_C: float = 42.0
     dT_primary_C: float = 10.0  # 표에 명시된 값 (재계산하지 않는다)
 
-    # 2차측 공급온도(경계조건) 27~30℃ 고정 [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
+    # 2차측 공급온도(경계조건) 27~30℃ 고정
+    # [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
     # 절대 규칙 7: 2차측은 다중 CDU 확장 전까지 이 고정 경계조건만 쓴다.
     T_secondary_supply_C: Range = Range(27.0, 30.0, "degC")
 
@@ -95,7 +98,8 @@ class PumpAssumptions:
     # 정격양정 20~30 mAq [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
     rated_head_mAq: Range = Range(20.0, 30.0, "mAq")
 
-    # 특성곡선 형태 H = H0 - a*Q - b*Q**2 [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
+    # 특성곡선 형태 H = H0 - a*Q - b*Q**2
+    # [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
     # 계수 H0·a·b 는 5장 표에 없다 — 이 파일에 두지 않는다(#2 미해결).
     curve_form: str = "H = H0 - a*Q - b*Q**2"
 
