@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cdu-simul"
+version = "0.1.0"
+description = "AI/GPU 서버 D2C 액체냉각 CDU 물리모델 시뮬레이터 (파일럿 — 가정값 기반)"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "scipy",
+    "CoolProp",
+    "pandas",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
