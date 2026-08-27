@@ -72,7 +72,9 @@ feasibility(무너지지 않는가)만 본다. 정확도 검증은 파일럿 종
     않는다. **승인된 의존성은 아래가 전부이고, 이 목록 밖은 먼저 물어본다.**
     - 런타임: `numpy` · `scipy` · `CoolProp` · `pandas`
     - 개발: `pytest` · `ruff` · `mypy`   ← ruff·mypy는 세션 1-C에서 도입
-    - Python 3.11+ · 가상환경은 저장소 루트의 `.venv`
+    - Python 3.12+ · 가상환경은 저장소 루트의 `.venv`
+      (`pyproject.toml` 은 `>=3.12`. 실측 환경은 3.12.10 하나뿐이고 3.11·3.13 에서는
+      돌려보지 않았다 — 넓히려면 먼저 그 버전에서 전체 테스트를 돌린다)
     - matplotlib 등 시각화 라이브러리는 파일럿 단계에서 **승인되지 않았다**
       (`project-overview.md` 「시각화 방향」 — 본 프로젝트 이후).
 13. **지시 범위를 넘지 않는다.** 짧은 지시는 그 일만 한다. 하는 김에 고칠 것이
@@ -112,7 +114,7 @@ feasibility(무너지지 않는가)만 본다. 정확도 검증은 파일럿 종
 아래처럼 인터프리터 경로를 명시해 실행한다. 저장소 루트에서 실행하는 것을 전제한다.)*
 
 ```bash
-# 최초 1회 — 가상환경 생성 (Python 3.11+ 필요. 세션 1-A 실측 환경: 3.12.10)
+# 최초 1회 — 가상환경 생성 (Python 3.12+ 필요. 실측 환경: 3.12.10)
 python -m venv .venv
 
 # 의존성 설치 (런타임 numpy·scipy·CoolProp·pandas + 개발 pytest — 절대 규칙 12)
@@ -173,7 +175,7 @@ git pull
 
 ## 코드 스타일
 
-- Python 3.11+, 타입힌트 필수, `from __future__ import annotations`
+- Python 3.12+, 타입힌트 필수, `from __future__ import annotations`
 - dataclass는 `frozen=True` 기본. 가변 상태(`state`)가 필요한 클래스는 이유를 주석으로.
 - 함수명·변수명은 영문 snake_case. 주석·docstring은 한국어 허용.
 - 물성치 계산 함수는 순수 함수로 작성한다. 전역 상태를 읽거나 쓰지 않는다.
