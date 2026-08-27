@@ -31,6 +31,8 @@ feasibility(무너지지 않는가)만 본다. 정확도 검증은 파일럿 종
 1. **모든 파라미터에 출처를 표기한다.** 값을 코드에 넣을 때 `[가정값]` 또는
    `[설계값]` 태그와 근거를 주석 또는 assumptions 파일에 함께 남긴다. 출처 없는
    숫자를 도입하지 않는다 — 5장 표에 없는 값이 필요하면 먼저 사람에게 확인한다.
+   **사람이 확정해 준 값은 프로젝트정리 5장 「5-1. 파생 가정치」에 기록된다** —
+   코드는 그 소절에 있는 값만 쓴다. 소절에 없으면 아직 확정된 것이 아니다.
 2. **가정치는 한 곳에 모은다.** 5장의 시나리오 조건·구성요소 가정치는 코드 곳곳에
    흩어 적지 않고 별도 파일(예: `assumptions.py` 또는 `assumptions.yaml`)에서
    읽는다. 설계데이터로 교체할 때 그 파일 하나만 바꾸면 되게 만든다.
@@ -69,7 +71,7 @@ feasibility(무너지지 않는가)만 본다. 정확도 검증은 파일럿 종
 12. **파이썬 환경은 사용자 소유다.** 패키지 설치·삭제·업그레이드를 임의로 하지
     않는다. **승인된 의존성은 아래가 전부이고, 이 목록 밖은 먼저 물어본다.**
     - 런타임: `numpy` · `scipy` · `CoolProp` · `pandas`
-    - 개발: `pytest`
+    - 개발: `pytest` · `ruff` · `mypy`   ← ruff·mypy는 세션 1-C에서 도입
     - Python 3.11+ · 가상환경은 저장소 루트의 `.venv`
     - matplotlib 등 시각화 라이브러리는 파일럿 단계에서 **승인되지 않았다**
       (`project-overview.md` 「시각화 방향」 — 본 프로젝트 이후).
@@ -89,6 +91,7 @@ feasibility(무너지지 않는가)만 본다. 정확도 검증은 파일럿 종
 |---|---|---|
 | 1-A | 저장소 clone · 가상환경 · 저장소 골격 · 5장 가정치 전사(`assumptions.py`) · CoolProp 래퍼 · `PROCEED.md`·`daily_brief.py` 초기 구성 · 문서 4종 커밋 | **게이트 없음** — 물리 모델이 없다. 환경 스모크 테스트(import·Python 버전·CoolProp 물성 조회)만 돌리고, 이것을 feasibility 통과로 적지 않는다 |
 | 1-B | 단일 랙 + 단일 CDU, 2차측 고정온도, 정상상태 모델 | energy balance 오차 <0.1% |
+| 1-C | 저장소 위생 정비 (lint·타입검사 도입 · 미해결 위생항목 정리) | **게이트 없음** — 물리 모델을 건드리지 않는다. 기존 테스트가 전부 그대로 통과하는 것만 확인한다 |
 | 2 | 시간축 추가 (`solve_ivp`) | 부하 변화에 대한 T_return이 물리적으로 타당한 방향(상승)으로 반응 |
 | 3 | 랙 개수 확장 | 헤더 압력평형 기반 유량분배(`fsolve`) 수렴, 극단 케이스(부하 0/최대) 비발산 |
 | 4 | 누출 시나리오 주입 | 정상 대비 신호 패턴(온도상승·유량감소·펌프RPM변화) 식별 가능 |
@@ -117,9 +120,15 @@ python -m venv .venv
 
 # 테스트
 .venv/Scripts/python.exe -m pytest
-# 세션 1-A 현재 있는 것은 tests/test_environment.py (환경 스모크 — import ·
-# Python 버전 · CoolProp 물성 조회)뿐이다. feasibility 검증 테스트(6장 네 기준)는
-# 물리 모델이 생기는 세션 1-B부터 추가된다.
+# tests/test_environment.py  환경 스모크(세션 1-A) — feasibility 판정이 아니다
+# tests/test_energy_balance.py  세션 1-B 게이트(energy balance <0.1%) + HX duty 항등성
+
+# 정상상태 결과 표 (4케이스 · "가정값 기반 · 실측 아님" 표시 포함)
+.venv/Scripts/python.exe -m cdu_simul.model
+
+# lint · 타입검사 (세션 1-C 도입 — 안 쓰기로 하면 이 두 줄과 규칙 12의 ruff·mypy를 지운다)
+.venv/Scripts/python.exe -m ruff check .
+.venv/Scripts/python.exe -m mypy src tests
 
 # 아침 브리핑 (PROCEED.md 「현재 상태」 표 + 마지막 세션 로그)
 git pull
@@ -129,6 +138,26 @@ git pull
 .venv/Scripts/python.exe -c "import sys; print(sys.executable)"
 .venv/Scripts/python.exe -m pip list
 ```
+
+## 판 시작·종료 정형 절차
+
+모든 판이 같은 절차로 열리고 닫힌다. **프롬프트에 다시 적지 않는다** — "표준 절차"라고만
+쓰면 아래를 뜻한다.
+
+**시작**
+1. `git pull` — 다른 PC의 작업 위에 덮어쓰지 않기 위해 먼저 한다
+2. `.venv/Scripts/python.exe daily_brief.py` — 오늘 상태를 확인한다
+3. 정본 문서 4종과 `PROCEED.md` 미해결 목록을 읽고 시작한다
+
+**종료** (하나라도 빠지면 판이 안 끝난 것이다)
+1. `.venv/Scripts/python.exe -m pytest` — **전부 통과**. 실패를 남긴 채 끝내지 않는다
+2. `.venv/Scripts/python.exe -m ruff check .` · `-m mypy src tests` — 통과
+3. `PROCEED.md` 갱신 — 완료 항목 · 만든/바꾼 파일 · 미해결과 이유 · 다음 세션 결정사항
+4. 계층별 커밋 분리(절대 규칙 14)
+5. `git push` — 올리지 않으면 이 PC에만 남는다
+
+**검사기가 통과했다는 것은 "코드가 문법·타입·스타일상 성립한다"는 뜻이지
+"물리적으로 맞다"는 뜻이 아니다.** feasibility 판정은 6장 기준으로만 한다.
 
 ## 세션 종료 시
 
