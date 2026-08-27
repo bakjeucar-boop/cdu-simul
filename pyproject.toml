@@ -17,6 +17,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "ruff",
+    "mypy",
 ]
 
 [tool.setuptools.packages.find]
@@ -24,3 +26,23 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# ── lint · 타입검사 (세션 1-C 도입) ───────────────────────────────────────────
+# 설정 파일을 늘리지 않기 위해 pyproject.toml 한 곳에 둔다.
+# 목적은 검사기를 세우는 것이지 기존 코드를 뜯어고치는 것이 아니다.
+
+[tool.ruff]
+# 기존 코드의 최장 줄이 89자이므로 90으로 맞춘다 — 재포맷을 유발하지 않기 위해서다.
+line-length = 90
+# requires-python 과 맞춘다(>=3.11). 실제 검증 환경은 3.12다(미해결 #10).
+target-version = "py311"
+
+[tool.ruff.lint]
+# 기본(E: pycodestyle · F: pyflakes) + I(import 정렬)로 시작한다.
+select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.12"
+# CoolProp·scipy 에 타입 스텁이 없다.
+ignore_missing_imports = true
+# strict 모드로 시작하지 않는다 — 이 판의 목적은 검사기 도입이다.
