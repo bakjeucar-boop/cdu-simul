@@ -6,7 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "cdu-simul"
 version = "0.1.0"
 description = "AI/GPU 서버 D2C 액체냉각 CDU 물리모델 시뮬레이터 (파일럿 — 가정값 기반)"
-requires-python = ">=3.11"
+# 세션 2에서 좁힘: 실제로 검증한 것은 3.12.10 하나뿐이다(1-C 미해결 #10).
+# 3.11·3.13 에서는 돌려본 적이 없다.
+requires-python = ">=3.12"
 dependencies = [
     "numpy",
     "scipy",
@@ -34,7 +36,8 @@ testpaths = ["tests"]
 [tool.ruff]
 # 기존 코드의 최장 줄이 89자이므로 90으로 맞춘다 — 재포맷을 유발하지 않기 위해서다.
 line-length = 90
-# requires-python 과 맞춘다(>=3.11). 실제 검증 환경은 3.12다(미해결 #10).
+# requires-python 이 세션 2에서 ">=3.12" 로 좁혀졌으나 lint 대상은 py311 로 둔다 —
+# 더 보수적인 쪽이라 3.12 전용 문법을 권하지 않는다. 맞출지는 사람이 정한다(미해결 #10).
 target-version = "py311"
 
 [tool.ruff.lint]
