@@ -51,3 +51,17 @@ def coolant_cp_Jkg_K(
 ) -> float:
     """냉각액 정압비열 [J/(kg·K)] 를 온도(℃)·압력(Pa)에서 조회한다."""
     return float(PropsSI("C", "T", celsius_to_kelvin(T_C), "P", P_Pa, fluid))
+
+
+def coolant_enthalpy_Jkg(
+    T_C: float,
+    P_Pa: float = REFERENCE_PRESSURE_Pa,
+    fluid: str = SCENARIO.coolant_coolprop_id,
+) -> float:
+    """냉각액 비엔탈피 [J/kg] 를 온도(℃)·압력(Pa)에서 조회한다.
+
+    기준점(reference state)은 CoolProp 이 정하며 절대값 자체에는 의미가 없다 —
+    **두 온도 사이의 차이**만 쓴다. energy balance 검사가 cp 선형화(cp·ΔT)와
+    독립한 경로를 갖게 하려고 세션 1-B에서 추가했다.
+    """
+    return float(PropsSI("H", "T", celsius_to_kelvin(T_C), "P", P_Pa, fluid))
