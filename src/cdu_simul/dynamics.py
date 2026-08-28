@@ -50,13 +50,18 @@ from scipy.integrate import solve_ivp
 from cdu_simul.assumptions import (
     ASSUMPTION_TAG,
     HEAT_EXCHANGER,
+    LEAK,
     LOAD_PROFILE,
     PIPING,
     SCENARIO,
     SESSION_3B_CAVEAT,
 )
 from cdu_simul.fluid import coolant_cp_Jkg_K, coolant_density_kgm3
-from cdu_simul.hydraulics import HydraulicCase, solve_flow_distribution
+from cdu_simul.hydraulics import (
+    HydraulicCase,
+    apply_leak_to_rack,
+    solve_flow_distribution,
+)
 from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
 from cdu_simul.model import (
     CduCase,
@@ -237,6 +242,7 @@ def _derivative(
     case: LoadStepCase,
     mass_hot_kg: float,
     mass_cold_kg: float,
+    hydraulic: HydraulicCase | None = None,
 ) -> tuple[float, float, float]:
     """2노드 온도 미분 (순수 함수). 반환: (dT_supply/dt, dT_return/dt, 총유량 L/s).
 
@@ -247,12 +253,16 @@ def _derivative(
     **압력-유량도 매 시점 그 온도에서 다시 푼다**(절대 규칙 4 · 세션 3-B) —
     quasi-steady 대수방정식이므로 시간미분이 없다. 유량은 상수가 아니다.
     `solve_flow_distribution` 이 `ier != 1` 이면 예외를 던진다(절대 규칙 5).
+
+    `hydraulic` 을 주면 그것으로 푼다(기본값은 `case.hydraulic`). 누출 스텝은
+    t0 전후로 **다른 수력 케이스**를 넘겨 K값 변화를 주입한다(세션 4).
     """
     T_property_C = _property_temperature_from_state(T_supply_C, T_return_C, "bulk_mean")
     rho_kgm3 = coolant_density_kgm3(T_property_C)
     cp_Jkg_K = coolant_cp_Jkg_K(T_property_C)
 
-    flow = solve_flow_distribution(case.hydraulic, T_property_C)
+    hydraulic_case = case.hydraulic if hydraulic is None else hydraulic
+    flow = solve_flow_distribution(hydraulic_case, T_property_C)
     m_dot_kgs = flow.total_flow_Lps * _M3_PER_LITRE * rho_kgm3
     C_W_K = m_dot_kgs * cp_Jkg_K
 
@@ -388,6 +398,170 @@ def default_load_step_cases() -> list[LoadStepCase]:
                 )
             )
     return cases
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 누출 스텝 (세션 4) — 정상 운전 중 t0 에 K값이 계단으로 오른다
+# ─────────────────────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class LeakStepCase:
+    """누출 주입 시나리오 1건. 케이스마다 새로 만들어 초기조건을 리셋한다.
+
+    부하는 **바뀌지 않는다** — 정격 정상운전 중에 누출만 계단으로 들어온다.
+    부하 스텝(`LoadStepCase`)과 자극이 다르므로 별도 케이스로 둔다.
+
+    누출은 배관 K값 배율로만 근사한다(절대 규칙 8 · 5장). `k_multiplier` 가 1.0
+    이면 **아무 일도 일어나지 않는 정상 케이스**이고, 같은 경로로 돈다(세션 4 C2).
+    """
+
+    label: str
+    holdup: HoldupBound
+    hydraulic: HydraulicCase
+    k_multiplier: float
+    T_secondary_supply_C: float
+    ntu: float
+    heat_capacity_ratio: float
+    load_percent: float = LOAD_PROFILE.rated_load_percent
+    leak_rack_index: int = LEAK.injection_rack_index
+    holdup_supply_fraction: float = PIPING.holdup_supply_node_fraction
+
+    @property
+    def hydraulic_after_leak(self) -> HydraulicCase:
+        """t >= t0 에서 쓰는 수력 케이스 (K값 배율이 걸린 것)."""
+        return apply_leak_to_rack(
+            self.hydraulic, self.k_multiplier, self.leak_rack_index
+        )
+
+    def steady_case(self, hydraulic: HydraulicCase) -> CduCase:
+        """주어진 수력 케이스에서의 결합 정상상태 케이스 (물리 정의 재사용)."""
+        return CduCase(
+            hydraulic=hydraulic,
+            T_secondary_supply_C=self.T_secondary_supply_C,
+            ntu=self.ntu,
+            load_percent=self.load_percent,
+            heat_capacity_ratio=self.heat_capacity_ratio,
+        )
+
+
+@dataclass(frozen=True)
+class LeakTransientResult:
+    """누출 스텝 적분 결과 1건. solver 플래그를 함께 싣는다(절대 규칙 5)."""
+
+    case: LeakStepCase
+    t_s: np.ndarray
+    T_supply_C: np.ndarray
+    T_return_C: np.ndarray
+    total_flow_initial_Lps: float
+    total_flow_final_Lps: float
+    leak_rack_flow_initial_Lps: float
+    leak_rack_flow_final_Lps: float
+    pump_head_initial_mAq: float
+    pump_head_final_mAq: float
+    tau_theory_s: float
+    t_end_s: float
+    hydraulic_solver_converged: bool
+    solver_success: bool
+    solver_message: str
+
+    @property
+    def T_return_initial_C(self) -> float:
+        return float(self.T_return_C[0])
+
+    @property
+    def T_return_final_C(self) -> float:
+        return float(self.T_return_C[-1])
+
+
+def integrate_leak_step(
+    case: LeakStepCase, horizon_in_tau: float = INTEGRATION_HORIZON_IN_TAU
+) -> LeakTransientResult:
+    """정격 정상운전 중 t=0 에 누출을 계단으로 주입하고 적분한다.
+
+    초기조건은 **누출 전 수력 케이스의 결합 정상상태**다. 케이스마다 이 함수를
+    새로 호출해 초기조건을 명시적으로 리셋한다(collaboration.md 결함유형 ④).
+
+    t>=0 에서는 K값 배율이 걸린 수력 케이스로 매 시점 압력평형을 다시 푼다 —
+    부하는 그대로다. `solve_ivp` 의 `success` 와 수력 `fsolve` 의 `ier` 를 **둘 다**
+    확인한다(절대 규칙 5).
+
+    **전이 시간 규모의 절대값을 해석하지 않는다** — M 결손(#21)과 8랙 해석 부재
+    (#31)가 둘 다 열려 있다.
+    """
+    before = solve_cdu_steady_state(case.steady_case(case.hydraulic))
+    if not before.solver_converged:
+        raise RuntimeError(f"{case.label}: 누출 전 정상상태가 수렴하지 않았다")
+
+    hydraulic_after = case.hydraulic_after_leak
+    mass_hot_kg = case.holdup_supply_fraction * case.holdup.mass_kg
+    mass_cold_kg = (1.0 - case.holdup_supply_fraction) * case.holdup.mass_kg
+    load_total_kW = case.steady_case(case.hydraulic).rack_load_kW * (
+        case.hydraulic.n_racks
+    )
+
+    tau_theory_s = case.holdup.mass_kg / before.thermal.m_dot_kgs
+    t_end_s = horizon_in_tau * tau_theory_s
+
+    # 부하 스텝 자리를 빌려 쓰지 않고, 이 케이스의 물리 인자만 담은 대역을 만든다.
+    load_step_view = LoadStepCase(
+        label=case.label,
+        holdup=case.holdup,
+        load_before_percent=case.load_percent,
+        load_after_percent=case.load_percent,
+        T_secondary_supply_C=case.T_secondary_supply_C,
+        ntu=case.ntu,
+        heat_capacity_ratio=case.heat_capacity_ratio,
+        hydraulic=hydraulic_after,
+    )
+
+    def rhs(_t: float, y: np.ndarray) -> list[float]:
+        dT_supply_dt, dT_return_dt, _flow = _derivative(
+            float(y[0]),
+            float(y[1]),
+            load_total_kW,
+            load_step_view,
+            mass_hot_kg,
+            mass_cold_kg,
+            hydraulic_after,
+        )
+        return [dT_supply_dt, dT_return_dt]
+
+    solution = solve_ivp(
+        rhs,
+        t_span=(0.0, t_end_s),
+        y0=[before.thermal.T_supply_C, before.thermal.T_return_C],
+        method="RK45",
+        rtol=INTEGRATION_RTOL,
+        atol=INTEGRATION_ATOL,
+        dense_output=True,
+        t_eval=np.linspace(0.0, t_end_s, 4001),
+    )
+
+    final_flow = solve_flow_distribution(
+        hydraulic_after,
+        _property_temperature_from_state(
+            float(solution.y[0][-1]), float(solution.y[1][-1]), "bulk_mean"
+        ),
+    )
+    index = case.leak_rack_index
+    return LeakTransientResult(
+        case=case,
+        t_s=solution.t,
+        T_supply_C=solution.y[0],
+        T_return_C=solution.y[1],
+        total_flow_initial_Lps=before.flow.total_flow_Lps,
+        total_flow_final_Lps=final_flow.total_flow_Lps,
+        leak_rack_flow_initial_Lps=before.flow.rack_flows_Lps[index],
+        leak_rack_flow_final_Lps=final_flow.rack_flows_Lps[index],
+        pump_head_initial_mAq=before.flow.pump_head_mAq,
+        pump_head_final_mAq=final_flow.pump_head_mAq,
+        tau_theory_s=tau_theory_s,
+        t_end_s=t_end_s,
+        hydraulic_solver_converged=(
+            before.flow.solver_converged and final_flow.solver_converged
+        ),
+        solver_success=bool(solution.success),
+        solver_message=str(solution.message).strip(),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

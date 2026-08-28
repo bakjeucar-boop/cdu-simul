@@ -30,13 +30,14 @@ quasi-steady 대수방정식으로 푼다 — 이 모듈이 그 대수방정식�
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 from scipy.optimize import fsolve
 
 from cdu_simul.assumptions import (
     ASSUMPTION_TAG,
+    LEAK,
     PASCAL_PER_MAQ,
     PIPING,
     PUMP,
@@ -230,6 +231,42 @@ class HydraulicCase:
         if len(self.branch_K_multipliers) != self.n_racks:
             raise ValueError("branch_K_multipliers 길이가 랙 수와 다르다")
         return tuple(self.branch_K * m for m in self.branch_K_multipliers)
+
+
+def apply_leak_to_rack(
+    case: HydraulicCase,
+    k_multiplier: float,
+    rack_index: int = LEAK.injection_rack_index,
+) -> HydraulicCase:
+    """랙 하나의 배관 K값에 배율을 걸어 누출 케이스를 만든다 (순수 함수).
+
+    [절대 규칙 8 · 5장 누출 시나리오 · 5-1 「누출 주입 지점」 · 세션 4]
+
+    누출은 **배관저항(K값) 변화로만** 근사한다 — 질량 손실을 직접 모델링하지
+    않는다. 3-A 가 만들어 둔 `branch_K_multipliers` 진입점을 쓰며 새 메커니즘을
+    만들지 않는다.
+
+    **배율 1.0(정상)도 이 함수를 통과한다.** 정상과 누출이 다른 경로를 타면 결과
+    차이가 누출 때문인지 경로 때문인지 갈라낼 수 없다(세션 4 C2). 배율 1.0 이면
+    `rack_branch_K` 가 원래 값과 부동소수점까지 같다(1.0 곱은 항등이다).
+
+    라벨에 배율을 남긴다 — 결과 표에서 어느 케이스가 누출인지 보이게 하려고.
+    """
+    if not 0 <= rack_index < case.n_racks:
+        raise ValueError(f"랙 번호 {rack_index} 가 랙 수 {case.n_racks} 범위 밖이다")
+    if k_multiplier <= 0.0:
+        raise ValueError("K 배율은 양수여야 한다")
+
+    base = case.branch_K_multipliers or (1.0,) * case.n_racks
+    multipliers = tuple(
+        m * k_multiplier if i == rack_index else m for i, m in enumerate(base)
+    )
+    suffix = "" if k_multiplier == 1.0 else f"/K×{k_multiplier:g}@r{rack_index}"
+    return replace(
+        case,
+        label=f"{case.label}{suffix}",
+        branch_K_multipliers=multipliers,
+    )
 
 
 @dataclass(frozen=True)
