@@ -321,12 +321,28 @@ def transient_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
             plant_ier="",
         )
 
+    # **자극이 필요하다.** `load_before == load_after` 로 두면 계가 정상상태에서
+    # 출발해 아무것도 하지 않아 「전이」 행이 평평한 직선이 된다 — 그런 행으로
+    # 학습하면 누출이 전이를 만들지 않는다고 배운다. 그래서 CDU A 에 **부하 스텝**을
+    # 준다(다른 쪽 수준 → `spec.load_percent`), CDU B 는 그대로 둔다.
+    #
+    # 누출은 **t=0 이전부터 있는 조건**으로 넣는다 — 템플릿에 걸어 두 CDU 의 랙 0 에
+    # 적용된다. `plant.PlantLoadStepCase` 가 CDU 마다 다른 템플릿을 받지 않고
+    # **`plant.py` 는 이 판의 범위 밖**이라, CDU 하나에만 누출을 거는 것은 여기서
+    # 만들 수 없다. 단일 CDU 전이는 누출이 **스텝으로** 들어오고 다중 CDU 전이는
+    # **기왕에 있는 조건**이라는 차이를 `cdu_config` 로 구분해 읽어야 한다
+    # (세션 5.5-B 보고에 적었고 사람의 확인이 필요하다).
+    other = (
+        LOAD_PROFILE.idle_load_percent
+        if spec.load_percent == LOAD_PROFILE.rated_load_percent
+        else LOAD_PROFILE.rated_load_percent
+    )
     dual = integrate_plant_load_step(
         PlantLoadStepCase(
             label=spec.scenario_id,
             holdup=holdup,
-            template=spec.template,
-            load_before_percents=loads,
+            template=_apply_leak(spec.template, spec),
+            load_before_percents=(other,) + tuple(loads[1:]),
             load_after_percents=loads,
         )
     )
