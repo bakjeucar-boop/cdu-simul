@@ -15,20 +15,39 @@ from __future__ import annotations
 
 import pytest
 
-from cdu_simul.assumptions import HEAT_EXCHANGER, LOAD_PROFILE, SCENARIO, VALVE
+from cdu_simul.assumptions import HEAT_EXCHANGER, LOAD_PROFILE, SCENARIO
 from cdu_simul.dynamics import (
     HoldupBound,
     LoadStepCase,
     holdup_bounds,
     integrate_load_step,
 )
-from cdu_simul.model import SteadyStateCase, default_cases, solve_steady_state
+from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
+from cdu_simul.model import CduCase, default_cdu_cases, solve_cdu_steady_state
 
 #: 정상상태 대조 허용오차 [K].
 #: 적분 허용오차(rtol 1e-10)에서 오는 수치 잡음은 실측 4.5e-9 K 수준이다.
 #: 1e-6 K 는 그 잡음보다 200배 이상 느슨하면서, 두 경로가 실제로 어긋났을 때
 #: 나타날 크기(4케이스의 온도 폭이 ~3 K 다)보다는 6자리 이상 엄격하다.
 STEADY_STATE_TOLERANCE_C: float = 1.0e-6
+
+
+#: 방향성 게이트가 쓰는 수력 조합 — 5장·5-1 범위의 한쪽 끝 하나로 고정한다.
+#: 수력 범위 양 끝은 세션 3 게이트(`test_session3_gates.py`)가 32조합으로 본다.
+_GATE_HYDRAULIC_CASE = default_hydraulic_cases()[0]
+
+
+def _steady_reference_cases() -> list[CduCase]:
+    """t→∞ 대조용 결합 정상상태 케이스 — 2차측 × NTU 양 끝 4개.
+
+    세션 2 가 `model.default_cases()`(4개)를 썼던 자리다. 수력 조합은 방향성
+    게이트와 같은 하나로 고정한다.
+    """
+    return [
+        case
+        for case in default_cdu_cases()
+        if case.hydraulic.label == _GATE_HYDRAULIC_CASE.label
+    ]
 
 
 def _direction_gate_cases() -> list[LoadStepCase]:
@@ -38,6 +57,11 @@ def _direction_gate_cases() -> list[LoadStepCase]:
     결과 표(dynamics.format_results_table)는 2차측·NTU 를 하단으로 고정하지만,
     **게이트는 고정하지 않는다** — 방침 (B)(양 끝을 둘 다 돌린다)가 걸리는 곳은
     판정이기 때문이다.
+
+    **세션 3-B 재확인**: 조합 구성은 세션 2 와 같은 16개를 유지하되, 계통이 8랙
+    CDU 가 되고 유량이 매 시점 압력평형으로 풀린다. 수력 조합은 하나로 고정한다 —
+    수력 범위 양 끝은 세션 3 게이트(`test_session3_gates.py`)가 32조합으로 보고,
+    여기서 판정하는 것은 **부하 방향에 대한 T_return 의 부호**이기 때문이다.
     """
     lower, upper = holdup_bounds()
     cases: list[LoadStepCase] = []
@@ -73,8 +97,7 @@ def _direction_gate_cases() -> list[LoadStepCase]:
                             heat_capacity_ratio=(
                                 HEAT_EXCHANGER.flow_ratio_primary_to_secondary
                             ),
-                            rack_load_kW=SCENARIO.rack_it_load_kW,
-                            rack_flow_Lps=VALVE.rated_flow_per_rack_Lps,
+                            hydraulic=_GATE_HYDRAULIC_CASE,
                         )
                     )
     return cases
@@ -133,22 +156,28 @@ def test_T_return_responds_in_physically_sound_direction(case: LoadStepCase) -> 
         )
 
 
-@pytest.mark.parametrize("steady_case", default_cases(), ids=lambda c: c.label)
-def test_transient_limit_matches_steady_state(steady_case: SteadyStateCase) -> None:
-    """t→∞ 시간적분 결과가 1-B 정상상태 해와 일치하는가.
+@pytest.mark.parametrize(
+    "steady_case", _steady_reference_cases(), ids=lambda c: c.label
+)
+def test_transient_limit_matches_steady_state(steady_case: CduCase) -> None:
+    """t→∞ 시간적분 결과가 결합 정상상태 해와 일치하는가.
 
     **feasibility 기준이 아니다 — 구현 일관성 검사다.** 두 값은 서로 다른
-    *계산 경로*로 나온다(1-B: 물성 평가온도에 대한 대수 고정점 `fsolve` ·
-    세션 2: 2노드 미분방정식 `solve_ivp` 시간적분). 그러나 동적 모델의 평형점은
-    설계상 1-B 식과 같은 방정식이므로, 이 대조가 재는 것은 **적분 정확도와 두
-    모듈의 구현 일관성**이지 물리 자체의 독립 확인이 아니다.
+    *계산 경로*로 나온다(정상상태: 물성 평가온도에 대한 대수 고정점 `fsolve` ·
+    동적: 2노드 미분방정식 `solve_ivp` 시간적분). 그러나 동적 모델의 평형점은
+    설계상 정상상태 식과 같은 방정식이므로, 이 대조가 재는 것은 **적분 정확도와
+    두 모듈의 구현 일관성**이지 물리 자체의 독립 확인이 아니다.
     미해결 #15("랙·HX 를 독립적으로 푼 뒤 대조")를 이 테스트가 닫지는 못한다.
+
+    **세션 3-B 에서 대조 대상이 결합 해로 바뀌었다** — 유량이 두 경로에서 같은
+    압력평형으로 풀리므로, 이 대조는 이제 수력 결합까지 함께 본다.
 
     그래도 값이 있다: 동적 모델을 잘못 세우면(노드 배분·부호·물성 평가 규칙이
     어긋나면) 여기서 바로 드러난다.
     """
-    steady = solve_steady_state(steady_case)
-    assert steady.solver_converged, f"{steady_case.label}: 1-B 정상상태 미수렴"
+    steady_cdu = solve_cdu_steady_state(steady_case)
+    assert steady_cdu.solver_converged, f"{steady_case.label}: 결합 정상상태 미수렴"
+    steady = steady_cdu.thermal
 
     lower_holdup: HoldupBound = holdup_bounds()[0]
     transient_case = LoadStepCase(
@@ -159,8 +188,7 @@ def test_transient_limit_matches_steady_state(steady_case: SteadyStateCase) -> N
         T_secondary_supply_C=steady_case.T_secondary_supply_C,
         ntu=steady_case.ntu,
         heat_capacity_ratio=steady_case.heat_capacity_ratio,
-        rack_load_kW=SCENARIO.rack_it_load_kW,
-        rack_flow_Lps=steady_case.rack_flow_Lps,
+        hydraulic=steady_case.hydraulic,
     )
     transient = integrate_load_step(transient_case)
     assert transient.solver_success, f"{steady_case.label}: solve_ivp 실패"
