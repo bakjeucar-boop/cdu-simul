@@ -43,6 +43,7 @@ from cdu_simul.assumptions import (
     PUMP,
     SCENARIO,
     SESSION_3B_CAVEAT,
+    SESSION_5B_CAVEAT,
     VALVE,
     PumpCurveCoefficients,
 )
@@ -546,6 +547,7 @@ def format_results_table(results: list[FlowDistributionResult]) -> str:
         "",
         "※ " + ASSUMPTION_TAG,
         SESSION_3B_CAVEAT,
+        SESSION_5B_CAVEAT,
         "※ 이 표는 압력-유량 분배만 본다 — 열모델과 결합한 32조합은",
         "   `python -m cdu_simul.model` 이고, 세션 3 게이트는 그쪽이 판정한다.",
     ]

@@ -56,6 +56,7 @@ from cdu_simul.assumptions import (
     PIPING,
     SCENARIO,
     SESSION_3B_CAVEAT,
+    SESSION_5B_CAVEAT,
 )
 from cdu_simul.fluid import coolant_cp_Jkg_K, coolant_density_kgm3
 from cdu_simul.hydraulics import (
@@ -185,8 +186,9 @@ class LoadStepCase:
     load_after_percent: float
     T_secondary_supply_C: float
     ntu: float
-    heat_capacity_ratio: float
     hydraulic: HydraulicCase
+    #: 이 CDU 의 2차측 부피유량 [L/s]. Cr 은 여기서 유도된다(세션 5-B).
+    secondary_flow_Lps: float = HEAT_EXCHANGER.secondary_flow_Lps
 
     def steady_case(self, load_percent: float) -> CduCase:
         """주어진 부하율에서의 결합 정상상태 케이스를 만든다 (물리 정의 재사용).
@@ -199,7 +201,6 @@ class LoadStepCase:
             T_secondary_supply_C=self.T_secondary_supply_C,
             ntu=self.ntu,
             load_percent=load_percent,
-            heat_capacity_ratio=self.heat_capacity_ratio,
         )
 
     @property
@@ -275,9 +276,8 @@ def _derivative(
     effectiveness, C_min_W_K = hx_capacity_terms(
         C_W_K,
         case.ntu,
-        case.heat_capacity_ratio,
         case.T_secondary_supply_C,
-        secondary_flow_Lps,
+        case.secondary_flow_Lps if secondary_flow_Lps is None else secondary_flow_Lps,
     )
     Q_rack_W = load_kW * _W_PER_KW
     Q_hx_W = effectiveness * C_min_W_K * (T_return_C - case.T_secondary_supply_C)
@@ -403,9 +403,6 @@ def default_load_step_cases() -> list[LoadStepCase]:
                     load_after_percent=after_percent,
                     T_secondary_supply_C=SCENARIO.T_secondary_supply_C.low,
                     ntu=HEAT_EXCHANGER.ntu.low,
-                    heat_capacity_ratio=(
-                        HEAT_EXCHANGER.flow_ratio_primary_to_secondary
-                    ),
                     hydraulic=default_hydraulic_cases()[0],
                 )
             )
@@ -432,7 +429,8 @@ class LeakStepCase:
     k_multiplier: float
     T_secondary_supply_C: float
     ntu: float
-    heat_capacity_ratio: float
+    #: 이 CDU 의 2차측 부피유량 [L/s]. Cr 은 여기서 유도된다(세션 5-B).
+    secondary_flow_Lps: float = HEAT_EXCHANGER.secondary_flow_Lps
     load_percent: float = LOAD_PROFILE.rated_load_percent
     leak_rack_index: int = LEAK.injection_rack_index
     holdup_supply_fraction: float = PIPING.holdup_supply_node_fraction
@@ -451,7 +449,6 @@ class LeakStepCase:
             T_secondary_supply_C=self.T_secondary_supply_C,
             ntu=self.ntu,
             load_percent=self.load_percent,
-            heat_capacity_ratio=self.heat_capacity_ratio,
         )
 
 
@@ -521,8 +518,8 @@ def integrate_leak_step(
         load_after_percent=case.load_percent,
         T_secondary_supply_C=case.T_secondary_supply_C,
         ntu=case.ntu,
-        heat_capacity_ratio=case.heat_capacity_ratio,
         hydraulic=hydraulic_after,
+        secondary_flow_Lps=case.secondary_flow_Lps,
     )
 
     def rhs(_t: float, y: np.ndarray) -> list[float]:
@@ -669,6 +666,7 @@ def format_results_table(results: list[TransientResult]) -> str:
         "",
         "※ " + ASSUMPTION_TAG,
         SESSION_3B_CAVEAT,
+        SESSION_5B_CAVEAT,
         "※ 이 표가 판정하는 feasibility 기준은 **T_return 방향성**과 **비발산**이다.",
         "   energy balance 는 model.py 쪽이 보고, 수렴시간은 위 M 한계 때문에",
         "   판정하지 않는다(미해결 #21).",
