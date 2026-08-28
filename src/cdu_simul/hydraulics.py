@@ -41,6 +41,7 @@ from cdu_simul.assumptions import (
     PIPING,
     PUMP,
     SCENARIO,
+    SESSION_3B_CAVEAT,
     VALVE,
     PumpCurveCoefficients,
 )
@@ -507,8 +508,9 @@ def format_results_table(results: list[FlowDistributionResult]) -> str:
         "    벗어남이 크든 작든 값을 그대로 적는다 — '충분히 작다'고 판단하지 않는다.",
         "",
         "※ " + ASSUMPTION_TAG,
-        "※ 이 표는 압력-유량 분배만 본다. 극단 케이스(부하 0/최대) 비발산은",
-        "   열모델이 붙는 세션 3-B 의 것이며 여기서 판정하지 않았다.",
+        SESSION_3B_CAVEAT,
+        "※ 이 표는 압력-유량 분배만 본다 — 열모델과 결합한 32조합은",
+        "   `python -m cdu_simul.model` 이고, 세션 3 게이트는 그쪽이 판정한다.",
     ]
     return "\n".join(lines)
 

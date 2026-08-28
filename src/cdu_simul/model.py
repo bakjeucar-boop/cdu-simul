@@ -1,19 +1,29 @@
-"""단일 랙 · 단일 CDU 정상상태 모델 (세션 1-B).
+"""다중 랙 · 단일 CDU 정상상태 모델 (세션 1-B → 세션 3-B 에서 8랙 확장).
 
-범위 — 4장 「단계적 확장 전략」 1단계의 최소 형태다.
+범위 — 4장 「단계적 확장 전략」 2단계다.
 
-    랙 1개(발열 80 kW) → 1차측 순환 → 열교환기 → 2차측 고정 경계조건
+    랙 N개(5장: 8개) → 유량가중 합류 → 1차측 순환 → 열교환기 → 2차측 고정 경계
 
-**열교환기 규모에 대한 해석**: NTU 는 무차원이므로 5장 값(2~3)을 그대로 쓰고,
-유량은 단일 랙 정격을 쓴다. 즉 "랙 1개 규모로 축소한 CDU"를 본다. 이것은 4장
-1단계의 해석이며 새 가정치가 아니다.
+**랙 수는 `assumptions.py` 에서 읽는다**(5장 `racks_per_cdu`) — 이 파일에 숫자를
+박지 않는다. 세션 1-B 는 랙 1개였고, 그때의 식은 N=1 의 특수경우로 그대로 남아
+있다(랙이 동일하면 합류식이 1랙 식과 같아진다 — `_state_at_property_temperature`).
 
-**압력-유량을 풀지 않는다.** 단일 랙이라 분배할 곳이 없다. 이것은 하이브리드
-구조(절대 규칙 4)를 없애는 것이 아니라 **아직 만들지 않는 것**이다 — fsolve 기반
-압력평형은 세션 3에서 도입한다. 랙 유량은 5장 정격유량을 주어진 값으로 쓴다.
+**열교환기 규모에 대한 해석**: NTU 는 무차원이므로 5장 값(2~3)을 그대로 쓴다.
+유량이 N배가 되면 UA 도 함께 커지는 것으로 읽는 것이며, 5장이 NTU 를 무차원으로
+준 이상 새 가정치가 아니다. 그 결과 **동일 랙 N개의 온도해는 1랙 해와 같다** —
+Q 와 C 가 같은 배수로 커지기 때문이다.
+
+**압력-유량은 `hydraulics.py` 가 푼다**(절대 규칙 4 — 하이브리드 구조).
+`solve_cdu_steady_state` 가 물성 온도 고정점 안에서 매번 헤더 압력평형을
+quasi-steady 로 풀어 랙별 유량을 받는다. 온도는 이 모듈이 대수적으로 풀고,
+시간적분은 `dynamics.py` 다.
 
 **2차측 동특성을 만들지 않는다**(절대 규칙 7). 2차측 공급온도는 5장 범위의 고정
-경계조건이다. 시간축(`solve_ivp`)은 이 모듈에 없다 — 세션 2다.
+경계조건이다.
+
+**부하는 CDU 전체 일괄이다** [규약: 5-1 「부하 프로파일의 랙 배분」 · 세션 3-B].
+8랙에 동일 부하를 준다 — 랙별 배분비는 5장에 없다. 랙 간 비대칭은 누출 K값이
+들어오는 세션 4에서 처음 생긴다.
 
 **모든 수치는 가정값 기반이며 실측이 아니다.** 5장 값은 assumptions.py 에서만
 읽는다(절대 규칙 2) — 이 파일에 5장 숫자를 박지 않는다.
@@ -27,17 +37,33 @@ from typing import Literal
 
 from scipy.optimize import fsolve
 
-from cdu_simul.assumptions import ASSUMPTION_TAG, HEAT_EXCHANGER, SCENARIO, VALVE
+from cdu_simul.assumptions import (
+    ASSUMPTION_TAG,
+    HEAT_EXCHANGER,
+    LOAD_PROFILE,
+    SCENARIO,
+    SESSION_3B_CAVEAT,
+    VALVE,
+)
 from cdu_simul.fluid import (
     coolant_cp_Jkg_K,
     coolant_density_kgm3,
     coolant_enthalpy_Jkg,
 )
+from cdu_simul.hydraulics import (
+    FlowDistributionResult,
+    HydraulicCase,
+    bulk_mean_temperature_C,
+    solve_flow_distribution,
+)
+from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
 
 #: L/s → m^3/s. 5장 표는 L/s 로 적혀 있고 SI 계산은 m^3/s 를 쓴다 (절대 규칙 9).
 _M3_PER_LITRE: float = 1.0e-3
 #: kW → W.
 _W_PER_KW: float = 1.0e3
+#: % → 분율.
+_PERCENT: float = 1.0e-2
 
 #: cp·ρ 를 어느 온도에서 평가할지 정하는 규칙.
 #: 기본값 = 1차측 벌크 평균온도
@@ -50,14 +76,62 @@ DEFAULT_CP_RULE: CpRule = "bulk_mean"
 
 @dataclass(frozen=True)
 class SteadyStateCase:
-    """정상상태 계산 1건의 입력 조건. 케이스마다 새로 만들어 초기조건을 리셋한다."""
+    """정상상태 계산 1건의 입력 조건. 케이스마다 새로 만들어 초기조건을 리셋한다.
+
+    **랙별 튜플이다**(세션 3-B). 세션 1-B 는 스칼라 1랙이었고, 그것은 길이 1
+    튜플의 특수경우로 그대로 표현된다 — 물리식을 바꾼 것이 아니라 랙 축을 편 것이다.
+    `uniform(...)` 이 5장 랙 수만큼 동일 랙을 만드는 통상 경로다.
+    """
 
     T_secondary_supply_C: float
     ntu: float
-    rack_load_kW: float
-    rack_flow_Lps: float
+    rack_loads_kW: tuple[float, ...]
+    rack_flows_Lps: tuple[float, ...]
     heat_capacity_ratio: float
     cp_rule: CpRule = DEFAULT_CP_RULE
+
+    def __post_init__(self) -> None:
+        if len(self.rack_loads_kW) != len(self.rack_flows_Lps):
+            raise ValueError("랙별 부하와 유량의 길이가 다르다")
+        if not self.rack_loads_kW:
+            raise ValueError("랙이 하나도 없다")
+
+    @classmethod
+    def uniform(
+        cls,
+        T_secondary_supply_C: float,
+        ntu: float,
+        rack_load_kW: float,
+        rack_flow_Lps: float,
+        heat_capacity_ratio: float,
+        n_racks: int = SCENARIO.racks_per_cdu,
+        cp_rule: CpRule = DEFAULT_CP_RULE,
+    ) -> SteadyStateCase:
+        """동일한 랙 `n_racks` 개로 케이스를 만든다.
+
+        기본 랙 수는 5장 `racks_per_cdu` 다 — 이 파일에 숫자를 박지 않는다.
+        부하 일괄 배분은 5-1 「부하 프로파일의 랙 배분」 규약이다.
+        """
+        return cls(
+            T_secondary_supply_C=T_secondary_supply_C,
+            ntu=ntu,
+            rack_loads_kW=(rack_load_kW,) * n_racks,
+            rack_flows_Lps=(rack_flow_Lps,) * n_racks,
+            heat_capacity_ratio=heat_capacity_ratio,
+            cp_rule=cp_rule,
+        )
+
+    @property
+    def n_racks(self) -> int:
+        return len(self.rack_loads_kW)
+
+    @property
+    def total_load_kW(self) -> float:
+        return sum(self.rack_loads_kW)
+
+    @property
+    def total_flow_Lps(self) -> float:
+        return sum(self.rack_flows_Lps)
 
     @property
     def label(self) -> str:
@@ -71,6 +145,7 @@ class SteadyStateResult:
     case: SteadyStateCase
     T_supply_C: float
     T_return_C: float
+    rack_return_temps_C: tuple[float, ...]
     dT_primary_C: float
     m_dot_kgs: float
     property_eval_T_C: float
@@ -98,36 +173,74 @@ def hx_effectiveness_counterflow(ntu: float, heat_capacity_ratio: float) -> floa
     return (1.0 - exponent) / (1.0 - heat_capacity_ratio * exponent)
 
 
+@dataclass(frozen=True)
+class _PrimaryState:
+    """`_state_at_property_temperature` 의 반환 묶음 (내부용)."""
+
+    T_supply_C: float
+    T_return_C: float
+    rack_return_temps_C: tuple[float, ...]
+    m_dot_kgs: float
+    cp_Jkg_K: float
+    effectiveness: float
+    hx_duty_W: float
+
+
 def _state_at_property_temperature(
     property_eval_T_C: float, case: SteadyStateCase
-) -> tuple[float, float, float, float, float, float]:
+) -> _PrimaryState:
     """물성 평가온도가 주어졌을 때의 정상상태 온도들을 대수적으로 푼다.
 
-    정상상태이므로 랙 발열량 = 열교환기 방열량이다. 그 조건에서
+    랙 N개가 공급 헤더에서 갈라져 각자 가열된 뒤 환수 헤더에서 **유량가중으로
+    혼합**된다::
 
-        T_return = T_2차공급 + Q / (ε · C)      (ε-NTU 관계)
-        T_supply = T_return - Q / C             (랙 현열 상승)
+        T_return,i = T_supply + Q_i / (m_dot_i · cp)      (랙 i 현열 상승)
+        T_return   = Σ(m_dot_i · T_return,i) / Σ m_dot_i  (혼합)
+                   = T_supply + ΣQ_i / (Σm_dot_i · cp)
 
-    여기서 C = m_dot · cp [W/K] 이다. **T_return 을 위 첫 식으로 정의하므로
+    cp 가 랙 간 공통이므로 혼합 결과는 **총 발열량과 총 유량만으로 결정된다** —
+    랙이 동일하든 아니든 그렇다. 그래서 아래는 총량으로 풀고, 랙별 환수온도는
+    해가 나온 뒤 되돌려 계산한다(누출로 랙이 갈라지는 세션 4에서 쓸 값이다).
+
+    정상상태이므로 총 발열량 = 열교환기 방열량이다. 그 조건에서
+
+        T_return = T_2차공급 + Q_총 / (ε · C_총)   (ε-NTU 관계)
+        T_supply = T_return - Q_총 / C_총          (현열 상승)
+
+    여기서 C_총 = m_dot_총 · cp [W/K] 이다. **T_return 을 위 첫 식으로 정의하므로
     ε-NTU duty 와 랙 발열량의 차는 구조상 항등적으로 0이 된다** — 그 성질은
     `hx_duty_identity_residual_percent` 에 적어 두었고 게이트 판정에 쓰지 않는다.
-
-    반환: (T_supply_C, T_return_C, m_dot_kgs, cp_Jkg_K, ε, HX duty [W])
     """
     rho_kgm3 = coolant_density_kgm3(property_eval_T_C)
     cp_Jkg_K = coolant_cp_Jkg_K(property_eval_T_C)
 
-    m_dot_kgs = case.rack_flow_Lps * _M3_PER_LITRE * rho_kgm3
+    m_dot_kgs = case.total_flow_Lps * _M3_PER_LITRE * rho_kgm3
     C_W_K = m_dot_kgs * cp_Jkg_K
 
     effectiveness = hx_effectiveness_counterflow(case.ntu, case.heat_capacity_ratio)
-    Q_W = case.rack_load_kW * _W_PER_KW
+    Q_W = case.total_load_kW * _W_PER_KW
 
     T_return_C = case.T_secondary_supply_C + Q_W / (effectiveness * C_W_K)
     T_supply_C = T_return_C - Q_W / C_W_K
 
+    rack_return_temps_C = tuple(
+        T_supply_C
+        + load_kW * _W_PER_KW / (flow_Lps * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K)
+        for load_kW, flow_Lps in zip(
+            case.rack_loads_kW, case.rack_flows_Lps, strict=True
+        )
+    )
+
     hx_duty_W = effectiveness * C_W_K * (T_return_C - case.T_secondary_supply_C)
-    return T_supply_C, T_return_C, m_dot_kgs, cp_Jkg_K, effectiveness, hx_duty_W
+    return _PrimaryState(
+        T_supply_C=T_supply_C,
+        T_return_C=T_return_C,
+        rack_return_temps_C=rack_return_temps_C,
+        m_dot_kgs=m_dot_kgs,
+        cp_Jkg_K=cp_Jkg_K,
+        effectiveness=effectiveness,
+        hx_duty_W=hx_duty_W,
+    )
 
 
 def _property_temperature_from_state(
@@ -164,8 +277,10 @@ def solve_steady_state(case: SteadyStateCase) -> SteadyStateResult:
 
     def residual(x: list[float]) -> list[float]:
         T_prop_C = float(x[0])
-        T_supply_C, T_return_C = _state_at_property_temperature(T_prop_C, case)[:2]
-        rule_T_C = _property_temperature_from_state(T_supply_C, T_return_C, case.cp_rule)
+        state = _state_at_property_temperature(T_prop_C, case)
+        rule_T_C = _property_temperature_from_state(
+            state.T_supply_C, state.T_return_C, case.cp_rule
+        )
         return [rule_T_C - T_prop_C]
 
     initial_guess_T_C = 0.5 * (
@@ -176,25 +291,19 @@ def solve_steady_state(case: SteadyStateCase) -> SteadyStateResult:
     )
 
     T_prop_C = float(solution[0])
-    (
-        T_supply_C,
-        T_return_C,
-        m_dot_kgs,
-        cp_Jkg_K,
-        effectiveness,
-        hx_duty_W,
-    ) = _state_at_property_temperature(T_prop_C, case)
+    state = _state_at_property_temperature(T_prop_C, case)
 
     return SteadyStateResult(
         case=case,
-        T_supply_C=T_supply_C,
-        T_return_C=T_return_C,
-        dT_primary_C=T_return_C - T_supply_C,
-        m_dot_kgs=m_dot_kgs,
+        T_supply_C=state.T_supply_C,
+        T_return_C=state.T_return_C,
+        rack_return_temps_C=state.rack_return_temps_C,
+        dT_primary_C=state.T_return_C - state.T_supply_C,
+        m_dot_kgs=state.m_dot_kgs,
         property_eval_T_C=T_prop_C,
-        cp_Jkg_K=cp_Jkg_K,
-        hx_effectiveness=effectiveness,
-        hx_duty_kW=hx_duty_W / _W_PER_KW,
+        cp_Jkg_K=state.cp_Jkg_K,
+        hx_effectiveness=state.effectiveness,
+        hx_duty_kW=state.hx_duty_W / _W_PER_KW,
         solver_converged=(ier == 1),
         solver_message=str(message).strip(),
     )
@@ -219,8 +328,13 @@ def energy_balance_residual_percent(result: SteadyStateResult) -> float:
     dh_Jkg = coolant_enthalpy_Jkg(result.T_return_C) - coolant_enthalpy_Jkg(
         result.T_supply_C
     )
+    q_rack_kW = result.case.total_load_kW
+    if q_rack_kW == 0.0:
+        raise ValueError(
+            "부하 0 에서는 상대 잔차가 정의되지 않는다 (0 으로 나눈다) — "
+            "극단 케이스(6장)는 비발산으로 판정하고 이 잔차를 쓰지 않는다"
+        )
     q_enthalpy_kW = result.m_dot_kgs * dh_Jkg / _W_PER_KW
-    q_rack_kW = result.case.rack_load_kW
     return (q_enthalpy_kW - q_rack_kW) / q_rack_kW * 100.0
 
 
@@ -232,7 +346,9 @@ def hx_duty_identity_residual_percent(result: SteadyStateResult) -> float:
     남는다. 통과해도 아무것도 증명하지 못한다 — 게이트 판정에 쓰지 않고, 항등임을
     눈으로 확인하려고 남겨둔다(C7).
     """
-    q_rack_kW = result.case.rack_load_kW
+    q_rack_kW = result.case.total_load_kW
+    if q_rack_kW == 0.0:
+        raise ValueError("부하 0 에서는 상대 잔차가 정의되지 않는다 (0 으로 나눈다)")
     return (result.hx_duty_kW - q_rack_kW) / q_rack_kW * 100.0
 
 
@@ -241,11 +357,15 @@ def default_cases(cp_rule: CpRule = DEFAULT_CP_RULE) -> list[SteadyStateCase]:
 
     2차측 공급온도 {하단, 상단} × NTU {하단, 상단}. 대표값을 고르지 않는다 —
     balance 는 보존법칙이므로 범위 안 어느 값에서도 성립해야 한다. 부하는
-    100%(5장 랙당 발열량) 고정이다. 부하 0/최대 스윕은 세션 3 게이트이며 여기서
-    돌리지 않는다.
+    100%(5장 랙당 발열량) 고정이고 랙 수는 5장 `racks_per_cdu`(8개)다.
+
+    **유량은 5장 랙당 정격(1.94 L/s)을 그대로 쓴다 — 수력을 풀지 않는다.**
+    수력과 결합한 32조합은 `default_cdu_cases()` 이고 세션 3 게이트는 그쪽이
+    판정한다. 이 4케이스는 수력과 무관하게 열식만 보는 세션 1-B 의 자리를
+    유지하려고 남긴다(랙 수만 5장대로 8개가 됐다).
     """
     return [
-        SteadyStateCase(
+        SteadyStateCase.uniform(
             T_secondary_supply_C=T_secondary_C,
             ntu=ntu,
             rack_load_kW=SCENARIO.rack_it_load_kW,
@@ -258,6 +378,152 @@ def default_cases(cp_rule: CpRule = DEFAULT_CP_RULE) -> list[SteadyStateCase]:
             SCENARIO.T_secondary_supply_C.high,
         )
         for ntu in (HEAT_EXCHANGER.ntu.low, HEAT_EXCHANGER.ntu.high)
+    ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 수력↔열 결합 (세션 3-B) — 하이브리드 구조의 두 반쪽을 물린다 (절대 규칙 4)
+# ─────────────────────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class CduCase:
+    """CDU 1대 정상상태 케이스 — 수력 조건 + 열 조건.
+
+    부하는 **CDU 전체 일괄**이다 [규약: 5-1 「부하 프로파일의 랙 배분」 · 세션 3-B]
+    — `load_percent` 를 8랙에 동일하게 나눈다. 랙별 배분비는 5장에 없다.
+    """
+
+    hydraulic: HydraulicCase
+    T_secondary_supply_C: float
+    ntu: float
+    load_percent: float = LOAD_PROFILE.rated_load_percent
+    heat_capacity_ratio: float = HEAT_EXCHANGER.flow_ratio_primary_to_secondary
+    cp_rule: CpRule = DEFAULT_CP_RULE
+
+    @property
+    def rack_load_kW(self) -> float:
+        """랙당 발열량 [kW] — 5장 랙당 발열량 × 부하율."""
+        return SCENARIO.rack_it_load_kW * self.load_percent * _PERCENT
+
+    @property
+    def label(self) -> str:
+        return (
+            f"{self.hydraulic.label} / NTU={self.ntu:g}"
+            f" / T2nd={self.T_secondary_supply_C:g}C"
+            f" / load={self.load_percent:g}%"
+        )
+
+
+@dataclass(frozen=True)
+class CduSteadyStateResult:
+    """결합 해 1건. 수력·열 두 solver 의 성공 플래그를 함께 싣는다(절대 규칙 5)."""
+
+    case: CduCase
+    thermal: SteadyStateResult
+    flow: FlowDistributionResult
+    property_eval_T_C: float
+    outer_solver_converged: bool
+    outer_solver_message: str
+
+    @property
+    def solver_converged(self) -> bool:
+        """수력·열·바깥 고정점이 **전부** 수렴했는가."""
+        return (
+            self.outer_solver_converged
+            and self.thermal.solver_converged
+            and self.flow.solver_converged
+        )
+
+
+def solve_cdu_steady_state(case: CduCase) -> CduSteadyStateResult:
+    """수력과 열을 결합해 CDU 정상상태를 푼다.
+
+    구조 (절대 규칙 4 — 하이브리드)::
+
+        바깥 fsolve: 물성 평가온도 T_prop 의 고정점
+          └ 안쪽 fsolve: 그 T_prop 에서 헤더 압력평형 → 랙별 유량 (quasi-steady)
+              └ 대수식: 그 유량으로 정상상태 온도
+
+    압력-유량은 **매번 quasi-steady 대수방정식**으로 다시 풀고, 온도는 대수적으로
+    (정상상태이므로) 푼다. 시간적분은 이 함수에 없다 — `dynamics.py` 다.
+
+    물성 온도는 5-1 규약대로 1차측 벌크 평균온도이며, 수력과 열이 **같은 온도를**
+    본다 — 세션 3-A2 가 수력 쪽 물성 온도를 인자로 뺀 것이 이 자리를 만들기
+    위해서였다(미해결 #28).
+
+    초기값은 5장 1차측 공급·환수의 산술평균이다 — 출발점일 뿐 해를 정하지 않는다.
+    **케이스마다 이 함수를 새로 호출해 초기조건을 명시적으로 리셋한다**
+    (collaboration.md 결함유형 ④ — 시나리오 간 상태 이월 방지).
+
+    절대 규칙 5: 바깥 `fsolve` 의 `ier`, 안쪽 수력 `fsolve` 의 `ier`, 열 쪽
+    `fsolve` 의 `ier` 를 **전부** 확인한다. 수력이 실패하면
+    `solve_flow_distribution` 이 예외를 던지고, 나머지는 결과에 플래그로 실린다.
+    """
+
+    def thermal_case_at(
+        T_property_C: float,
+    ) -> tuple[SteadyStateCase, FlowDistributionResult]:
+        flow = solve_flow_distribution(case.hydraulic, T_property_C)
+        thermal_case = SteadyStateCase(
+            T_secondary_supply_C=case.T_secondary_supply_C,
+            ntu=case.ntu,
+            rack_loads_kW=(case.rack_load_kW,) * case.hydraulic.n_racks,
+            rack_flows_Lps=flow.rack_flows_Lps,
+            heat_capacity_ratio=case.heat_capacity_ratio,
+            cp_rule=case.cp_rule,
+        )
+        return thermal_case, flow
+
+    def residual(x: list[float]) -> list[float]:
+        T_prop_C = float(x[0])
+        thermal_case, _flow = thermal_case_at(T_prop_C)
+        state = _state_at_property_temperature(T_prop_C, thermal_case)
+        rule_T_C = _property_temperature_from_state(
+            state.T_supply_C, state.T_return_C, case.cp_rule
+        )
+        return [rule_T_C - T_prop_C]
+
+    initial_guess_T_C = bulk_mean_temperature_C(
+        SCENARIO.T_primary_supply_C, SCENARIO.T_primary_return_C
+    )
+    solution, _info, ier, message = fsolve(
+        residual, [initial_guess_T_C], full_output=True
+    )
+
+    T_prop_C = float(solution[0])
+    thermal_case, flow = thermal_case_at(T_prop_C)
+    thermal = solve_steady_state(thermal_case)
+    return CduSteadyStateResult(
+        case=case,
+        thermal=thermal,
+        flow=flow,
+        property_eval_T_C=T_prop_C,
+        outer_solver_converged=(ier == 1),
+        outer_solver_message=str(message).strip(),
+    )
+
+
+def default_cdu_cases(
+    load_percent: float = LOAD_PROFILE.rated_load_percent,
+) -> list[CduCase]:
+    """5장·5-1 범위 양 끝의 **32조합** (방침 (B) — 양 끝을 둘 다 돌린다).
+
+    수력 8조합(양정 2 × 분기ΔP 2 × 밸브ΔP 2) × NTU 2 × 2차측 2 = 32.
+    중점을 고르지 않는다. 부하는 인자로 받는다 — 극단 케이스(0% / 100%)를
+    같은 32조합 위에서 돌리기 위해서다(6장 발산 검사).
+    """
+    return [
+        CduCase(
+            hydraulic=hydraulic,
+            T_secondary_supply_C=T_secondary_C,
+            ntu=ntu,
+            load_percent=load_percent,
+        )
+        for hydraulic in default_hydraulic_cases()
+        for ntu in (HEAT_EXCHANGER.ntu.low, HEAT_EXCHANGER.ntu.high)
+        for T_secondary_C in (
+            SCENARIO.T_secondary_supply_C.low,
+            SCENARIO.T_secondary_supply_C.high,
+        )
     ]
 
 
@@ -274,7 +540,7 @@ def format_results_table(results: list[SteadyStateResult]) -> str:
         f"{'':<22}{'[C]':>10}{'[C]':>10}{'[K]':>8}{'[kW]':>10}{'[%]':>14}{'':>9}"
     )
     lines = [
-        "세션 1-B · 단일 랙 · 단일 CDU 정상상태 결과",
+        f"열식 단독 정상상태 (랙 {results[0].case.n_racks}개 · 유량 5장 정격 고정)",
         "※ " + ASSUMPTION_TAG,
         "",
         header,
@@ -297,8 +563,55 @@ def format_results_table(results: list[SteadyStateResult]) -> str:
         "  — 모델이 해를 구할 때 쓴 상수 cp 경로와 독립이다.",
         "",
         "※ " + ASSUMPTION_TAG,
-        "※ 이 표는 energy balance 만 본다. T_return 방향성·수렴시간·극단 케이스는",
-        "   세션 2·3의 것이며 여기서 판정하지 않았다.",
+        "※ 이 표는 수력을 풀지 않는다 — 유량이 5장 정격 고정이다.",
+        "   수력과 결합한 32조합은 아래 「세션 3-B」 표이며, 세션 3 게이트는 그쪽이다.",
+    ]
+    return "\n".join(lines)
+
+
+def format_cdu_results_table(results: list[CduSteadyStateResult]) -> str:
+    """수력 결합 32조합 결과 표를 문자열로 만든다 (순수 함수).
+
+    절대 규칙 11: 산출물에 "가정값 기반 — 실측 아님" 표시를 반드시 넣는다.
+    """
+    header = (
+        f"{'case':<44}{'Q_total':>10}{'Q_rack':>9}{'T_sup':>9}{'T_ret':>9}"
+        f"{'dT':>8}{'duty':>10}{'balance':>11}{'solver':>8}"
+    )
+    units = (
+        f"{'':<44}{'[L/s]':>10}{'[L/s]':>9}{'[C]':>9}{'[C]':>9}"
+        f"{'[K]':>8}{'[kW]':>10}{'[%]':>11}{'':>8}"
+    )
+    lines = [
+        f"세션 3-B · 8랙 CDU 정상상태 (수력 결합) · {len(results)}조합",
+        "※ " + ASSUMPTION_TAG,
+        "",
+        header,
+        units,
+        "-" * len(header),
+    ]
+    worst_residual_percent = 0.0
+    for r in results:
+        residual_percent = energy_balance_residual_percent(r.thermal)
+        worst_residual_percent = max(worst_residual_percent, abs(residual_percent))
+        lines.append(
+            f"{r.case.label:<44}"
+            f"{r.flow.total_flow_Lps:>10.4f}{r.flow.mean_rack_flow_Lps:>9.4f}"
+            f"{r.thermal.T_supply_C:>9.3f}{r.thermal.T_return_C:>9.3f}"
+            f"{r.thermal.dT_primary_C:>8.3f}{r.thermal.hx_duty_kW:>10.2f}"
+            f"{residual_percent:>11.5f}"
+            f"{('OK' if r.solver_converged else 'FAIL'):>8}"
+        )
+    lines += [
+        "-" * len(header),
+        "",
+        f"energy balance 최대 |잔차| = {worst_residual_percent:.5f} % "
+        "(6장 기준 <0.1% — 세션 1-B 게이트를 8랙에서 재판정한 값)",
+        "solver: 수력 fsolve · 열 fsolve · 결합 고정점 fsolve 셋 다 ier==1 이어야 OK",
+        "물성 평가: 수력과 열이 같은 1차측 벌크 평균온도를 본다 (5-1 규약)",
+        "",
+        "※ " + ASSUMPTION_TAG,
+        SESSION_3B_CAVEAT,
     ]
     return "\n".join(lines)
 
@@ -308,8 +621,13 @@ def main() -> int:
 
     if hasattr(sys.stdout, "reconfigure"):  # Windows 콘솔 기본 인코딩 대비
         sys.stdout.reconfigure(encoding="utf-8")
-    results = [solve_steady_state(case) for case in default_cases()]
-    print(format_results_table(results))
+    print(format_results_table([solve_steady_state(c) for c in default_cases()]))
+    print()
+    print(
+        format_cdu_results_table(
+            [solve_cdu_steady_state(c) for c in default_cdu_cases()]
+        )
+    )
     return 0
 
 
