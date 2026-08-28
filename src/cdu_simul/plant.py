@@ -41,6 +41,7 @@ from cdu_simul.assumptions import (
     PLANT,
     SCENARIO,
     SESSION_5_CAVEAT,
+    SESSION_5B_CAVEAT,
 )
 from cdu_simul.dynamics import (
     INTEGRATION_ATOL,
@@ -298,6 +299,7 @@ def format_plant_table(results: list[PlantSteadyStateResult]) -> str:
         "",
         "※ " + ASSUMPTION_TAG,
         SESSION_5_CAVEAT,
+        SESSION_5B_CAVEAT,
     ]
     return "\n".join(lines)
 
@@ -390,8 +392,8 @@ def integrate_plant_load_step(
                 load_after_percent=cdu.load_percent,
                 T_secondary_supply_C=cdu.T_secondary_supply_C,
                 ntu=cdu.ntu,
-                heat_capacity_ratio=cdu.heat_capacity_ratio,
                 hydraulic=cdu.hydraulic,
+                secondary_flow_Lps=shares[i],
             )
             dT_supply, dT_return, _flow = _derivative(
                 float(y[2 * i]),
@@ -483,6 +485,7 @@ def format_plant_transient_table(results: list[PlantTransientResult]) -> str:
         "",
         "※ " + ASSUMPTION_TAG,
         SESSION_5_CAVEAT,
+        SESSION_5B_CAVEAT,
     ]
     return "\n".join(lines)
 

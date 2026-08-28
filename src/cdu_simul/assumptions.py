@@ -73,6 +73,15 @@ SESSION_5_CAVEAT: str = "\n".join(
     ]
 )
 
+#: 세션 5-B 산출물에 붙이는 추가 문구 — Cr 유도 전환의 소급 효과.
+#: 다른 ※ 문구와 같은 자리에 둔다(표시 문구가 모듈마다 갈리지 않게).
+SESSION_5B_CAVEAT: str = "\n".join(
+    [
+        "· Cr 은 5-1 이 선언한 1 이 아니라 물성에서 유도된 값이다(세션 5-B). 세션 5-B",
+        "  이전 로그의 수치는 이후 것과 나란히 읽을 수 없다",
+    ]
+)
+
 #: 압력 단위 규약 — 1 mAq 를 몇 Pa 로 읽을 것인가.
 #: [규약: 프로젝트정리 5-1 「압력 단위 규약 mAq」 · 세션 3 확정]
 #: 5장이 mAq·L/s·℃ 를 섞어 쓰는데, mAq 를 PG25 액주 높이로 읽으면 값이 1.3%
@@ -254,8 +263,28 @@ class HeatExchangerAssumptions:
     method: str = "ε-NTU"
     ntu: Range = Range(2.0, 3.0, "-")
 
-    # 1차:2차 유량비 1:1 가정 [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
+    # 1차:2차 **부피유량**비 1:1 [가정값: 업계 공개자료 전형범위 · 프로젝트정리 5장]
+    # [읽는 방식: 프로젝트정리 5-1 「2차측 유체」 · 세션 5-B 확정]
+    # **이것은 부피유량비이지 열용량유량비(Cr)가 아니다.** 5장이 유량을 전부 L/s 로
+    # 쓰므로 「1:1」을 부피로 읽는 것이 가장 충실하다. 열용량유량으로 읽으려면
+    # 5장에 없는 개념이 필요하다.
+    # 세션 1-B~5 는 이 값을 Cr 로 **선언해** 썼는데, 그것이 세션 5 C4 가 드러낸
+    # 오류다 — 부피유량이 같아도 양쪽 온도가 다르면 ρ·cp 가 달라 Cr ≠ 1 이다.
+    # **Cr 은 이제 어디에서도 선언하지 않고 매번 물성에서 유도한다**
+    # (`model.hx_capacity_terms`).
     flow_ratio_primary_to_secondary: float = 1.0
+
+    @property
+    def secondary_flow_Lps(self) -> float:
+        """CDU 1대의 2차측 부피유량 [L/s] = 부피유량비 × 5장 **정격** 1차측 유량.
+
+        [규약: 프로젝트정리 5-1 「2차측 유체」 · 세션 5-B 확정]
+
+        **정격에 고정한다 — 운전점을 추종하지 않는다.** 추종은 5장에 없는 처리이고,
+        고정해야 다중 CDU 대칭 배분이 단일 CDU 를 정확히 재현한다(세션 5-B C4).
+        새 숫자가 아니다: 5장 정격유량 15.5 L/s 와 5장 유량비 1:1 의 곱이다.
+        """
+        return self.flow_ratio_primary_to_secondary * PumpAssumptions().rated_flow_Lps
 
 
 @dataclass(frozen=True)
@@ -351,19 +380,18 @@ class PlantAssumptions:
 
     @property
     def secondary_total_flow_Lps(self) -> float:
-        """총 2차측 유량 [L/s] = CDU 대수 × 5장 정격 1차측 유량.
+        """총 2차측 유량 [L/s] = CDU 대수 × CDU 1대분 2차측 유량.
 
-        5장 「1차:2차 유량비 1:1」에서 유도되므로 **새 숫자가 아니다**.
+        5장 「1차:2차 유량비 1:1」과 정격유량에서 유도되므로 **새 숫자가 아니다**.
 
         **이 총합이 고정이라는 것이 연동의 실체다**(5-1). 한쪽 CDU 의 1차측
         유량이 오르면 그쪽 배분이 커지고 다른 쪽 배분이 줄어든다 — 두 CDU 가
         고정된 총량을 두고 경쟁한다.
 
-        **주의**: 정격(15.5 L/s)으로 고정되므로, 운전점이 정격에서 벗어나 있는
-        만큼(세션 3-A 관측: +0.019~+0.046%) 대칭 케이스에서도 2차:1차 비가
-        정확히 1:1 이 되지 않는다. 그 결과가 세션 5 C4 대조에 그대로 나타난다.
+        대칭 조건에서는 각 CDU 가 정확히 `HEAT_EXCHANGER.secondary_flow_Lps`
+        (=15.5 L/s)를 받으므로 **단일 CDU 결과가 그대로 재현된다**(세션 5-B C4).
         """
-        return self.cdu_count * PumpAssumptions().rated_flow_Lps
+        return self.cdu_count * HeatExchangerAssumptions().secondary_flow_Lps
 
     def secondary_shares_Lps(
         self, primary_flows_Lps: tuple[float, ...]
