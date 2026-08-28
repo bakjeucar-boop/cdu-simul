@@ -1,0 +1,437 @@
+"""수력 모듈 — 8랙 헤더 압력평형 기반 유량분배 (세션 3-A).
+
+범위 — 4장 「단계적 확장 전략」 3단계의 **앞 절반**이다.
+
+    펌프곡선 · 랙 분기저항 · 밸브 · 계통 잔여저항 → fsolve 로 랙별 유량
+
+**열모델과 결합하지 않는다.** 온도는 이 모듈에 없다 — 물성(밀도)만 5장 1차측
+공급·환수의 벌크 평균온도에서 한 번 조회한다. 결합은 세션 3-B다. 따라서
+6장 feasibility 기준(energy balance · T_return 방향성 · 수렴시간 · 극단 케이스)은
+이 모듈이 **하나도 판정하지 않는다**.
+
+**하이브리드 구조(절대 규칙 4)의 압력-유량 쪽이다.** 압력-유량 분배는 매 시점
+quasi-steady 대수방정식으로 푼다 — 이 모듈이 그 대수방정식이다. 시간적분하지
+않는다.
+
+**모든 수치는 가정값 기반이며 실측이 아니다.** 5장·5-1 값은 assumptions.py
+에서만 읽는다(절대 규칙 2) — 이 파일에 숫자를 박지 않는다.
+
+**계통 구조(프로젝트정리 5-1 「계통 잔여저항」)**::
+
+    펌프 ──┬── 계통 잔여저항 ──┬── [헤더] ──┬── 랙1 분기 + 밸브 ──┐
+           │  (집중저항 하나)   │ 저항 0 의  ├── 랙2 분기 + 밸브 ──┤
+           │                    │ 공통 노드  ├── ...               │
+           └────────────────────┴────────────┴─────────────────────┘
+
+헤더에 저항을 임의로 부여하지 않는다(5-1). 잔여저항을 HX·CDU 내부·헤더로
+분해하지 않는다(5-1: 5장에 개별 값이 없어 분해하지 않는다).
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+
+import numpy as np
+from scipy.optimize import fsolve
+
+from cdu_simul.assumptions import (
+    ASSUMPTION_TAG,
+    PASCAL_PER_MAQ,
+    PIPING,
+    PUMP,
+    SCENARIO,
+    VALVE,
+    PumpCurveCoefficients,
+)
+from cdu_simul.fluid import coolant_density_kgm3
+
+#: L/s → m^3/h. 밸브 Kv 식이 m^3/h 를 쓰고 5장 유량은 L/s 다 (절대 규칙 9).
+_M3H_PER_LPS: float = 3.6
+#: L/s → m^3/s. 분기저항 ΔP = K·ρv²/2 는 SI 로 푼다.
+_M3S_PER_LPS: float = 1.0e-3
+#: mm → m.
+_M_PER_MM: float = 1.0e-3
+#: bar → Pa. Kv 식(ΔP 를 bar 로 받는 관례)의 변환 지점.
+_PA_PER_BAR: float = 1.0e5
+#: 비중(SG) 의 기준 밀도 [kg/m^3].
+#: [정의값: SG 의 정의 — 가정값·설계값 아님]
+#: SG 는 정의상 기준 물의 밀도에 대한 비이고 배관 실무의 관례 기준이 1000 kg/m^3
+#: 이다. 5-1 이 SG = 1.0124 (37℃ 벌크평균 ρ 기준) 라고 적은 것도 같은 기준이다.
+_SG_REFERENCE_DENSITY_kgm3: float = 1000.0
+
+
+def property_temperature_C() -> float:
+    """물성(밀도) 을 평가할 온도 [℃] — 1차측 벌크 평균온도.
+
+    [규약: 프로젝트정리 5-1 「cp·ρ 평가 온도」 · 세션 1-B 확정]
+
+    5장 1차측 공급·환수 온도의 산술평균이다. 5-1 이 정한 벌크평균 규칙을 그대로
+    따르며, `model.py` 의 기본 규칙(`bulk_mean`)과 같은 규칙이다.
+
+    **세션 3-A 의 한계**: 여기서는 5장 표의 공급·환수 온도를 **고정값으로** 쓴다.
+    열모델이 붙으면 이 온도는 풀린 상태에서 나와야 하고, 밀도가 유량에 의존하므로
+    수력-열 연립이 된다 — **세션 3-B 에서 다시 본다**. 이 모듈은 그 결합을 하지
+    않는다.
+    """
+    return 0.5 * (SCENARIO.T_primary_supply_C + SCENARIO.T_primary_return_C)
+
+
+def coolant_specific_gravity(T_C: float) -> float:
+    """냉각액 비중 SG [-] — CoolProp 래퍼를 통해 얻는다 (하드코딩 금지).
+
+    5-1 은 SG = 1.0124 로 기록돼 있으나 그 숫자를 박지 않는다. 유체(PG25)가
+    설계데이터로 교체되면 SG 도 함께 따라가야 하고, 교체 지점은 `assumptions.py`
+    하나여야 하기 때문이다(절대 규칙 2).
+
+    **관측**: 현재 CoolProp 이 주는 값은 5-1 기록보다 약 0.09% 작다. 전사된
+    Kv·K 값은 5-1 의 SG 로 역산된 것이므로, 이 모듈이 정격점에서 재현하는
+    ΔP 는 5장 표값과 0.1% 이내에서 어긋난다(`format_results_table` 참조).
+    **어느 쪽도 고치지 않는다** — 5-1 값은 그대로 전사하는 것이 이 판의 규칙이다.
+    """
+    return coolant_density_kgm3(T_C) / _SG_REFERENCE_DENSITY_kgm3
+
+
+def pump_head_mAq(Q_total_Lps: float, coeffs: PumpCurveCoefficients) -> float:
+    """펌프 특성곡선 H = H0 - a*Q - b*Q^2 [mAq] (순수 함수).
+
+    Q 는 **총유량** [L/s] 이다 — 펌프는 계통에 한 대다(5장).
+    계수는 5-1 전사값이며 이 함수가 만들지 않는다.
+    """
+    return (
+        coeffs.H0_mAq
+        - coeffs.a_mAq_per_Lps * Q_total_Lps
+        - coeffs.b_mAq_per_Lps2 * Q_total_Lps**2
+    )
+
+
+def valve_dp_mAq(
+    Q_rack_Lps: float,
+    Kv_max_m3h: float,
+    opening_fraction: float,
+    T_property_C: float | None = None,
+) -> float:
+    """랙 밸브 차압 [mAq] (순수 함수).
+
+    개도 특성은 **선형** Kv(x) = Kv_max·x [규약: 5-1] 이다. Kv 정의식
+    Kv = Q·sqrt(SG/ΔP[bar]) 를 ΔP 에 대해 푼 것이므로 ΔP = SG·(Q/Kv)^2 [bar] 다.
+
+    SG 는 하드코딩하지 않고 CoolProp 래퍼에서 얻는다(`coolant_specific_gravity`).
+    `T_property_C` 를 주지 않으면 5-1 벌크평균 규칙을 쓴다.
+    """
+    if opening_fraction <= 0.0:
+        raise ValueError("개도 0 이하에서는 Kv 가 0이 되어 ΔP 가 정의되지 않는다")
+    T_C = property_temperature_C() if T_property_C is None else T_property_C
+    Kv_m3h = Kv_max_m3h * opening_fraction
+    Q_m3h = Q_rack_Lps * _M3H_PER_LPS
+    dP_bar = coolant_specific_gravity(T_C) * (Q_m3h / Kv_m3h) ** 2
+    return dP_bar * _PA_PER_BAR / PASCAL_PER_MAQ
+
+
+def branch_dp_mAq(
+    Q_rack_Lps: float,
+    K: float,
+    inner_diameter_mm: float = PIPING.rack_branch_inner_diameter_mm,
+    T_property_C: float | None = None,
+) -> float:
+    """랙 분기 배관 차압 [mAq] — ΔP = K·ρ·v²/2 (순수 함수).
+
+    K 는 무차원이며 **25A 내경 기준 유속으로 정의**돼 있다(5-1) — 기본 내경을
+    그대로 쓴다. 다른 구경을 넘기면 K 의 정의 기준이 어긋나므로 호출자가 그
+    책임을 진다.
+    """
+    T_C = property_temperature_C() if T_property_C is None else T_property_C
+    rho_kgm3 = coolant_density_kgm3(T_C)
+    d_m = inner_diameter_mm * _M_PER_MM
+    area_m2 = math.pi * d_m**2 / 4.0
+    v_ms = Q_rack_Lps * _M3S_PER_LPS / area_m2
+    return K * rho_kgm3 * v_ms**2 / 2.0 / PASCAL_PER_MAQ
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 케이스 정의
+# ─────────────────────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class HydraulicCase:
+    """수력 케이스 하나. 5장·5-1 범위의 양 끝 조합을 담는다.
+
+    `branch_K_multipliers` 는 랙별 K 배수다. 기본(None)은 전부 1.0 — 8랙 동일
+    조건이다. 누출 시나리오(절대 규칙 8: K값 변화로 근사)가 이 자리에 걸리지만
+    **누출 구현은 세션 4**이며, 세션 3-A 에서는 방향성 검사에만 쓴다.
+    """
+
+    label: str
+    pump: PumpCurveCoefficients
+    branch_K: float
+    valve_Kv_max_m3h: float
+    opening_fraction: float = VALVE.rated_opening_fraction
+    n_racks: int = SCENARIO.racks_per_cdu
+    branch_K_multipliers: tuple[float, ...] | None = None
+
+    @property
+    def rack_branch_K(self) -> tuple[float, ...]:
+        """랙별 K값 [-]."""
+        if self.branch_K_multipliers is None:
+            return (self.branch_K,) * self.n_racks
+        if len(self.branch_K_multipliers) != self.n_racks:
+            raise ValueError("branch_K_multipliers 길이가 랙 수와 다르다")
+        return tuple(self.branch_K * m for m in self.branch_K_multipliers)
+
+
+@dataclass(frozen=True)
+class FlowDistributionResult:
+    """유량분배 해. solver 성공 여부를 반드시 싣는다(절대 규칙 5)."""
+
+    case: HydraulicCase
+    rack_flows_Lps: tuple[float, ...]
+    total_flow_Lps: float
+    pump_head_mAq: float
+    residual_dp_mAq: float
+    rack_branch_dp_mAq: tuple[float, ...]
+    rack_valve_dp_mAq: tuple[float, ...]
+    residual_coeff_mAq_per_Lps2: float
+    residual_share_at_rated_percent: float
+    max_abs_equation_residual_mAq: float
+    solver_ier: int
+    solver_message: str
+    solver_converged: bool
+
+    @property
+    def mean_rack_flow_Lps(self) -> float:
+        return self.total_flow_Lps / self.case.n_racks
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 계통 잔여저항 — 5-1 은 값이 아니라 **규칙**을 준다
+# ─────────────────────────────────────────────────────────────────────────────
+def residual_resistance_coeff_mAq_per_Lps2(
+    case: HydraulicCase,
+    T_property_C: float | None = None,
+) -> float:
+    """계통 잔여저항 계수 [mAq/(L/s)^2] 를 5-1 규칙 그대로 역산한다.
+
+    [역산: 프로젝트정리 5-1 「계통 잔여저항 (HX 1차측 + CDU 내부배관 + 헤더)」]
+
+    5-1 규칙::
+
+        잔여저항 = H정격 - (랙 분기 ΔP + 밸브 ΔP)
+
+    이것을 **총유량 경로의 집중저항 하나**로 배정한다. 헤더는 저항 0의 공통
+    노드로 본다. 난류 영역이므로 ΔP ∝ Q^2 로 두고, 계수는 정격점 한 점에서
+    정해진다::
+
+        C_res = ΔP_res,정격 / Q_총,정격^2
+
+    잔여저항은 독립 범위가 아니라 각 조합의 **종속값**이다 — 양정·분기ΔP·밸브ΔP
+    가 정해지면 잔여분도 정해지므로 조합 수가 늘지 않는다(5-1).
+
+    **두 정격 기준이 0.13% 어긋나 있다.** 역산의 총유량 기준은 5장 펌프 정격
+    15.5 L/s 이고, 랙 분기·밸브 ΔP 는 5장 표대로 랙당 1.94 L/s 기준이다.
+    8 × 1.94 = 15.52 ≠ 15.5 다. **이는 5장 자체의 반올림이며 어느 쪽도 고치지
+    않는다** — 한쪽을 다른 쪽에 맞추면 5장에 없는 숫자를 만드는 것이 된다.
+    이 어긋남이 운전점에 얼마나 전파되는지는 `format_results_table` 이 낸다.
+
+    **한계(5-1)**: 잔여저항이 총양정의 60~83% 를 차지한다 — 세션 3의 유량분배
+    결과는 사실상 이 배정 방식이 지배한다. 수렴·비발산 게이트 통과를 "유량분배
+    값이 타당하다"로 읽지 않는다.
+    """
+    T_C = property_temperature_C() if T_property_C is None else T_property_C
+    Q_rack_rated_Lps = VALVE.rated_flow_per_rack_Lps
+    Q_total_rated_Lps = PUMP.rated_flow_Lps
+
+    branch_dp = branch_dp_mAq(Q_rack_rated_Lps, case.branch_K, T_property_C=T_C)
+    valve_dp = valve_dp_mAq(
+        Q_rack_rated_Lps, case.valve_Kv_max_m3h, case.opening_fraction, T_C
+    )
+    head_rated_mAq = pump_head_mAq(Q_total_rated_Lps, case.pump)
+    residual_dp_rated_mAq = head_rated_mAq - (branch_dp + valve_dp)
+    if residual_dp_rated_mAq <= 0.0:
+        raise ValueError(
+            "잔여저항이 0 이하로 역산됐다 — 5장 조건이 정격점에서 닫히지 않는다: "
+            f"{case.label} (H정격 {head_rated_mAq:.3f} mAq, "
+            f"분기+밸브 {branch_dp + valve_dp:.3f} mAq)"
+        )
+    return residual_dp_rated_mAq / Q_total_rated_Lps**2
+
+
+def residual_share_at_rated_percent(
+    case: HydraulicCase, T_property_C: float | None = None
+) -> float:
+    """정격점에서 잔여저항이 총양정에서 차지하는 몫 [%] (5-1 한계의 실측치)."""
+    coeff = residual_resistance_coeff_mAq_per_Lps2(case, T_property_C)
+    Q_total_rated_Lps = PUMP.rated_flow_Lps
+    head_rated_mAq = pump_head_mAq(Q_total_rated_Lps, case.pump)
+    return coeff * Q_total_rated_Lps**2 / head_rated_mAq * 100.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 헤더 압력평형 — fsolve
+# ─────────────────────────────────────────────────────────────────────────────
+def solve_flow_distribution(
+    case: HydraulicCase,
+    T_property_C: float | None = None,
+    initial_guess_Lps: tuple[float, ...] | None = None,
+) -> FlowDistributionResult:
+    """헤더 압력평형을 `fsolve` 로 풀어 랙별 유량을 낸다.
+
+    헤더는 **저항 0의 공통 노드**이므로(5-1) 랙 i 마다 같은 펌프 양정을 나눠
+    받는다. 미지수는 랙별 유량 Q_i [L/s] 이고 식은 랙마다 하나다::
+
+        H_pump(ΣQ) - C_res·(ΣQ)^2 - ΔP_분기,i(Q_i) - ΔP_밸브,i(Q_i) = 0
+
+    초기값은 5장 랙당 정격유량(1.94 L/s)이다 — 출발점일 뿐 해를 정하지 않는다.
+    **케이스마다 이 함수를 새로 호출해 초기조건을 명시적으로 리셋한다**
+    (collaboration.md 결함유형 ④ — 시나리오 간 상태 이월 방지).
+
+    절대 규칙 5: `ier` 를 확인해 결과에 싣고, 실패하면 조용히 넘어가지 않고
+    `RuntimeError` 를 던진다.
+    """
+    T_C = property_temperature_C() if T_property_C is None else T_property_C
+    K_per_rack = case.rack_branch_K
+    residual_coeff = residual_resistance_coeff_mAq_per_Lps2(case, T_C)
+
+    def equations(Q_racks_Lps: np.ndarray) -> np.ndarray:
+        Q_total_Lps = float(np.sum(Q_racks_Lps))
+        available_mAq = (
+            pump_head_mAq(Q_total_Lps, case.pump) - residual_coeff * Q_total_Lps**2
+        )
+        return np.array(
+            [
+                available_mAq
+                - branch_dp_mAq(float(Q_i), K_i, T_property_C=T_C)
+                - valve_dp_mAq(
+                    float(Q_i), case.valve_Kv_max_m3h, case.opening_fraction, T_C
+                )
+                for Q_i, K_i in zip(Q_racks_Lps, K_per_rack, strict=True)
+            ]
+        )
+
+    guess = (
+        np.full(case.n_racks, VALVE.rated_flow_per_rack_Lps)
+        if initial_guess_Lps is None
+        else np.array(initial_guess_Lps, dtype=float)
+    )
+    solution, _info, ier, message = fsolve(equations, guess, full_output=True)
+    converged = ier == 1
+    if not converged:
+        raise RuntimeError(
+            f"fsolve 가 수렴하지 않았다 (ier={ier}): {case.label} — "
+            f"{str(message).strip()}"
+        )
+
+    rack_flows = tuple(float(q) for q in solution)
+    total_flow_Lps = float(sum(rack_flows))
+    return FlowDistributionResult(
+        case=case,
+        rack_flows_Lps=rack_flows,
+        total_flow_Lps=total_flow_Lps,
+        pump_head_mAq=pump_head_mAq(total_flow_Lps, case.pump),
+        residual_dp_mAq=residual_coeff * total_flow_Lps**2,
+        rack_branch_dp_mAq=tuple(
+            branch_dp_mAq(q, k, T_property_C=T_C)
+            for q, k in zip(rack_flows, K_per_rack, strict=True)
+        ),
+        rack_valve_dp_mAq=tuple(
+            valve_dp_mAq(q, case.valve_Kv_max_m3h, case.opening_fraction, T_C)
+            for q in rack_flows
+        ),
+        residual_coeff_mAq_per_Lps2=residual_coeff,
+        residual_share_at_rated_percent=residual_share_at_rated_percent(case, T_C),
+        max_abs_equation_residual_mAq=float(np.max(np.abs(equations(solution)))),
+        solver_ier=int(ier),
+        solver_message=str(message).strip(),
+        solver_converged=converged,
+    )
+
+
+def default_cases() -> list[HydraulicCase]:
+    """5장·5-1 범위 양 끝의 8조합 (방침 (B) — 양 끝을 둘 다 돌린다).
+
+    세 축이 각각 두 끝을 가진다: 펌프 정격양정(20/30 mAq) · 랙 분기 K
+    (3.20/4.80 = 5장 ΔP 2/3 mAq) · 밸브 Kv_max(16.19/12.54 = 5장 ΔP 3/5 mAq).
+    2 x 2 x 2 = 8 조합이다. 중점을 고르지 않는다.
+    """
+    cases = []
+    for pump_coeffs in PUMP.curve_coefficient_bounds:
+        for branch_K in (PIPING.rack_branch_K.low, PIPING.rack_branch_K.high):
+            for Kv_max in VALVE.Kv_max_bounds_m3h:
+                cases.append(
+                    HydraulicCase(
+                        label=(
+                            f"H{pump_coeffs.H0_mAq:.1f}/K{branch_K:.2f}/Kv{Kv_max:.2f}"
+                        ),
+                        pump=pump_coeffs,
+                        branch_K=branch_K,
+                        valve_Kv_max_m3h=Kv_max,
+                    )
+                )
+    return cases
+
+
+def format_results_table(results: list[FlowDistributionResult]) -> str:
+    """8조합 결과 표를 문자열로 만든다 (순수 함수).
+
+    절대 규칙 11: 산출물에 "가정값 기반 — 실측 아님" 표시를 반드시 넣는다.
+    """
+    header = (
+        f"{'case':<26}{'H_op':>8}{'branch':>9}{'valve':>8}"
+        f"{'res dP':>9}{'res/H':>8}{'Q_total':>10}{'Q_rack':>9}{'dev':>9}{'solver':>8}"
+    )
+    units = (
+        f"{'':<26}{'[mAq]':>8}{'[mAq]':>9}{'[mAq]':>8}"
+        f"{'[mAq]':>9}{'[%]':>8}{'[L/s]':>10}{'[L/s]':>9}{'[%]':>9}{'':>8}"
+    )
+    rated_Lps = PUMP.rated_flow_Lps
+    lines = [
+        "세션 3-A · 8랙 헤더 압력평형 유량분배 (개도 80% · 8랙 동일 조건)",
+        "※ " + ASSUMPTION_TAG,
+        "※ 열모델과 결합하지 않았다 — 6장 feasibility 기준을 하나도 판정하지 않는다.",
+        "",
+        header,
+        units,
+        "-" * len(header),
+    ]
+    for r in results:
+        deviation_percent = (r.total_flow_Lps - rated_Lps) / rated_Lps * 100.0
+        lines.append(
+            f"{r.case.label:<26}"
+            f"{r.pump_head_mAq:>8.3f}{r.rack_branch_dp_mAq[0]:>9.3f}"
+            f"{r.rack_valve_dp_mAq[0]:>8.3f}{r.residual_dp_mAq:>9.3f}"
+            f"{r.residual_share_at_rated_percent:>8.2f}{r.total_flow_Lps:>10.4f}"
+            f"{r.mean_rack_flow_Lps:>9.4f}{deviation_percent:>9.4f}"
+            f"{('OK' if r.solver_converged else 'FAIL'):>8}"
+        )
+    shares = [r.residual_share_at_rated_percent for r in results]
+    lines += [
+        "-" * len(header),
+        "",
+        f"물성(밀도·SG) 평가 온도: {property_temperature_C():.1f} ℃ "
+        "(5장 1차측 공급·환수 벌크평균 · 5-1 규약)",
+        f"잔여저항 몫(정격점): {min(shares):.2f} ~ {max(shares):.2f} %"
+        " — 5-1 이 적은 60~83% 와 같은 범위다.",
+        "  → **유량분배 결과는 사실상 이 배정 방식이 지배한다**(5-1 한계 · 미해결 #24).",
+        "     이 표의 수렴을 '유량분배 값이 타당하다'로 읽지 않는다.",
+        "dev: 운전점 총유량이 5장 펌프 정격 15.5 L/s 에서 벗어난 정도.",
+        "  — 잔여저항을 15.5 L/s 기준으로, 분기·밸브 ΔP 를 랙당 1.94 L/s(×8=15.52)",
+        "    기준으로 역산했으므로 두 기준이 0.13% 어긋나 있다(5장 자체의 반올림).",
+        "    벗어남이 크든 작든 값을 그대로 적는다 — '충분히 작다'고 판단하지 않는다.",
+        "",
+        "※ " + ASSUMPTION_TAG,
+        "※ 이 표는 압력-유량 분배만 본다. 극단 케이스(부하 0/최대) 비발산은",
+        "   열모델이 붙는 세션 3-B 의 것이며 여기서 판정하지 않았다.",
+    ]
+    return "\n".join(lines)
+
+
+def main() -> int:
+    import sys
+
+    if hasattr(sys.stdout, "reconfigure"):  # Windows 콘솔 기본 인코딩 대비
+        sys.stdout.reconfigure(encoding="utf-8")
+    results = [solve_flow_distribution(case) for case in default_cases()]
+    print(format_results_table(results))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
