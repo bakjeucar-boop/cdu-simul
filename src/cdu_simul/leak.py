@@ -28,8 +28,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from cdu_simul.assumptions import ASSUMPTION_TAG, LEAK, SESSION_4_CAVEAT
+from cdu_simul.assumptions import (
+    ASSUMPTION_TAG,
+    HEAT_EXCHANGER,
+    LEAK,
+    SCENARIO,
+    SESSION_4_CAVEAT,
+)
+from cdu_simul.dynamics import (
+    LeakStepCase,
+    LeakTransientResult,
+    holdup_bounds,
+    integrate_leak_step,
+    time_to_fraction_of_step_s,
+)
 from cdu_simul.hydraulics import apply_leak_to_rack
+from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
 from cdu_simul.model import (
     CduCase,
     CduSteadyStateResult,
@@ -230,12 +244,97 @@ def format_steady_signal_table(signals: list[LeakSteadySignal]) -> str:
     return "\n".join(lines)
 
 
+def default_leak_transient_cases() -> list[LeakStepCase]:
+    """누출 3수준 × M 하한·상한. 나머지는 결과표 관례대로 범위 하단 고정."""
+    hydraulic = default_hydraulic_cases()[0]
+    lower, upper = holdup_bounds()
+    return [
+        LeakStepCase(
+            label=f"{level.label} · {holdup.label}",
+            holdup=holdup,
+            hydraulic=hydraulic,
+            k_multiplier=level.k_multiplier,
+            T_secondary_supply_C=SCENARIO.T_secondary_supply_C.low,
+            ntu=HEAT_EXCHANGER.ntu.low,
+            heat_capacity_ratio=HEAT_EXCHANGER.flow_ratio_primary_to_secondary,
+        )
+        for holdup in (lower, upper)
+        for level in leak_levels()[1:]
+    ]
+
+
+def format_transient_table(results: list[LeakTransientResult]) -> str:
+    """누출 스텝 전이 결과 표 (순수 함수).
+
+    절대 규칙 11: 산출물에 "가정값 기반 — 실측 아님" 표시를 반드시 넣는다.
+    """
+    header = (
+        f"{'case':<44}{'tau':>8}{'t63':>9}{'t95':>9}"
+        f"{'Tret 초기':>11}{'Tret 최종':>11}{'누출랙 Q':>11}{'총 Q':>10}"
+        f"{'양정':>9}{'ivp':>6}{'fsol':>6}"
+    )
+    units = (
+        f"{'':<44}{'[s]':>8}{'[s]':>9}{'[s]':>9}{'[C]':>11}{'[C]':>11}"
+        f"{'[%]':>11}{'[%]':>10}{'[mAq]':>9}{'':>6}{'':>6}"
+    )
+    lines = [
+        "세션 4 · 누출 스텝 전이 (정격 정상운전 중 t=0 에 K값 계단 주입)",
+        "※ " + ASSUMPTION_TAG,
+        "※ tau·t63·t95 의 **절대값은 해석하지 않는다** — M 결손(#21)·8랙 해석 부재(#31).",
+        "",
+        header,
+        units,
+        "-" * len(header),
+    ]
+    for r in results:
+        t63 = time_to_fraction_of_step_s(r, 0.63)
+        t95 = time_to_fraction_of_step_s(r, 0.95)
+        rack_change = (
+            (r.leak_rack_flow_final_Lps - r.leak_rack_flow_initial_Lps)
+            / r.leak_rack_flow_initial_Lps
+            * 100.0
+        )
+        total_change = (
+            (r.total_flow_final_Lps - r.total_flow_initial_Lps)
+            / r.total_flow_initial_Lps
+            * 100.0
+        )
+        lines.append(
+            f"{r.case.label:<44}"
+            f"{r.tau_theory_s:>8.2f}"
+            f"{(f'{t63:.2f}' if t63 is not None else '-'):>9}"
+            f"{(f'{t95:.2f}' if t95 is not None else '-'):>9}"
+            f"{r.T_return_initial_C:>11.4f}{r.T_return_final_C:>11.4f}"
+            f"{rack_change:>11.4f}{total_change:>10.4f}"
+            f"{r.pump_head_final_mAq - r.pump_head_initial_mAq:>9.5f}"
+            f"{('OK' if r.solver_success else 'FAIL'):>6}"
+            f"{('OK' if r.hydraulic_solver_converged else 'FAIL'):>6}"
+        )
+    lines += [
+        "-" * len(header),
+        "",
+        "부하는 바뀌지 않는다 — 정격 운전 중 누출만 계단으로 들어온다.",
+        "누출랙 Q·총 Q·양정 = 누출 전 정상상태 대비 변화.",
+        "2차측·NTU·수력 조합은 이 표에서 범위 하단 고정.",
+        "",
+        "※ " + ASSUMPTION_TAG,
+        SESSION_4_CAVEAT,
+    ]
+    return "\n".join(lines)
+
+
 def main() -> int:
     import sys
 
     if hasattr(sys.stdout, "reconfigure"):  # Windows 콘솔 기본 인코딩 대비
         sys.stdout.reconfigure(encoding="utf-8")
     print(format_steady_signal_table(all_steady_signals()))
+    print()
+    print(
+        format_transient_table(
+            [integrate_leak_step(case) for case in default_leak_transient_cases()]
+        )
+    )
     return 0
 
 

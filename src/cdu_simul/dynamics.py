@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -567,7 +568,31 @@ def integrate_leak_step(
 # ─────────────────────────────────────────────────────────────────────────────
 # C9. 수렴시간 관측 — 판정이 아니다
 # ─────────────────────────────────────────────────────────────────────────────
-def time_to_fraction_of_step_s(result: TransientResult, fraction: float) -> float | None:
+class _StepTrajectory(Protocol):
+    """`time_to_fraction_of_step_s` 가 실제로 쓰는 필드만 담은 구조적 타입.
+
+    부하 스텝(`TransientResult`)과 누출 스텝(`LeakTransientResult`)이 같은 관측
+    함수를 쓰는데, 둘은 상속 관계가 아니라 자극이 다른 별개의 결과다. 공통 조상을
+    억지로 만들지 않고 **쓰는 필드만** 프로토콜로 적는다.
+    """
+
+    # frozen dataclass 의 필드는 읽기 전용이므로 프로토콜도 읽기 전용으로 적는다.
+    @property
+    def t_s(self) -> np.ndarray: ...
+
+    @property
+    def T_return_C(self) -> np.ndarray: ...
+
+    @property
+    def T_return_initial_C(self) -> float: ...
+
+    @property
+    def T_return_final_C(self) -> float: ...
+
+
+def time_to_fraction_of_step_s(
+    result: _StepTrajectory, fraction: float
+) -> float | None:
     """T_return 이 스텝 전체 변화량의 `fraction` 에 처음 도달한 시각 [s].
 
     **관측용이다. 6장 「수렴시간」 기준을 판정하지 않는다** — M 이 배관 보유량만
