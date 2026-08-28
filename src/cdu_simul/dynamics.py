@@ -67,7 +67,7 @@ from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
 from cdu_simul.model import (
     CduCase,
     _property_temperature_from_state,
-    hx_effectiveness_counterflow,
+    hx_capacity_terms,
     solve_cdu_steady_state,
 )
 
@@ -244,6 +244,7 @@ def _derivative(
     mass_hot_kg: float,
     mass_cold_kg: float,
     hydraulic: HydraulicCase | None = None,
+    secondary_flow_Lps: float | None = None,
 ) -> tuple[float, float, float]:
     """2노드 온도 미분 (순수 함수). 반환: (dT_supply/dt, dT_return/dt, 총유량 L/s).
 
@@ -257,6 +258,10 @@ def _derivative(
 
     `hydraulic` 을 주면 그것으로 푼다(기본값은 `case.hydraulic`). 누출 스텝은
     t0 전후로 **다른 수력 케이스**를 넘겨 K값 변화를 주입한다(세션 4).
+
+    `secondary_flow_Lps` 를 주면 ε·C_min 을 그 유량에서 유도한다(세션 5 공유
+    2차측). `None` 이면 세션 4까지와 같은 경로다 — `model.hx_capacity_terms` 가
+    그 분기를 한 곳에서 처리하므로 물리를 두 번 적지 않는다.
     """
     T_property_C = _property_temperature_from_state(T_supply_C, T_return_C, "bulk_mean")
     rho_kgm3 = coolant_density_kgm3(T_property_C)
@@ -267,9 +272,15 @@ def _derivative(
     m_dot_kgs = flow.total_flow_Lps * _M3_PER_LITRE * rho_kgm3
     C_W_K = m_dot_kgs * cp_Jkg_K
 
-    effectiveness = hx_effectiveness_counterflow(case.ntu, case.heat_capacity_ratio)
+    effectiveness, C_min_W_K = hx_capacity_terms(
+        C_W_K,
+        case.ntu,
+        case.heat_capacity_ratio,
+        case.T_secondary_supply_C,
+        secondary_flow_Lps,
+    )
     Q_rack_W = load_kW * _W_PER_KW
-    Q_hx_W = effectiveness * C_W_K * (T_return_C - case.T_secondary_supply_C)
+    Q_hx_W = effectiveness * C_min_W_K * (T_return_C - case.T_secondary_supply_C)
 
     dT_return_dt = (C_W_K * (T_supply_C - T_return_C) + Q_rack_W) / (
         mass_hot_kg * cp_Jkg_K

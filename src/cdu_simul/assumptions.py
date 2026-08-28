@@ -59,6 +59,20 @@ SESSION_4_CAVEAT: str = "\n".join(
     ]
 )
 
+#: 세션 5 산출물에 붙이는 과대해석 금지 문구 (절대 규칙 11 · 6장).
+SESSION_5_CAVEAT: str = "\n".join(
+    [
+        "※ 이 판이 판정한 것 (과대해석 금지)",
+        "· CDU 간 연동은 공유 2차측의 유량 배분 경로로만 생긴다. 2차측 공급온도는",
+        "  고정이므로 열 경로 결합은 모델에 없다(5-1 한계) — 연동이 작더라도",
+        "  \"CDU 간 상호작용이 작다\"로 읽지 않는다",
+        "· 2대만 돌렸다. 5장은 대수를 주지 않는다",
+        "· 누출은 여전히 배관 K값 근사다(5장 정의). 총유량·양정 신호의 부호가 실제",
+        "  누출과 반대일 수 있다는 관측은 열려 있다",
+        "· 수렴시간은 판정하지 않는다(#21·#31)",
+    ]
+)
+
 #: 압력 단위 규약 — 1 mAq 를 몇 Pa 로 읽을 것인가.
 #: [규약: 프로젝트정리 5-1 「압력 단위 규약 mAq」 · 세션 3 확정]
 #: 5장이 mAq·L/s·℃ 를 섞어 쓰는데, mAq 를 PG25 액주 높이로 읽으면 값이 1.3%
@@ -319,6 +333,60 @@ class PipingAssumptions:
 
 
 @dataclass(frozen=True)
+class PlantAssumptions:
+    """다중 CDU 플랜트 — 5-1 「CDU 대수」·「공유 2차측 결합 방식」 (세션 5 확정).
+
+    5장은 "여러 대 반복 배치"라고만 적고 대수를 주지 않는다. 아래 값은 전부
+    5-1 에 기록된 **시나리오 정의**이며 물리 가정이 아니다.
+    """
+
+    # CDU 대수 [시나리오 정의: 프로젝트정리 5-1 「CDU 대수」 · 세션 5 확정]
+    # 2대가 「CDU 간 연동」이 성립하는 최소 수이고 새 숫자를 가장 적게 만든다.
+    # 3대 이상은 배치·부하 비대칭 등 5장에 없는 선택을 부른다.
+    cdu_count: int = 2
+
+    # 공유 2차측 결합 방식 [규약: 프로젝트정리 5-1 「공유 2차측 결합 방식」 · 세션 5]
+    # **병렬 · 총 2차측 유량 고정 · 각 CDU 배분은 1차측 유량에 비례**.
+    coupling: str = "병렬 · 총유량 고정 · 1차측 유량 비례 배분"
+
+    @property
+    def secondary_total_flow_Lps(self) -> float:
+        """총 2차측 유량 [L/s] = CDU 대수 × 5장 정격 1차측 유량.
+
+        5장 「1차:2차 유량비 1:1」에서 유도되므로 **새 숫자가 아니다**.
+
+        **이 총합이 고정이라는 것이 연동의 실체다**(5-1). 한쪽 CDU 의 1차측
+        유량이 오르면 그쪽 배분이 커지고 다른 쪽 배분이 줄어든다 — 두 CDU 가
+        고정된 총량을 두고 경쟁한다.
+
+        **주의**: 정격(15.5 L/s)으로 고정되므로, 운전점이 정격에서 벗어나 있는
+        만큼(세션 3-A 관측: +0.019~+0.046%) 대칭 케이스에서도 2차:1차 비가
+        정확히 1:1 이 되지 않는다. 그 결과가 세션 5 C4 대조에 그대로 나타난다.
+        """
+        return self.cdu_count * PumpAssumptions().rated_flow_Lps
+
+    def secondary_shares_Lps(
+        self, primary_flows_Lps: tuple[float, ...]
+    ) -> tuple[float, ...]:
+        """1차측 유량에 비례해 총 2차측 유량을 배분한다 [L/s] (순수 함수).
+
+        배분비는 추가 파라미터가 0이다 — 1차측 유량 말고 다른 것을 쓰려면 5장에
+        없는 가중치가 필요하다.
+        """
+        if len(primary_flows_Lps) != self.cdu_count:
+            raise ValueError(
+                f"1차측 유량 개수 {len(primary_flows_Lps)} 가 "
+                f"CDU 대수 {self.cdu_count} 와 다르다"
+            )
+        total = sum(primary_flows_Lps)
+        if total <= 0.0:
+            raise ValueError("총 1차측 유량이 0 이하다 — 배분할 수 없다")
+        return tuple(
+            self.secondary_total_flow_Lps * flow / total for flow in primary_flows_Lps
+        )
+
+
+@dataclass(frozen=True)
 class LoadProfileAssumptions:
     """5장 구성요소 표 — 부하 프로파일."""
 
@@ -387,5 +455,6 @@ PUMP = PumpAssumptions()
 VALVE = ValveAssumptions()
 HEAT_EXCHANGER = HeatExchangerAssumptions()
 PIPING = PipingAssumptions()
+PLANT = PlantAssumptions()
 LOAD_PROFILE = LoadProfileAssumptions()
 LEAK = LeakScenarioAssumptions()

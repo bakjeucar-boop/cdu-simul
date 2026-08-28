@@ -89,6 +89,11 @@ class SteadyStateCase:
     rack_flows_Lps: tuple[float, ...]
     heat_capacity_ratio: float
     cp_rule: CpRule = DEFAULT_CP_RULE
+    #: 이 CDU 에 배분된 2차측 유량 [L/s]. `None` 이면 2차측을 유량으로 풀지 않고
+    #: `heat_capacity_ratio` 를 그대로 쓴다 — **세션 4까지의 단일 CDU 경로**이며
+    #: 그 경로의 수치를 바꾸지 않으려고 남겨 둔다(세션 5 C2 "단일 CDU 경로를
+    #: 지우지 않는다"). 값이 주어지면 Cr 과 C_min 을 유량에서 유도한다.
+    secondary_flow_Lps: float | None = None
 
     def __post_init__(self) -> None:
         if len(self.rack_loads_kW) != len(self.rack_flows_Lps):
@@ -106,6 +111,7 @@ class SteadyStateCase:
         heat_capacity_ratio: float,
         n_racks: int = SCENARIO.racks_per_cdu,
         cp_rule: CpRule = DEFAULT_CP_RULE,
+        secondary_flow_Lps: float | None = None,
     ) -> SteadyStateCase:
         """동일한 랙 `n_racks` 개로 케이스를 만든다.
 
@@ -119,6 +125,7 @@ class SteadyStateCase:
             rack_flows_Lps=(rack_flow_Lps,) * n_racks,
             heat_capacity_ratio=heat_capacity_ratio,
             cp_rule=cp_rule,
+            secondary_flow_Lps=secondary_flow_Lps,
         )
 
     @property
@@ -186,6 +193,50 @@ class _PrimaryState:
     hx_duty_W: float
 
 
+def hx_capacity_terms(
+    C_primary_W_K: float,
+    ntu: float,
+    heat_capacity_ratio: float,
+    T_secondary_supply_C: float,
+    secondary_flow_Lps: float | None,
+) -> tuple[float, float]:
+    """열교환기 유효도 ε 와 C_min 을 낸다 (순수 함수). 반환: (ε, C_min [W/K]).
+
+    **물리를 한 곳에만 적는다**(collaboration.md ④) — 정상상태(`model`)와
+    시간적분(`dynamics`)이 둘 다 이 함수를 쓴다.
+
+    `secondary_flow_Lps` 가 `None` 이면 **세션 4까지의 경로**다: 5장 「유량비 1:1」
+    에서 온 `heat_capacity_ratio`(=1)를 그대로 쓰고 C_min = C_1차 로 둔다.
+    2차측이 고정 경계조건인 동안은 2차측 유량이 모델에 없었기 때문이다(절대 규칙 7).
+
+    값이 주어지면(세션 5 공유 2차측) Cr 과 C_min 을 **유량에서 유도**한다::
+
+        C_2차 = Q_2차 · ρ(T_2차공급) · cp(T_2차공급)
+        Cr    = C_min / C_max          (ε-NTU 정의)
+
+    **2차측 물성을 공급온도에서 평가한다.** 2차측 출구온도는 모델에 없으므로
+    (5-1 「2차측 공급온도」 — 냉각탑을 모델링하지 않는다) 벌크평균을 만들 수 없다.
+    선택이 아니라 강제다. 5-1 의 cp·ρ 벌크평균 규약은 1차측에만 적용된다.
+    """
+    if secondary_flow_Lps is None:
+        return (
+            hx_effectiveness_counterflow(ntu, heat_capacity_ratio),
+            C_primary_W_K,
+        )
+    C_secondary_W_K = (
+        secondary_flow_Lps
+        * _M3_PER_LITRE
+        * coolant_density_kgm3(T_secondary_supply_C)
+        * coolant_cp_Jkg_K(T_secondary_supply_C)
+    )
+    C_min_W_K = min(C_primary_W_K, C_secondary_W_K)
+    C_max_W_K = max(C_primary_W_K, C_secondary_W_K)
+    return (
+        hx_effectiveness_counterflow(ntu, C_min_W_K / C_max_W_K),
+        C_min_W_K,
+    )
+
+
 def _state_at_property_temperature(
     property_eval_T_C: float, case: SteadyStateCase
 ) -> _PrimaryState:
@@ -217,10 +268,16 @@ def _state_at_property_temperature(
     m_dot_kgs = case.total_flow_Lps * _M3_PER_LITRE * rho_kgm3
     C_W_K = m_dot_kgs * cp_Jkg_K
 
-    effectiveness = hx_effectiveness_counterflow(case.ntu, case.heat_capacity_ratio)
+    effectiveness, C_min_W_K = hx_capacity_terms(
+        C_W_K,
+        case.ntu,
+        case.heat_capacity_ratio,
+        case.T_secondary_supply_C,
+        case.secondary_flow_Lps,
+    )
     Q_W = case.total_load_kW * _W_PER_KW
 
-    T_return_C = case.T_secondary_supply_C + Q_W / (effectiveness * C_W_K)
+    T_return_C = case.T_secondary_supply_C + Q_W / (effectiveness * C_min_W_K)
     T_supply_C = T_return_C - Q_W / C_W_K
 
     rack_return_temps_C = tuple(
@@ -231,7 +288,7 @@ def _state_at_property_temperature(
         )
     )
 
-    hx_duty_W = effectiveness * C_W_K * (T_return_C - case.T_secondary_supply_C)
+    hx_duty_W = effectiveness * C_min_W_K * (T_return_C - case.T_secondary_supply_C)
     return _PrimaryState(
         T_supply_C=T_supply_C,
         T_return_C=T_return_C,
@@ -434,7 +491,51 @@ class CduSteadyStateResult:
         )
 
 
-def solve_cdu_steady_state(case: CduCase) -> CduSteadyStateResult:
+def cdu_thermal_case_at(
+    case: CduCase,
+    T_property_C: float,
+    secondary_flow_Lps: float | None = None,
+) -> tuple[SteadyStateCase, FlowDistributionResult]:
+    """물성 온도가 주어졌을 때의 열 케이스와 수력 해를 만든다 (순수 함수).
+
+    수력은 그 온도에서 **매번 quasi-steady 로 다시 푼다**(절대 규칙 4).
+    상위 레벨(다중 CDU)이 이 함수를 통해 CDU 하나의 상태를 들여다본다 —
+    `plant.py` 가 비공개 이름을 import 하지 않도록 공개해 둔다.
+    """
+    flow = solve_flow_distribution(case.hydraulic, T_property_C)
+    thermal_case = SteadyStateCase(
+        T_secondary_supply_C=case.T_secondary_supply_C,
+        ntu=case.ntu,
+        rack_loads_kW=(case.rack_load_kW,) * case.hydraulic.n_racks,
+        rack_flows_Lps=flow.rack_flows_Lps,
+        heat_capacity_ratio=case.heat_capacity_ratio,
+        cp_rule=case.cp_rule,
+        secondary_flow_Lps=secondary_flow_Lps,
+    )
+    return thermal_case, flow
+
+
+def cdu_property_temperature_residual(
+    case: CduCase,
+    T_property_C: float,
+    secondary_flow_Lps: float | None = None,
+) -> float:
+    """물성 온도 고정점의 잔차 [K] — 규칙이 주는 온도와 넣은 온도의 차 (순수 함수).
+
+    0 이면 그 온도가 이 CDU 의 자기정합 해다. 상위 레벨 연립방정식은 CDU 마다
+    이 잔차를 하나씩 세워 **동시에** 0으로 만든다(`plant.solve_plant_steady_state`).
+    """
+    thermal_case, _flow = cdu_thermal_case_at(case, T_property_C, secondary_flow_Lps)
+    state = _state_at_property_temperature(T_property_C, thermal_case)
+    rule_T_C = _property_temperature_from_state(
+        state.T_supply_C, state.T_return_C, case.cp_rule
+    )
+    return rule_T_C - T_property_C
+
+
+def solve_cdu_steady_state(
+    case: CduCase, secondary_flow_Lps: float | None = None
+) -> CduSteadyStateResult:
     """수력과 열을 결합해 CDU 정상상태를 푼다.
 
     구조 (절대 규칙 4 — 하이브리드)::
@@ -459,28 +560,12 @@ def solve_cdu_steady_state(case: CduCase) -> CduSteadyStateResult:
     `solve_flow_distribution` 이 예외를 던지고, 나머지는 결과에 플래그로 실린다.
     """
 
-    def thermal_case_at(
-        T_property_C: float,
-    ) -> tuple[SteadyStateCase, FlowDistributionResult]:
-        flow = solve_flow_distribution(case.hydraulic, T_property_C)
-        thermal_case = SteadyStateCase(
-            T_secondary_supply_C=case.T_secondary_supply_C,
-            ntu=case.ntu,
-            rack_loads_kW=(case.rack_load_kW,) * case.hydraulic.n_racks,
-            rack_flows_Lps=flow.rack_flows_Lps,
-            heat_capacity_ratio=case.heat_capacity_ratio,
-            cp_rule=case.cp_rule,
-        )
-        return thermal_case, flow
-
     def residual(x: list[float]) -> list[float]:
-        T_prop_C = float(x[0])
-        thermal_case, _flow = thermal_case_at(T_prop_C)
-        state = _state_at_property_temperature(T_prop_C, thermal_case)
-        rule_T_C = _property_temperature_from_state(
-            state.T_supply_C, state.T_return_C, case.cp_rule
-        )
-        return [rule_T_C - T_prop_C]
+        return [
+            cdu_property_temperature_residual(
+                case, float(x[0]), secondary_flow_Lps
+            )
+        ]
 
     initial_guess_T_C = bulk_mean_temperature_C(
         SCENARIO.T_primary_supply_C, SCENARIO.T_primary_return_C
@@ -490,7 +575,7 @@ def solve_cdu_steady_state(case: CduCase) -> CduSteadyStateResult:
     )
 
     T_prop_C = float(solution[0])
-    thermal_case, flow = thermal_case_at(T_prop_C)
+    thermal_case, flow = cdu_thermal_case_at(case, T_prop_C, secondary_flow_Lps)
     thermal = solve_steady_state(thermal_case)
     return CduSteadyStateResult(
         case=case,
