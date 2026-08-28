@@ -1,9 +1,12 @@
 """단일 CDU 경로 격리 · 앞 게이트 재확인 (세션 5 C4·C7).
 
 절대 규칙 6: 앞 단계의 게이트를 통과한 상태를 유지하지 못하면 다음으로 가지
-않는다. 세션 5 는 `model.py`·`dynamics.py` 의 열교환기 항을 건드렸으므로
-(`hx_capacity_terms` 도입), **2차측 유량을 주지 않은 경로가 세션 4까지와 완전히
-같은지**부터 고정한다.
+않는다.
+
+**세션 5-B 에서 이 파일의 첫 테스트가 뒤집혔다.** 세션 5 는 "2차측 유량을 주지 않은
+경로가 세션 4까지와 완전히 같다"를 고정했는데, 세션 5-B 가 그 전제(Cr=1 선언)를
+폐기했다. 지금 고정하는 것은 **Cr 이 유도된다는 사실**이다 — 자세한 것은 아래
+`test_single_cdu_uses_derived_cr` docstring 을 본다.
 
 앞 게이트 자체의 판정은 원래 자리에 그대로 있다 —
 `test_energy_balance.py`(1-B) · `test_dynamics.py`(2) · `test_session3_gates.py`(3) ·
@@ -19,7 +22,7 @@ from __future__ import annotations
 
 import pytest
 
-from cdu_simul.assumptions import PLANT
+from cdu_simul.assumptions import HEAT_EXCHANGER, PLANT
 from cdu_simul.leak import leak_case, leak_levels
 from cdu_simul.model import (
     default_cdu_cases,
@@ -33,22 +36,38 @@ ENERGY_BALANCE_TOLERANCE_PERCENT: float = 0.1
 
 
 @pytest.mark.parametrize("case", default_cdu_cases(), ids=lambda c: c.label)
-def test_single_cdu_path_is_bit_identical(case) -> None:  # type: ignore[no-untyped-def]
-    """2차측 유량을 주지 않은 경로가 세션 4까지와 **완전히 같다**.
+def test_single_cdu_uses_derived_cr(case) -> None:  # type: ignore[no-untyped-def]
+    """단일 CDU 경로가 **선언된 Cr=1 이 아니라 유도된 Cr** 을 쓴다 (세션 5-B).
 
-    허용오차를 두지 않고 `==` 로 본다 — `hx_capacity_terms` 가 `None` 분기에서
-    예전 식을 글자 그대로 되돌려주므로 부동소수점까지 같아야 한다. 조금이라도
-    다르면 결합 도입이 단일 CDU 경로로 샜다는 뜻이다(세션 5 C2 "단일 CDU 경로를
-    지우지 않는다").
+    이 테스트는 세션 5 에서 "2차측 유량을 주지 않은 경로가 세션 4와 부동소수점까지
+    같다"를 고정하고 있었다. **세션 5-B 가 그 전제를 폐기했다** — 5장 「1차:2차
+    유량비 1:1」은 부피유량비이지 Cr 이 아니고, 양측 온도가 달라 Cr ≠ 1 이다.
+    허용오차를 늘린 것이 아니라 **고정 대상이 바뀐 것**이므로 잠금 내용을 바꾼다.
+
+    이제 고정하는 것은 셋이다:
+      ① 2차측 유량이 `None` 이 아니라 5장에서 유도된 정격값(15.5 L/s)이다 —
+         선언 Cr 이 들어올 자리가 코드에 남아 있지 않다
+      ② ε 가 Cr=1 의 닫힌 형태 NTU/(1+NTU) 와 **다르다** (Cr<1 이므로)
+      ③ 그럼에도 차이가 물성 차이에서 오는 크기(상대 1e-3 미만)여야 한다 —
+         이보다 크면 유량이나 물성 평가점이 어긋난 것이므로 사람이 봐야 한다
     """
     result = solve_cdu_steady_state(case)
     assert result.solver_converged
-    assert result.thermal.case.secondary_flow_Lps is None
-    assert result.thermal.hx_effectiveness == pytest.approx(
-        result.thermal.hx_effectiveness, abs=0.0
+    assert result.thermal.case.secondary_flow_Lps == (
+        HEAT_EXCHANGER.secondary_flow_Lps
     )
-    # 명목 Cr=1 이면 ε = NTU/(1+NTU) 라는 1-B 의 닫힌 형태가 그대로 서야 한다.
-    assert result.thermal.hx_effectiveness == case.ntu / (1.0 + case.ntu)
+
+    cr_one_effectiveness = case.ntu / (1.0 + case.ntu)
+    assert result.thermal.hx_effectiveness != cr_one_effectiveness, (
+        f"{case.label}: ε 가 아직 Cr=1 의 닫힌 형태다 — 선언 Cr 이 남아 있다"
+    )
+    relative_gap = abs(
+        result.thermal.hx_effectiveness / cr_one_effectiveness - 1.0
+    )
+    assert relative_gap < 1.0e-3, (
+        f"{case.label}: ε 가 Cr=1 형태에서 상대 {relative_gap:.3e} 벗어났다 — "
+        "물성 차이만으로 설명되지 않는 크기다"
+    )
 
 
 @pytest.mark.parametrize("template", default_cdu_cases(), ids=lambda c: c.label)

@@ -127,6 +127,12 @@ def test_eight_racks_match_single_rack_model(case: CduCase) -> None:
 
     비교 대상을 5장 정격유량(1.94 L/s)이 아니라 **압력평형이 낸 랙당 유량**으로
     잡는다 — 두 모델에 같은 유량을 주어야 구현만 대조된다.
+
+    **2차측 유량도 같은 배수로 나눈다**(세션 5-B). Cr 이 이제 양측 유량에서
+    유도되므로(선언이 아니다), 1차측만 1/8 로 줄이고 2차측을 CDU 1대분 그대로
+    두면 Cr 이 0.125 로 떨어져 아예 다른 열교환기를 비교하게 된다. 랙 축을 나누는
+    것과 열교환기를 바꾸는 것은 다른 이야기다 — 두 모델이 **같은 Cr** 을 보도록
+    2차측도 랙 수로 나눈다. 허용오차를 늘린 것이 아니라 비교 기준을 맞춘 것이다.
     """
     result = solve_cdu_steady_state(case)
     assert result.solver_converged, f"{case.label}: 결합 해 미수렴"
@@ -138,7 +144,9 @@ def test_eight_racks_match_single_rack_model(case: CduCase) -> None:
             ntu=case.ntu,
             rack_loads_kW=(case.rack_load_kW,),
             rack_flows_Lps=(result.flow.mean_rack_flow_Lps,),
-            heat_capacity_ratio=case.heat_capacity_ratio,
+            secondary_flow_Lps=(
+                result.thermal.case.secondary_flow_Lps / SCENARIO.racks_per_cdu
+            ),
         )
     )
     assert single.solver_converged

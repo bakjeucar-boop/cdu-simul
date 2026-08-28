@@ -94,9 +94,6 @@ def _direction_gate_cases() -> list[LoadStepCase]:
                             load_after_percent=after_percent,
                             T_secondary_supply_C=T_secondary_C,
                             ntu=ntu,
-                            heat_capacity_ratio=(
-                                HEAT_EXCHANGER.flow_ratio_primary_to_secondary
-                            ),
                             hydraulic=_GATE_HYDRAULIC_CASE,
                         )
                     )
@@ -187,7 +184,6 @@ def test_transient_limit_matches_steady_state(steady_case: CduCase) -> None:
         load_after_percent=LOAD_PROFILE.rated_load_percent,
         T_secondary_supply_C=steady_case.T_secondary_supply_C,
         ntu=steady_case.ntu,
-        heat_capacity_ratio=steady_case.heat_capacity_ratio,
         hydraulic=steady_case.hydraulic,
     )
     transient = integrate_load_step(transient_case)

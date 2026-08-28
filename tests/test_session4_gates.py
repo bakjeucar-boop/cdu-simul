@@ -217,7 +217,6 @@ def _leak_transient_cases() -> list[LeakStepCase]:
             k_multiplier=level.k_multiplier,
             T_secondary_supply_C=SCENARIO.T_secondary_supply_C.low,
             ntu=HEAT_EXCHANGER.ntu.low,
-            heat_capacity_ratio=HEAT_EXCHANGER.flow_ratio_primary_to_secondary,
         )
         for holdup in (lower, upper)
         for level in leak_levels()[1:]

@@ -60,7 +60,6 @@ def _case(
         k_multiplier=k_multiplier,
         T_secondary_supply_C=SCENARIO.T_secondary_supply_C.low,
         ntu=HEAT_EXCHANGER.ntu.low,
-        heat_capacity_ratio=HEAT_EXCHANGER.flow_ratio_primary_to_secondary,
         holdup_supply_fraction=supply_fraction,
     )
 

@@ -179,9 +179,6 @@ def _extreme_transient_cases() -> list[LoadStepCase]:
                     load_after_percent=after,
                     T_secondary_supply_C=SCENARIO.T_secondary_supply_C.low,
                     ntu=HEAT_EXCHANGER.ntu.low,
-                    heat_capacity_ratio=(
-                        HEAT_EXCHANGER.flow_ratio_primary_to_secondary
-                    ),
                     hydraulic=hydraulic,
                 )
             )
