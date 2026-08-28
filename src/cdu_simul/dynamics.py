@@ -2,10 +2,18 @@
 
 범위 — 1-B 정상상태 모델에 **시간축만** 얹는다.
 
-**압력-유량을 풀지 않는다.** 유량은 5장 정격 고정이다. 단일 랙이라 분배할 곳이
-없다 — 이것은 하이브리드 구조(절대 규칙 4)를 없애는 것이 아니라 **아직 만들지
-않는 것**이며, `fsolve` 기반 압력평형은 세션 3에서 들어온다. 절대 규칙 4가 요구하는
-"압력은 quasi-steady 대수, 온도는 시간적분"에서 이 판은 **온도 쪽만** 세운다.
+**압력-유량을 매 시점 푼다**(세션 3-B). 절대 규칙 4가 요구하는 "압력은
+quasi-steady 대수, 온도는 시간적분"이 여기서 완성된다 — `solve_ivp` 의 우변이
+호출될 때마다 그 시점의 1차측 벌크 평균온도로 `hydraulics.solve_flow_distribution`
+을 다시 풀어 랙별 유량을 받는다. 유량을 상수로 얼려 두지 않는다.
+
+**M 의 8랙 해석은 세션 2 그대로 두었다.** 5-1 이 등가길이를 "랙 1개 회로의 왕복
+전체"로 읽으므로 `holdup_bounds()` 가 내는 M 은 **랙 1개 회로분**이다. 랙이 8개가
+되면 계통 전체 보유량을 어떻게 읽어야 하는지(분기는 8벌·헤더는 공용) 5장에도
+5-1 에도 답이 없다 — **새 숫자를 만들지 않고 세션 2 값을 그대로 쓴다**(절대 규칙 1).
+그 결과 아래 τ·t63·t95 의 **절대값은 8랙에서 해석할 수 없다**. 이 판이 판정하는
+방향성·비발산은 M 의 크기와 무관하므로(정상상태는 M 에 의존하지 않고, 전이의
+부호도 M>0 이면 바뀌지 않는다) 게이트에는 영향이 없다.
 
 **2차측 동특성을 만들지 않는다**(절대 규칙 7). 2차측 공급온도는 고정 경계조건이다.
 
@@ -14,11 +22,11 @@
 
 노드 구성 (2노드 루프):
 
-    ┌── 랙 (Q_rack 유입) ──┐
-    │                      ↓
-  T_supply 노드        T_return 노드
-    ↑                      │
-    └── 열교환기 (Q_hx 유출) ┘
+    ┌── 랙 8개 병렬 (Q_총 유입) ──┐
+    │                             ↓
+  T_supply 노드               T_return 노드
+    ↑                             │
+    └──── 열교환기 (Q_hx 유출) ────┘
 
     M_hot ·cp·dT_return/dt = C·(T_supply - T_return) + Q_rack(t)
     M_cold·cp·dT_supply/dt = C·(T_return - T_supply) - Q_hx(T_return)
@@ -45,14 +53,16 @@ from cdu_simul.assumptions import (
     LOAD_PROFILE,
     PIPING,
     SCENARIO,
-    VALVE,
+    SESSION_3B_CAVEAT,
 )
 from cdu_simul.fluid import coolant_cp_Jkg_K, coolant_density_kgm3
+from cdu_simul.hydraulics import HydraulicCase, solve_flow_distribution
+from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
 from cdu_simul.model import (
-    SteadyStateCase,
+    CduCase,
     _property_temperature_from_state,
     hx_effectiveness_counterflow,
-    solve_steady_state,
+    solve_cdu_steady_state,
 )
 
 _M3_PER_LITRE: float = 1.0e-3
@@ -170,16 +180,19 @@ class LoadStepCase:
     T_secondary_supply_C: float
     ntu: float
     heat_capacity_ratio: float
-    rack_load_kW: float
-    rack_flow_Lps: float
+    hydraulic: HydraulicCase
 
-    def steady_case(self, load_percent: float) -> SteadyStateCase:
-        """주어진 부하율에서의 1-B 정상상태 케이스를 만든다 (물리 정의 재사용)."""
-        return SteadyStateCase(
+    def steady_case(self, load_percent: float) -> CduCase:
+        """주어진 부하율에서의 결합 정상상태 케이스를 만든다 (물리 정의 재사용).
+
+        세션 3-B 부터 초기조건은 **수력과 결합한** 정상상태다 — 유량이 5장 정격
+        고정이 아니라 압력평형의 해이기 때문이다.
+        """
+        return CduCase(
+            hydraulic=self.hydraulic,
             T_secondary_supply_C=self.T_secondary_supply_C,
             ntu=self.ntu,
-            rack_load_kW=self.rack_load_kW * load_percent * _PERCENT,
-            rack_flow_Lps=self.rack_flow_Lps,
+            load_percent=load_percent,
             heat_capacity_ratio=self.heat_capacity_ratio,
         )
 
@@ -198,6 +211,9 @@ class TransientResult:
     T_return_C: np.ndarray
     tau_theory_s: float
     t_end_s: float
+    total_flow_initial_Lps: float
+    total_flow_final_Lps: float
+    hydraulic_solver_converged: bool
     solver_success: bool
     solver_message: str
 
@@ -221,18 +237,23 @@ def _derivative(
     case: LoadStepCase,
     mass_hot_kg: float,
     mass_cold_kg: float,
-) -> tuple[float, float]:
-    """2노드 온도 미분 (순수 함수). 반환: (dT_supply/dt, dT_return/dt) [K/s].
+) -> tuple[float, float, float]:
+    """2노드 온도 미분 (순수 함수). 반환: (dT_supply/dt, dT_return/dt, 총유량 L/s).
 
     cp·ρ 는 **매 시점 1차측 벌크 평균온도에서** 다시 평가한다 — 1-B 와 같은
-    규약(프로젝트정리 5-1)이며, 그래야 dT/dt = 0 인 극한이 1-B 해와 정확히
+    규약(프로젝트정리 5-1)이며, 그래야 dT/dt = 0 인 극한이 정상상태 해와 정확히
     일치한다. ε 계산은 1-B 함수를 그대로 쓴다.
+
+    **압력-유량도 매 시점 그 온도에서 다시 푼다**(절대 규칙 4 · 세션 3-B) —
+    quasi-steady 대수방정식이므로 시간미분이 없다. 유량은 상수가 아니다.
+    `solve_flow_distribution` 이 `ier != 1` 이면 예외를 던진다(절대 규칙 5).
     """
     T_property_C = _property_temperature_from_state(T_supply_C, T_return_C, "bulk_mean")
     rho_kgm3 = coolant_density_kgm3(T_property_C)
     cp_Jkg_K = coolant_cp_Jkg_K(T_property_C)
 
-    m_dot_kgs = case.rack_flow_Lps * _M3_PER_LITRE * rho_kgm3
+    flow = solve_flow_distribution(case.hydraulic, T_property_C)
+    m_dot_kgs = flow.total_flow_Lps * _M3_PER_LITRE * rho_kgm3
     C_W_K = m_dot_kgs * cp_Jkg_K
 
     effectiveness = hx_effectiveness_counterflow(case.ntu, case.heat_capacity_ratio)
@@ -245,7 +266,7 @@ def _derivative(
     dT_supply_dt = (C_W_K * (T_return_C - T_supply_C) - Q_hx_W) / (
         mass_cold_kg * cp_Jkg_K
     )
-    return dT_supply_dt, dT_return_dt
+    return dT_supply_dt, dT_return_dt, flow.total_flow_Lps
 
 
 def integrate_load_step(
@@ -257,27 +278,39 @@ def integrate_load_step(
     호출해 초기조건을 명시적으로 리셋한다(collaboration.md 결함유형 ④ — 시나리오
     간 상태 이월 방지). t=0 에 부하가 스텝으로 바뀐다.
 
-    M 을 두 노드에 절반씩 나눈다: 5장 등가길이를 **왕복 전체**로 읽으라는 5-1
-    규칙에서 공급측 구간과 환수측 구간이 그 왕복의 두 다리이기 때문이다. 배분
-    비율 자체는 5장에도 5-1 에도 없다 — 미해결 목록에 올린다.
+    M 의 노드 배분은 **공급 50% · 환수 50%** 다 [규약: 5-1 「계통 보유수량 M의
+    노드 배분」 · 세션 3 확정] — `assumptions.py` 에서 읽는다(미해결 #20 종결).
 
-    `solve_ivp` 의 `success` 를 확인해 결과에 실어 보낸다(절대 규칙 5).
+    **M 자체는 세션 2 값 그대로다**(랙 1개 회로분). 8랙에서의 계통 전체 보유량은
+    5장·5-1 에 답이 없어 새로 만들지 않았다 — 모듈 docstring 참조. 방향성·비발산은
+    M 의 크기와 무관하므로 게이트에는 영향이 없고, τ·t63·t95 의 절대값만 해석할
+    수 없다.
+
+    `solve_ivp` 의 `success` 와 내부 수력 `fsolve` 의 `ier` 를 **둘 다** 확인한다
+    (절대 규칙 5). 수력이 실패하면 `solve_flow_distribution` 이 예외를 던진다.
     """
-    initial = solve_steady_state(case.steady_case(case.load_before_percent))
-    if not initial.solver_converged:
+    initial_cdu = solve_cdu_steady_state(case.steady_case(case.load_before_percent))
+    if not initial_cdu.solver_converged:
         raise RuntimeError(
-            f"{case.label}: 초기 정상상태가 수렴하지 않았다 — {initial.solver_message}"
+            f"{case.label}: 초기 정상상태가 수렴하지 않았다 — "
+            f"{initial_cdu.outer_solver_message} / "
+            f"{initial_cdu.thermal.solver_message} / {initial_cdu.flow.solver_message}"
         )
+    initial = initial_cdu.thermal
 
-    mass_hot_kg = 0.5 * case.holdup.mass_kg
-    mass_cold_kg = 0.5 * case.holdup.mass_kg
-    load_after_kW = case.rack_load_kW * case.load_after_percent * _PERCENT
+    mass_hot_kg = PIPING.holdup_supply_node_fraction * case.holdup.mass_kg
+    mass_cold_kg = PIPING.holdup_return_node_fraction * case.holdup.mass_kg
+    load_after_kW = (
+        case.steady_case(case.load_after_percent).rack_load_kW
+        * case.hydraulic.n_racks
+    )
 
     tau_theory_s = case.holdup.mass_kg / initial.m_dot_kgs
     t_end_s = horizon_in_tau * tau_theory_s
+    total_flow_initial_Lps = initial_cdu.flow.total_flow_Lps
 
     def rhs(_t: float, y: np.ndarray) -> list[float]:
-        dT_supply_dt, dT_return_dt = _derivative(
+        dT_supply_dt, dT_return_dt, _total_flow_Lps = _derivative(
             float(y[0]), float(y[1]), load_after_kW, case, mass_hot_kg, mass_cold_kg
         )
         return [dT_supply_dt, dT_return_dt]
@@ -293,6 +326,12 @@ def integrate_load_step(
         t_eval=np.linspace(0.0, t_end_s, 4001),
     )
 
+    final_flow = solve_flow_distribution(
+        case.hydraulic,
+        _property_temperature_from_state(
+            float(solution.y[0][-1]), float(solution.y[1][-1]), "bulk_mean"
+        ),
+    )
     return TransientResult(
         case=case,
         t_s=solution.t,
@@ -300,6 +339,11 @@ def integrate_load_step(
         T_return_C=solution.y[1],
         tau_theory_s=tau_theory_s,
         t_end_s=t_end_s,
+        total_flow_initial_Lps=total_flow_initial_Lps,
+        total_flow_final_Lps=final_flow.total_flow_Lps,
+        hydraulic_solver_converged=(
+            initial_cdu.flow.solver_converged and final_flow.solver_converged
+        ),
         solver_success=bool(solution.success),
         solver_message=str(solution.message).strip(),
     )
@@ -314,10 +358,10 @@ def default_load_step_cases() -> list[LoadStepCase]:
     부하는 5장 부하 프로파일의 양 끝(유휴 20% ↔ 정격 100%)을 그대로 쓴다.
     **극단 케이스(부하 0 / 최대)는 이 판에서 돌리지 않는다** — 세션 3 게이트다.
 
-    2차측 공급온도·NTU 는 이 표에서 **범위 하단으로 고정**한다. 이 판이 변화시키는
-    것은 부하와 M 이고, 열교환 조건은 그 둘을 분리해 보기 위해 고정한 것이다 —
-    대표값을 골랐다는 뜻이 아니다. 방침 (B)가 걸리는 곳(세션 2 게이트)은
-    `tests/test_dynamics.py` 가 2차측·NTU 양 끝 조합까지 전부 돌려 판정한다.
+    2차측 공급온도·NTU·수력 조합은 이 표에서 **범위 하단으로 고정**한다. 이 판이
+    변화시키는 것은 부하와 M 이고, 나머지는 그 둘을 분리해 보기 위해 고정한 것이다
+    — 대표값을 골랐다는 뜻이 아니다. 방침 (B)가 걸리는 곳(세션 2·3 게이트)은
+    `tests/test_dynamics.py` 가 양 끝 조합까지 전부 돌려 판정한다.
     """
     lower, upper = holdup_bounds()
     cases: list[LoadStepCase] = []
@@ -340,8 +384,7 @@ def default_load_step_cases() -> list[LoadStepCase]:
                     heat_capacity_ratio=(
                         HEAT_EXCHANGER.flow_ratio_primary_to_secondary
                     ),
-                    rack_load_kW=SCENARIO.rack_it_load_kW,
-                    rack_flow_Lps=VALVE.rated_flow_per_rack_Lps,
+                    hydraulic=default_hydraulic_cases()[0],
                 )
             )
     return cases
@@ -372,17 +415,19 @@ def format_results_table(results: list[TransientResult]) -> str:
     """세션 2 결과 표 (순수 함수). 절대 규칙 11 표시를 반드시 넣는다."""
     header = (
         f"{'case':<40}{'M':>9}{'tau':>9}{'t63':>9}{'t95':>9}"
-        f"{'Tret 초기':>11}{'Tret 최종':>11}{'방향':>7}{'ivp':>6}"
+        f"{'Tret 초기':>11}{'Tret 최종':>11}{'Q 초기':>9}{'Q 최종':>9}"
+        f"{'방향':>7}{'ivp':>6}{'fsol':>6}"
     )
     units = (
         f"{'':<40}{'[kg]':>9}{'[s]':>9}{'[s]':>9}{'[s]':>9}"
-        f"{'[C]':>11}{'[C]':>11}{'':>7}{'':>6}"
+        f"{'[C]':>11}{'[C]':>11}{'[L/s]':>9}{'[L/s]':>9}{'':>7}{'':>6}{'':>6}"
     )
     lines = [
-        "세션 2 · 부하 스텝에 대한 T_return 응답",
+        "세션 3-B · 8랙 CDU · 부하 스텝에 대한 T_return 응답 (수력 매 시점 결합)",
         "※ " + ASSUMPTION_TAG,
         "※ M 은 배관 보유량만 — 열교환기·CDU 내부·콜드플레이트 보유량 제외(과소평가).",
-        "   따라서 아래 수렴시간은 실제보다 짧다. '합리적'이라고 판정하지 않는다.",
+        "   게다가 **M 은 랙 1개 회로분**이고 8랙 계통 전체 보유량은 5장·5-1 에 답이",
+        "   없어 만들지 않았다. 따라서 아래 tau·t63·t95 의 **절대값은 해석하지 않는다.**",
         "",
         header,
         units,
@@ -398,7 +443,9 @@ def format_results_table(results: list[TransientResult]) -> str:
             f"{(f'{t63:.2f}' if t63 is not None else '-'):>9}"
             f"{(f'{t95:.2f}' if t95 is not None else '-'):>9}"
             f"{r.T_return_initial_C:>11.3f}{r.T_return_final_C:>11.3f}"
+            f"{r.total_flow_initial_Lps:>9.4f}{r.total_flow_final_Lps:>9.4f}"
             f"{direction:>7}{('OK' if r.solver_success else 'FAIL'):>6}"
+            f"{('OK' if r.hydraulic_solver_converged else 'FAIL'):>6}"
         )
     lines += [
         "-" * len(header),
@@ -407,12 +454,14 @@ def format_results_table(results: list[TransientResult]) -> str:
         f"구간 {INTEGRATION_HORIZON_IN_TAU:g}τ",
         "tau = M / m_dot (이론 체류시간)",
         "t63·t95 = 스텝 전체 변화량의 63%·95% 도달 시각",
-        "2차측 공급온도·NTU 는 이 표에서 범위 하단 고정 (부하와 M 만 변화시킨다)",
+        "2차측 공급온도·NTU·수력 조합은 이 표에서 범위 하단 고정",
+        "Q 초기·최종 = 매 시점 압력평형으로 다시 푼 총유량 (상수가 아니다)",
         "",
         "※ " + ASSUMPTION_TAG,
-        "※ 이 표가 판정하는 feasibility 기준은 **T_return 방향성 하나**다.",
-        "   energy balance 는 세션 1-B에서 봤고, 수렴시간은 위 M 한계 때문에",
-        "   판정하지 않으며, 극단 케이스(부하 0/최대)는 세션 3이다.",
+        SESSION_3B_CAVEAT,
+        "※ 이 표가 판정하는 feasibility 기준은 **T_return 방향성**과 **비발산**이다.",
+        "   energy balance 는 model.py 쪽이 보고, 수렴시간은 위 M 한계 때문에",
+        "   판정하지 않는다(미해결 #21).",
     ]
     return "\n".join(lines)
 
