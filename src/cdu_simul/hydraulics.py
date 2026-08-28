@@ -286,10 +286,10 @@ def residual_resistance_coeff_mAq_per_Lps2(case: HydraulicCase) -> float:
     값이 타당하다"로 읽지 않는다.
 
     **정격 물성에서 한 번만 역산한다** — Kv·K 와 같은 취급이며, 물성원도 같다
-    (세션 3-A2). 5-1 이 이 계수를 mAq/(L/s)^2 로 정의하므로 **온도에 따라 다시
-    스케일하지 않는다.** 분기·밸브 ΔP 는 밀도에 비례해 움직이는데 이 항만 고정
-    이라, 정격 밖 온도에서는 셋의 스케일이 어긋난다 — 5-1 의 잔여저항 규칙을 이
-    판에서 바꾸지 않기로 했으므로 **고치지 않고 관측으로 남긴다**(미해결 #30).
+    (세션 3-A2). 반환값은 **정격 밀도 기준** 계수이고, 실제 ΔP 는
+    `residual_dp_mAq` 가 그때의 ρ 로 스케일해 낸다 [5-1 「계통 잔여저항의 물성
+    의존」 · 세션 3-B 확정] — 잔여저항도 집중저항이므로 분기·밸브와 같은 온도
+    스케일을 따른다(미해결 #30 이 이것으로 닫혔다).
     """
     Q_rack_rated_Lps = VALVE.rated_flow_per_rack_Lps
     Q_total_rated_Lps = PUMP.rated_flow_Lps
@@ -308,6 +308,30 @@ def residual_resistance_coeff_mAq_per_Lps2(case: HydraulicCase) -> float:
             f"분기+밸브 {branch_dp + valve_dp:.3f} mAq)"
         )
     return residual_dp_rated_mAq / Q_total_rated_Lps**2
+
+
+def residual_dp_mAq(
+    Q_total_Lps: float,
+    residual_coeff_mAq_per_Lps2: float,
+    T_property_C: float,
+) -> float:
+    """계통 잔여저항 차압 [mAq] — 정격 기준 계수를 그때의 ρ 로 스케일한다.
+
+    [규약: 프로젝트정리 5-1 「계통 잔여저항의 물성 의존」 · 세션 3-B 확정]
+
+    ΔP_res(Q, T) = C_res · Q^2 · ρ(T)/ρ(정격)
+
+    5-1 이 잔여저항을 **집중저항**으로 규정했고 집중저항의 물리는 K·ρv²/2 이므로,
+    분기 ΔP·밸브 ΔP 와 같은 온도 스케일을 따른다. 나머지 두 저항이 이미 따르는
+    물리를 세 번째에 적용하는 것이라 **추가 파라미터가 0**이다.
+
+    **정격 온도(37℃)에서는 비가 정확히 1 이므로 세션 3-A2 결과가 바뀌지 않는다**
+    — 이 변경의 격리 확인이 그것이다(세션 3-B C2).
+    """
+    density_ratio = coolant_density_kgm3(T_property_C) / coolant_density_kgm3(
+        rated_property_temperature_C()
+    )
+    return residual_coeff_mAq_per_Lps2 * Q_total_Lps**2 * density_ratio
 
 
 def residual_share_at_rated_percent(case: HydraulicCase) -> float:
@@ -349,9 +373,9 @@ def solve_flow_distribution(
 
     def equations(Q_racks_Lps: np.ndarray) -> np.ndarray:
         Q_total_Lps = float(np.sum(Q_racks_Lps))
-        available_mAq = (
-            pump_head_mAq(Q_total_Lps, case.pump) - residual_coeff * Q_total_Lps**2
-        )
+        available_mAq = pump_head_mAq(
+            Q_total_Lps, case.pump
+        ) - residual_dp_mAq(Q_total_Lps, residual_coeff, T_C)
         return np.array(
             [
                 available_mAq
@@ -383,7 +407,7 @@ def solve_flow_distribution(
         rack_flows_Lps=rack_flows,
         total_flow_Lps=total_flow_Lps,
         pump_head_mAq=pump_head_mAq(total_flow_Lps, case.pump),
-        residual_dp_mAq=residual_coeff * total_flow_Lps**2,
+        residual_dp_mAq=residual_dp_mAq(total_flow_Lps, residual_coeff, T_C),
         rack_branch_dp_mAq=tuple(
             branch_dp_mAq(q, k, T_C)
             for q, k in zip(rack_flows, K_per_rack, strict=True)
