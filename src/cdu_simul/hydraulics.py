@@ -44,7 +44,7 @@ from cdu_simul.assumptions import (
     VALVE,
     PumpCurveCoefficients,
 )
-from cdu_simul.fluid import coolant_density_kgm3
+from cdu_simul.fluid import coolant_density_kgm3, coolant_specific_gravity
 
 #: L/s → m^3/h. 밸브 Kv 식이 m^3/h 를 쓰고 5장 유량은 L/s 다 (절대 규칙 9).
 _M3H_PER_LPS: float = 3.6
@@ -54,43 +54,35 @@ _M3S_PER_LPS: float = 1.0e-3
 _M_PER_MM: float = 1.0e-3
 #: bar → Pa. Kv 식(ΔP 를 bar 로 받는 관례)의 변환 지점.
 _PA_PER_BAR: float = 1.0e5
-#: 비중(SG) 의 기준 밀도 [kg/m^3].
-#: [정의값: SG 의 정의 — 가정값·설계값 아님]
-#: SG 는 정의상 기준 물의 밀도에 대한 비이고 배관 실무의 관례 기준이 1000 kg/m^3
-#: 이다. 5-1 이 SG = 1.0124 (37℃ 벌크평균 ρ 기준) 라고 적은 것도 같은 기준이다.
-_SG_REFERENCE_DENSITY_kgm3: float = 1000.0
 
 
-def property_temperature_C() -> float:
-    """물성(밀도) 을 평가할 온도 [℃] — 1차측 벌크 평균온도.
+def bulk_mean_temperature_C(T_supply_C: float, T_return_C: float) -> float:
+    """1차측 벌크 평균온도 [℃] — 수력 물성을 평가할 온도 (순수 함수).
 
-    [규약: 프로젝트정리 5-1 「cp·ρ 평가 온도」 · 세션 1-B 확정]
+    [규약: 프로젝트정리 5-1 「수력 계산의 물성 평가 온도」 · 세션 3-A2 확정]
 
-    5장 1차측 공급·환수 온도의 산술평균이다. 5-1 이 정한 벌크평균 규칙을 그대로
-    따르며, `model.py` 의 기본 규칙(`bulk_mean`)과 같은 규칙이다.
+    cp·ρ 평가 규칙(5-1 · 세션 1-B)을 수력에도 그대로 적용한 것이다. 추가
+    파라미터가 0이며, 공급측·환수측 중 하나를 고르면 5장에 없는 선택이 된다.
+    **물리 가정이 아니라 수치처리 규약**이다.
 
-    **세션 3-A 의 한계**: 여기서는 5장 표의 공급·환수 온도를 **고정값으로** 쓴다.
-    열모델이 붙으면 이 온도는 풀린 상태에서 나와야 하고, 밀도가 유량에 의존하므로
-    수력-열 연립이 된다 — **세션 3-B 에서 다시 본다**. 이 모듈은 그 결합을 하지
-    않는다.
+    이 함수를 받는 쪽(`valve_dp_mAq` · `branch_dp_mAq` · `solve_flow_distribution`)
+    은 **온도를 인자로 요구한다** — 기본값을 두지 않는 것이 의도다. `CLAUDE.md`
+    규칙 4가 압력-유량을 "매 시점 quasi-steady"로 규정하므로, 열모델이 붙는
+    세션 3-B 에서는 호출부가 **풀린 상태의** 공급·환수 온도를 넣게 된다.
     """
-    return 0.5 * (SCENARIO.T_primary_supply_C + SCENARIO.T_primary_return_C)
+    return 0.5 * (T_supply_C + T_return_C)
 
 
-def coolant_specific_gravity(T_C: float) -> float:
-    """냉각액 비중 SG [-] — CoolProp 래퍼를 통해 얻는다 (하드코딩 금지).
+def rated_property_temperature_C() -> float:
+    """정격 물성 온도 [℃] — 5장 1차측 공급·환수의 벌크평균 (37℃).
 
-    5-1 은 SG = 1.0124 로 기록돼 있으나 그 숫자를 박지 않는다. 유체(PG25)가
-    설계데이터로 교체되면 SG 도 함께 따라가야 하고, 교체 지점은 `assumptions.py`
-    하나여야 하기 때문이다(절대 규칙 2).
-
-    **관측**: 현재 CoolProp 이 주는 값은 5-1 기록보다 약 0.09% 작다. 전사된
-    Kv·K 값은 5-1 의 SG 로 역산된 것이므로, 이 모듈이 정격점에서 재현하는
-    ΔP 는 5장 표값과 0.1% 이내에서 어긋난다(`format_results_table` 참조).
-    **어느 쪽도 고치지 않는다** — 5-1 값은 그대로 전사하는 것이 이 판의 규칙이다.
+    **Kv·K·잔여저항 역산의 기준점이다.** 이 셋은 기기·형상 특성이므로 정격 물성
+    에서 **한 번 역산한 뒤 고정**한다(5-1) — 온도에 따라 변하는 것은 그것들이
+    아니라 그것으로 계산한 ΔP 다.
     """
-    return coolant_density_kgm3(T_C) / _SG_REFERENCE_DENSITY_kgm3
-
+    return bulk_mean_temperature_C(
+        SCENARIO.T_primary_supply_C, SCENARIO.T_primary_return_C
+    )
 
 def pump_head_mAq(Q_total_Lps: float, coeffs: PumpCurveCoefficients) -> float:
     """펌프 특성곡선 H = H0 - a*Q - b*Q^2 [mAq] (순수 함수).
@@ -109,39 +101,43 @@ def valve_dp_mAq(
     Q_rack_Lps: float,
     Kv_max_m3h: float,
     opening_fraction: float,
-    T_property_C: float | None = None,
+    T_property_C: float,
 ) -> float:
     """랙 밸브 차압 [mAq] (순수 함수).
 
     개도 특성은 **선형** Kv(x) = Kv_max·x [규약: 5-1] 이다. Kv 정의식
     Kv = Q·sqrt(SG/ΔP[bar]) 를 ΔP 에 대해 푼 것이므로 ΔP = SG·(Q/Kv)^2 [bar] 다.
 
-    SG 는 하드코딩하지 않고 CoolProp 래퍼에서 얻는다(`coolant_specific_gravity`).
-    `T_property_C` 를 주지 않으면 5-1 벌크평균 규칙을 쓴다.
+    SG 는 하드코딩하지 않고 CoolProp 래퍼(`fluid.coolant_specific_gravity`)에서
+    얻는다 — SG 의 정의가 그 한 곳에만 있다(절대 규칙 2).
+
+    **`T_property_C` 에 기본값을 두지 않는다.** 호출부가 어느 온도에서 물성을
+    평가하는지 명시하게 강제하는 것이 의도다(세션 3-A2). 5-1 규약대로라면
+    `bulk_mean_temperature_C(...)` 를 넣는다.
     """
     if opening_fraction <= 0.0:
         raise ValueError("개도 0 이하에서는 Kv 가 0이 되어 ΔP 가 정의되지 않는다")
-    T_C = property_temperature_C() if T_property_C is None else T_property_C
     Kv_m3h = Kv_max_m3h * opening_fraction
     Q_m3h = Q_rack_Lps * _M3H_PER_LPS
-    dP_bar = coolant_specific_gravity(T_C) * (Q_m3h / Kv_m3h) ** 2
+    dP_bar = coolant_specific_gravity(T_property_C) * (Q_m3h / Kv_m3h) ** 2
     return dP_bar * _PA_PER_BAR / PASCAL_PER_MAQ
 
 
 def branch_dp_mAq(
     Q_rack_Lps: float,
     K: float,
+    T_property_C: float,
     inner_diameter_mm: float = PIPING.rack_branch_inner_diameter_mm,
-    T_property_C: float | None = None,
 ) -> float:
     """랙 분기 배관 차압 [mAq] — ΔP = K·ρ·v²/2 (순수 함수).
 
     K 는 무차원이며 **25A 내경 기준 유속으로 정의**돼 있다(5-1) — 기본 내경을
     그대로 쓴다. 다른 구경을 넘기면 K 의 정의 기준이 어긋나므로 호출자가 그
     책임을 진다.
+
+    **`T_property_C` 에 기본값을 두지 않는다** — `valve_dp_mAq` 와 같은 이유다.
     """
-    T_C = property_temperature_C() if T_property_C is None else T_property_C
-    rho_kgm3 = coolant_density_kgm3(T_C)
+    rho_kgm3 = coolant_density_kgm3(T_property_C)
     d_m = inner_diameter_mm * _M_PER_MM
     area_m2 = math.pi * d_m**2 / 4.0
     v_ms = Q_rack_Lps * _M3S_PER_LPS / area_m2
@@ -204,10 +200,7 @@ class FlowDistributionResult:
 # ─────────────────────────────────────────────────────────────────────────────
 # 계통 잔여저항 — 5-1 은 값이 아니라 **규칙**을 준다
 # ─────────────────────────────────────────────────────────────────────────────
-def residual_resistance_coeff_mAq_per_Lps2(
-    case: HydraulicCase,
-    T_property_C: float | None = None,
-) -> float:
+def residual_resistance_coeff_mAq_per_Lps2(case: HydraulicCase) -> float:
     """계통 잔여저항 계수 [mAq/(L/s)^2] 를 5-1 규칙 그대로 역산한다.
 
     [역산: 프로젝트정리 5-1 「계통 잔여저항 (HX 1차측 + CDU 내부배관 + 헤더)」]
@@ -234,14 +227,19 @@ def residual_resistance_coeff_mAq_per_Lps2(
     **한계(5-1)**: 잔여저항이 총양정의 60~83% 를 차지한다 — 세션 3의 유량분배
     결과는 사실상 이 배정 방식이 지배한다. 수렴·비발산 게이트 통과를 "유량분배
     값이 타당하다"로 읽지 않는다.
+
+    **정격 물성에서 한 번만 역산한다** — 5-1 이 이 계수를 mAq/(L/s)^2 로 정의하므로
+    **온도에 따라 다시 스케일하지 않는다.** 분기·밸브 ΔP 는 밀도에 비례해 움직이는데
+    이 항만 고정이라, 정격 밖 온도에서는 셋의 스케일이 어긋난다 — 5-1 의 잔여저항
+    규칙을 이 판에서 바꾸지 않기로 했으므로 **고치지 않고 관측으로 남긴다**(미해결 #30).
     """
-    T_C = property_temperature_C() if T_property_C is None else T_property_C
     Q_rack_rated_Lps = VALVE.rated_flow_per_rack_Lps
     Q_total_rated_Lps = PUMP.rated_flow_Lps
+    T_rated_C = rated_property_temperature_C()
 
-    branch_dp = branch_dp_mAq(Q_rack_rated_Lps, case.branch_K, T_property_C=T_C)
+    branch_dp = branch_dp_mAq(Q_rack_rated_Lps, case.branch_K, T_rated_C)
     valve_dp = valve_dp_mAq(
-        Q_rack_rated_Lps, case.valve_Kv_max_m3h, case.opening_fraction, T_C
+        Q_rack_rated_Lps, case.valve_Kv_max_m3h, case.opening_fraction, T_rated_C
     )
     head_rated_mAq = pump_head_mAq(Q_total_rated_Lps, case.pump)
     residual_dp_rated_mAq = head_rated_mAq - (branch_dp + valve_dp)
@@ -254,11 +252,9 @@ def residual_resistance_coeff_mAq_per_Lps2(
     return residual_dp_rated_mAq / Q_total_rated_Lps**2
 
 
-def residual_share_at_rated_percent(
-    case: HydraulicCase, T_property_C: float | None = None
-) -> float:
+def residual_share_at_rated_percent(case: HydraulicCase) -> float:
     """정격점에서 잔여저항이 총양정에서 차지하는 몫 [%] (5-1 한계의 실측치)."""
-    coeff = residual_resistance_coeff_mAq_per_Lps2(case, T_property_C)
+    coeff = residual_resistance_coeff_mAq_per_Lps2(case)
     Q_total_rated_Lps = PUMP.rated_flow_Lps
     head_rated_mAq = pump_head_mAq(Q_total_rated_Lps, case.pump)
     return coeff * Q_total_rated_Lps**2 / head_rated_mAq * 100.0
@@ -269,7 +265,7 @@ def residual_share_at_rated_percent(
 # ─────────────────────────────────────────────────────────────────────────────
 def solve_flow_distribution(
     case: HydraulicCase,
-    T_property_C: float | None = None,
+    T_property_C: float,
     initial_guess_Lps: tuple[float, ...] | None = None,
 ) -> FlowDistributionResult:
     """헤더 압력평형을 `fsolve` 로 풀어 랙별 유량을 낸다.
@@ -283,12 +279,15 @@ def solve_flow_distribution(
     **케이스마다 이 함수를 새로 호출해 초기조건을 명시적으로 리셋한다**
     (collaboration.md 결함유형 ④ — 시나리오 간 상태 이월 방지).
 
+    `T_property_C` 는 **ΔP 계산에만** 쓴다 — 잔여저항은 정격 물성에서 이미 고정돼
+    있다(5-1). 기본값을 두지 않아 호출부가 물성 온도를 명시하게 한다.
+
     절대 규칙 5: `ier` 를 확인해 결과에 싣고, 실패하면 조용히 넘어가지 않고
     `RuntimeError` 를 던진다.
     """
-    T_C = property_temperature_C() if T_property_C is None else T_property_C
+    T_C = T_property_C
     K_per_rack = case.rack_branch_K
-    residual_coeff = residual_resistance_coeff_mAq_per_Lps2(case, T_C)
+    residual_coeff = residual_resistance_coeff_mAq_per_Lps2(case)
 
     def equations(Q_racks_Lps: np.ndarray) -> np.ndarray:
         Q_total_Lps = float(np.sum(Q_racks_Lps))
@@ -298,7 +297,7 @@ def solve_flow_distribution(
         return np.array(
             [
                 available_mAq
-                - branch_dp_mAq(float(Q_i), K_i, T_property_C=T_C)
+                - branch_dp_mAq(float(Q_i), K_i, T_C)
                 - valve_dp_mAq(
                     float(Q_i), case.valve_Kv_max_m3h, case.opening_fraction, T_C
                 )
@@ -328,7 +327,7 @@ def solve_flow_distribution(
         pump_head_mAq=pump_head_mAq(total_flow_Lps, case.pump),
         residual_dp_mAq=residual_coeff * total_flow_Lps**2,
         rack_branch_dp_mAq=tuple(
-            branch_dp_mAq(q, k, T_property_C=T_C)
+            branch_dp_mAq(q, k, T_C)
             for q, k in zip(rack_flows, K_per_rack, strict=True)
         ),
         rack_valve_dp_mAq=tuple(
@@ -336,7 +335,7 @@ def solve_flow_distribution(
             for q in rack_flows
         ),
         residual_coeff_mAq_per_Lps2=residual_coeff,
-        residual_share_at_rated_percent=residual_share_at_rated_percent(case, T_C),
+        residual_share_at_rated_percent=residual_share_at_rated_percent(case),
         max_abs_equation_residual_mAq=float(np.max(np.abs(equations(solution)))),
         solver_ier=int(ier),
         solver_message=str(message).strip(),
@@ -405,8 +404,10 @@ def format_results_table(results: list[FlowDistributionResult]) -> str:
     lines += [
         "-" * len(header),
         "",
-        f"물성(밀도·SG) 평가 온도: {property_temperature_C():.1f} ℃ "
+        f"물성(밀도·SG) 평가 온도: {rated_property_temperature_C():.1f} ℃ "
         "(5장 1차측 공급·환수 벌크평균 · 5-1 규약)",
+        "  — 잔여저항은 이 정격 물성에서 한 번 역산해 고정했다(5-1).",
+        "     ΔP 계산 온도는 인자이며, 열모델이 붙는 세션 3-B 에서 풀린 상태가 들어온다.",
         f"잔여저항 몫(정격점): {min(shares):.2f} ~ {max(shares):.2f} %"
         " — 5-1 이 적은 60~83% 와 같은 범위다.",
         "  → **유량분배 결과는 사실상 이 배정 방식이 지배한다**(5-1 한계 · 미해결 #24).",
@@ -428,7 +429,10 @@ def main() -> int:
 
     if hasattr(sys.stdout, "reconfigure"):  # Windows 콘솔 기본 인코딩 대비
         sys.stdout.reconfigure(encoding="utf-8")
-    results = [solve_flow_distribution(case) for case in default_cases()]
+    T_property_C = rated_property_temperature_C()
+    results = [
+        solve_flow_distribution(case, T_property_C) for case in default_cases()
+    ]
     print(format_results_table(results))
     return 0
 
