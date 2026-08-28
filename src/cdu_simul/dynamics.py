@@ -84,6 +84,20 @@ _PERCENT: float = 1.0e-2
 INTEGRATION_RTOL: float = 1.0e-10
 INTEGRATION_ATOL: float = 1.0e-12
 
+#: 저장 표본 추출 — **수치 설정이지 물리 가정이 아니다**(세션 5.5-B).
+#: 적분 자체(RK45 · rtol · atol · 구간)는 손대지 않는다. `solve_ivp` 가 어느 시각의
+#: 값을 **돌려줄지**만 정한다 — 해는 dense output 에서 같은 정확도로 나온다.
+#:
+#: 스텝 직후를 조밀하게 잡는 이유: 세션 2 방향성 게이트가 **스텝 직후 기울기**를
+#: 쓰는데, 균등 간격으로 30τ 를 201점에 담으면 첫 구간이 0.15τ 나 되어 그 기울기가
+#: 뭉개진다. 전이의 정보는 앞쪽에 몰려 있고 뒤쪽은 점근선이다.
+#: 분할점 2τ 는 시간상수 몇 배 안에서 변화의 대부분이 끝나기 때문이고, 점 배분
+#: 100/100 은 앞뒤에 같은 해상도를 주되 앞쪽 간격을 15배 좁히는 값이다.
+#: 이 셋(분할점·앞 점수·뒤 점수)은 **5-1 에 기록하지 않는다** — 물리가 아니다.
+STORAGE_SPLIT_IN_TAU: float = 2.0
+STORAGE_POINTS_EARLY: int = 100
+STORAGE_POINTS_LATE: int = 100
+
 #: 적분 구간을 이론 체류시간 τ 의 몇 배까지 잡을지. **수치 설정**이다.
 #: 가장 느린 모드의 시간상수가 τ/ε (ε<1) 이므로 30τ 는 최소 20 시간상수에
 #: 해당한다 — 잔여 과도분이 e^-20 ≈ 2e-9 배로 줄어 t→∞ 대조에 영향을 주지 않는다.
@@ -93,6 +107,29 @@ INTEGRATION_HORIZON_IN_TAU: float = 30.0
 # ─────────────────────────────────────────────────────────────────────────────
 # C3. 계통 보유수량(열용량) — 순수 함수
 # ─────────────────────────────────────────────────────────────────────────────
+def storage_times_s(t_end_s: float, tau_s: float) -> np.ndarray:
+    """저장할 시각 [s] — 스텝 직후를 조밀하게 잡는 **비균등** 표본 (순수 함수).
+
+    [수치 설정: 세션 5.5-B. 물리 가정이 아니므로 5-1 에 기록하지 않는다]
+
+    0 ~ `STORAGE_SPLIT_IN_TAU`·τ 에 `STORAGE_POINTS_EARLY` 점,
+    그 뒤 `t_end_s` 까지 `STORAGE_POINTS_LATE` 점. 경계 시각은 한 번만 담는다.
+
+    **적분 정확도와 무관하다** — `solve_ivp` 는 자기 스텝으로 풀고 여기 준 시각에서
+    dense output 을 평가할 뿐이다. 그래서 이 함수를 바꿔도 게이트 결과가 바뀌지
+    않아야 하고, 세션 5.5-B 가 그것을 확인했다.
+
+    τ 가 0 이하이거나 구간이 비면 균등 표본으로 물러난다 — 그런 케이스는 현재
+    없지만, 조용히 빈 배열을 내는 것보다 낫다.
+    """
+    split_s = min(STORAGE_SPLIT_IN_TAU * tau_s, t_end_s)
+    if not (0.0 < split_s < t_end_s):
+        return np.linspace(0.0, t_end_s, STORAGE_POINTS_EARLY + STORAGE_POINTS_LATE)
+    early = np.linspace(0.0, split_s, STORAGE_POINTS_EARLY, endpoint=False)
+    late = np.linspace(split_s, t_end_s, STORAGE_POINTS_LATE + 1)
+    return np.concatenate([early, late])
+
+
 def pipe_cross_section_area_m2(inner_diameter_m: float) -> float:
     """원형 배관 단면적 [m^2] (순수 함수)."""
     return math.pi * 0.25 * inner_diameter_m * inner_diameter_m
@@ -345,7 +382,7 @@ def integrate_load_step(
         rtol=INTEGRATION_RTOL,
         atol=INTEGRATION_ATOL,
         dense_output=True,
-        t_eval=np.linspace(0.0, t_end_s, 4001),
+        t_eval=storage_times_s(t_end_s, tau_theory_s),
     )
 
     final_flow = solve_flow_distribution(
@@ -542,7 +579,7 @@ def integrate_leak_step(
         rtol=INTEGRATION_RTOL,
         atol=INTEGRATION_ATOL,
         dense_output=True,
-        t_eval=np.linspace(0.0, t_end_s, 4001),
+        t_eval=storage_times_s(t_end_s, tau_theory_s),
     )
 
     final_flow = solve_flow_distribution(
