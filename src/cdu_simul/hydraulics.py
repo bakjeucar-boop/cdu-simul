@@ -145,6 +145,63 @@ def branch_dp_mAq(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 밸브 Kv · 배관 K — 5-1 은 값이 아니라 **역산 규칙**을 준다 (세션 3-A2)
+# ─────────────────────────────────────────────────────────────────────────────
+def valve_Kv_max_m3h_from_rated_dP(dP_rated_mAq: float) -> float:
+    """밸브 Kv_max [m^3/h] 를 5-1 역산 규칙 그대로 산출한다.
+
+    [역산 규칙: 프로젝트정리 5-1 「밸브 Kv (개도 100% 기준)」 · 세션 3-A2]
+
+    5장 조건(랙당 1.94 L/s · 개도 80% · ΔP 3~5 mAq)에 Kv = Q·sqrt(SG/ΔP[bar]) 를
+    적용해 정격개도에서의 Kv 를 구하고, **선형 개도 특성**으로 100% 로 환산한다::
+
+        Kv_80  = Q · sqrt(SG / ΔP)
+        Kv_100 = Kv_80 / 개도분율
+
+    **Kv 는 기기 특성이므로 정격 물성에서 한 번 역산한 뒤 고정한다**(5-1) —
+    온도에 따라 변하는 것은 Kv 가 아니라 그것으로 계산한 ΔP 다. 그래서 이 함수는
+    온도를 인자로 받지 않고 `rated_property_temperature_C()` 를 쓴다.
+
+    SG 는 `fluid.coolant_specific_gravity` 한 곳에서만 온다 — 그 결과 이 Kv 로
+    정격 조건의 ΔP 를 되계산하면 **역산의 역이므로 5장 표값이 항등적으로 재현된다**
+    (`test_hydraulics.py` 의 항등성 검사). 세션 3-A 는 5-1 이 SG 를 숫자로 적어
+    두는 바람에 이 항등성이 깨져 있었다(미해결 #27).
+
+    5-1 참고값: ΔP 3 mAq → Kv ≈ 16.18 · 5 mAq → Kv ≈ 12.53 m^3/h.
+    **그 숫자를 코드에 박지 않는다** — 이 함수가 규칙대로 재산출한다.
+    """
+    Q_m3h = VALVE.rated_flow_per_rack_Lps * _M3H_PER_LPS
+    dP_bar = dP_rated_mAq * PASCAL_PER_MAQ / _PA_PER_BAR
+    SG = coolant_specific_gravity(rated_property_temperature_C())
+    Kv_at_rated_opening_m3h = Q_m3h * math.sqrt(SG / dP_bar)
+    return Kv_at_rated_opening_m3h / VALVE.rated_opening_fraction
+
+
+def branch_K_from_rated_dP(
+    dP_rated_mAq: float,
+    inner_diameter_mm: float = PIPING.rack_branch_inner_diameter_mm,
+) -> float:
+    """랙 분기 배관 K값 [-] 을 5-1 역산 규칙 그대로 산출한다.
+
+    [역산 규칙: 프로젝트정리 5-1 「배관 K값 (랙 분기)」 · 세션 3-A2]
+
+    5장 "랙당 ΔP 2~3 mAq @ 1.94 L/s" 와 5-1 배관 내경(25A)으로
+    ΔP = K·ρ·v²/2 를 K 에 대해 푼 것이다. **K 는 무차원 형상 특성이므로 정격
+    물성에서 한 번 역산한 뒤 고정한다**(5-1) — `valve_Kv_max_m3h_from_rated_dP`
+    와 같은 이유로 온도를 인자로 받지 않는다.
+
+    5-1 참고값: K ≈ 3.20 ~ 4.80. **그 숫자를 코드에 박지 않는다.**
+    """
+    dP_at_unit_K_mAq = branch_dp_mAq(
+        VALVE.rated_flow_per_rack_Lps,
+        K=1.0,
+        T_property_C=rated_property_temperature_C(),
+        inner_diameter_mm=inner_diameter_mm,
+    )
+    return dP_rated_mAq / dP_at_unit_K_mAq
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 케이스 정의
 # ─────────────────────────────────────────────────────────────────────────────
 @dataclass(frozen=True)
@@ -228,10 +285,11 @@ def residual_resistance_coeff_mAq_per_Lps2(case: HydraulicCase) -> float:
     결과는 사실상 이 배정 방식이 지배한다. 수렴·비발산 게이트 통과를 "유량분배
     값이 타당하다"로 읽지 않는다.
 
-    **정격 물성에서 한 번만 역산한다** — 5-1 이 이 계수를 mAq/(L/s)^2 로 정의하므로
-    **온도에 따라 다시 스케일하지 않는다.** 분기·밸브 ΔP 는 밀도에 비례해 움직이는데
-    이 항만 고정이라, 정격 밖 온도에서는 셋의 스케일이 어긋난다 — 5-1 의 잔여저항
-    규칙을 이 판에서 바꾸지 않기로 했으므로 **고치지 않고 관측으로 남긴다**(미해결 #30).
+    **정격 물성에서 한 번만 역산한다** — Kv·K 와 같은 취급이며, 물성원도 같다
+    (세션 3-A2). 5-1 이 이 계수를 mAq/(L/s)^2 로 정의하므로 **온도에 따라 다시
+    스케일하지 않는다.** 분기·밸브 ΔP 는 밀도에 비례해 움직이는데 이 항만 고정
+    이라, 정격 밖 온도에서는 셋의 스케일이 어긋난다 — 5-1 의 잔여저항 규칙을 이
+    판에서 바꾸지 않기로 했으므로 **고치지 않고 관측으로 남긴다**(미해결 #30).
     """
     Q_rack_rated_Lps = VALVE.rated_flow_per_rack_Lps
     Q_total_rated_Lps = PUMP.rated_flow_Lps
@@ -279,8 +337,8 @@ def solve_flow_distribution(
     **케이스마다 이 함수를 새로 호출해 초기조건을 명시적으로 리셋한다**
     (collaboration.md 결함유형 ④ — 시나리오 간 상태 이월 방지).
 
-    `T_property_C` 는 **ΔP 계산에만** 쓴다 — 잔여저항은 정격 물성에서 이미 고정돼
-    있다(5-1). 기본값을 두지 않아 호출부가 물성 온도를 명시하게 한다.
+    `T_property_C` 는 **ΔP 계산에만** 쓴다 — Kv·K·잔여저항은 정격 물성에서 이미
+    고정돼 있다(5-1). 기본값을 두지 않아 호출부가 물성 온도를 명시하게 한다.
 
     절대 규칙 5: `ier` 를 확인해 결과에 싣고, 실패하면 조용히 넘어가지 않고
     `RuntimeError` 를 던진다.
@@ -346,22 +404,29 @@ def solve_flow_distribution(
 def default_cases() -> list[HydraulicCase]:
     """5장·5-1 범위 양 끝의 8조합 (방침 (B) — 양 끝을 둘 다 돌린다).
 
-    세 축이 각각 두 끝을 가진다: 펌프 정격양정(20/30 mAq) · 랙 분기 K
-    (3.20/4.80 = 5장 ΔP 2/3 mAq) · 밸브 Kv_max(16.19/12.54 = 5장 ΔP 3/5 mAq).
-    2 x 2 x 2 = 8 조합이다. 중점을 고르지 않는다.
+    세 축이 각각 두 끝을 가진다: 펌프 정격양정(20/30 mAq) · 랙 분기 ΔP(2/3 mAq)
+    · 밸브 ΔP(3/5 mAq). 2 x 2 x 2 = 8 조합이다. 중점을 고르지 않는다.
+
+    **K 와 Kv 는 여기서 5-1 역산 규칙으로 산출해 케이스에 고정한다**(세션 3-A2)
+    — 5장이 주는 것은 ΔP 범위이고 K·Kv 는 그것의 역산값이다. 케이스 생성 시점에
+    한 번 계산되므로 이후 온도가 바뀌어도 다시 계산되지 않는다.
     """
     cases = []
     for pump_coeffs in PUMP.curve_coefficient_bounds:
-        for branch_K in (PIPING.rack_branch_K.low, PIPING.rack_branch_K.high):
-            for Kv_max in VALVE.Kv_max_bounds_m3h:
+        for branch_dP_mAq in (PIPING.dP_per_rack_mAq.low, PIPING.dP_per_rack_mAq.high):
+            for valve_dP_mAq in (
+                VALVE.dP_at_rated_opening_mAq.low,
+                VALVE.dP_at_rated_opening_mAq.high,
+            ):
                 cases.append(
                     HydraulicCase(
                         label=(
-                            f"H{pump_coeffs.H0_mAq:.1f}/K{branch_K:.2f}/Kv{Kv_max:.2f}"
+                            f"H{pump_coeffs.H0_mAq:.1f}"
+                            f"/dPb{branch_dP_mAq:.0f}/dPv{valve_dP_mAq:.0f}"
                         ),
                         pump=pump_coeffs,
-                        branch_K=branch_K,
-                        valve_Kv_max_m3h=Kv_max,
+                        branch_K=branch_K_from_rated_dP(branch_dP_mAq),
+                        valve_Kv_max_m3h=valve_Kv_max_m3h_from_rated_dP(valve_dP_mAq),
                     )
                 )
     return cases
@@ -382,7 +447,7 @@ def format_results_table(results: list[FlowDistributionResult]) -> str:
     )
     rated_Lps = PUMP.rated_flow_Lps
     lines = [
-        "세션 3-A · 8랙 헤더 압력평형 유량분배 (개도 80% · 8랙 동일 조건)",
+        "세션 3-A2 · 8랙 헤더 압력평형 유량분배 (개도 80% · 8랙 동일 조건)",
         "※ " + ASSUMPTION_TAG,
         "※ 열모델과 결합하지 않았다 — 6장 feasibility 기준을 하나도 판정하지 않는다.",
         "",
@@ -406,7 +471,7 @@ def format_results_table(results: list[FlowDistributionResult]) -> str:
         "",
         f"물성(밀도·SG) 평가 온도: {rated_property_temperature_C():.1f} ℃ "
         "(5장 1차측 공급·환수 벌크평균 · 5-1 규약)",
-        "  — 잔여저항은 이 정격 물성에서 한 번 역산해 고정했다(5-1).",
+        "  — Kv·K·잔여저항은 이 정격 물성에서 한 번 역산해 고정했다(5-1).",
         "     ΔP 계산 온도는 인자이며, 열모델이 붙는 세션 3-B 에서 풀린 상태가 들어온다.",
         f"잔여저항 몫(정격점): {min(shares):.2f} ~ {max(shares):.2f} %"
         " — 5-1 이 적은 60~83% 와 같은 범위다.",
