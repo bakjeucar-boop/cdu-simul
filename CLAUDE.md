@@ -12,7 +12,8 @@ feasibility(무너지지 않는가)만 본다. 정확도 검증은 파일럿 종
 0. **`git pull` 을 먼저 한다.** 여러 PC를 GitHub를 사이에 두고 번갈아 쓸 수 있다.
    당기지 않고 시작하면 다른 PC의 작업 위에 덮어쓰게 된다.
 1. **저장소**: `https://github.com/bakjeucar-boop/cdu-simul`
-   (로컬 경로(Windows): `C:\Users\SAMSUNG\Documents\cdu-simul`)
+   (로컬 경로는 PC마다 다르다 — 저장소 루트에서 실행하는 것만 전제한다.
+   코드에 절대경로를 넣지 않는다: 절대 규칙 15)
 2. `PROCEED.md` — 지금까지의 진행 이력과 미해결 항목. 없으면 세션 1-A에서 만든다.
 3. `daily_brief.py` — 대화 시작 시 붙일 브리핑을 뽑는 스크립트. 세션 1-A에서 저장소와
    함께 만든다.
