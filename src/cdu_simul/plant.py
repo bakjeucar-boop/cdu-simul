@@ -211,13 +211,41 @@ def solve_plant_steady_state(case: PlantCase) -> PlantSteadyStateResult:
 def plant_case(
     label: str, load_percents: tuple[float, ...], template: CduCase
 ) -> PlantCase:
-    """같은 사양의 CDU 여러 대를 부하율만 다르게 만든다."""
+    """같은 사양의 CDU 여러 대를 부하율만 다르게 만든다.
+
+    **대칭 경로다** — 전 CDU 가 같은 템플릿을 받는다. CDU 마다 다른 조건(예: 한
+    CDU 에만 누출)이 필요하면 `plant_case_from_templates` 를 쓴다. 이 함수는 그
+    함수에 같은 템플릿을 n 벌 넘기는 것과 **완전히 같다**(세션 5.5-D).
+    """
+    return plant_case_from_templates(
+        label, load_percents, (template,) * len(load_percents)
+    )
+
+
+def plant_case_from_templates(
+    label: str,
+    load_percents: tuple[float, ...],
+    templates: tuple[CduCase, ...],
+) -> PlantCase:
+    """CDU 마다 **다른 템플릿**을 받아 부하율만 덮어쓴다.
+
+    필요해진 이유 [세션 5.5-D · 미해결 #34]: 다중 CDU 전이에서 누출을 **한 CDU 의
+    랙 1개**에만 걸어야 한다. 5-1 「누출 주입 지점」이 "랙 1개에 주입한다 · 전 랙
+    동시 누출은 5장에 근거가 없어 돌리지 않는다" 이므로, 두 CDU 의 랙 0 에 동시에
+    거는 것은 그 규정 밖이다. 정상상태 경로(`dataset.steady_rows`)는 이미 CDU 0
+    에만 걸고 있었고, 전이 경로만 걸지 못하고 있었다.
+
+    **CDU 별 사양(펌프·랙 수·배관 규격)을 다르게 두라는 뜻이 아니다** — 그것은
+    5장에 없는 선택이다(세션 5 「하지 않을 것」). 여기서 갈리는 것은 5장·5-1 이
+    이미 정의한 시나리오 조건(누출 K값 배율)뿐이다.
+    """
     from dataclasses import replace
 
     return PlantCase(
         label=label,
         cdus=tuple(
-            replace(template, load_percent=percent) for percent in load_percents
+            replace(template, load_percent=percent)
+            for template, percent in zip(templates, load_percents, strict=True)
         ),
     )
 
@@ -313,6 +341,10 @@ class PlantLoadStepCase:
 
     **연동이 있으면 부하가 그대로인 CDU 도 움직인다** — 공유 2차측 배분이
     이동하기 때문이다. 그것을 보는 것이 이 케이스의 목적이다.
+
+    **CDU 별 템플릿** [세션 5.5-D]: `templates` 를 주면 CDU 마다 다른 조건(누출
+    K값 배율)을 건다. 주지 않으면 `template` 을 전 CDU 에 쓴다 — **기존 대칭
+    경로가 그대로 남아 있고, 같은 템플릿을 n 벌 주는 것과 완전히 같다.**
     """
 
     label: str
@@ -321,9 +353,27 @@ class PlantLoadStepCase:
     load_before_percents: tuple[float, ...]
     load_after_percents: tuple[float, ...]
     holdup_supply_fraction: float = PIPING.holdup_supply_node_fraction
+    #: CDU 별 템플릿. `None` 이면 `template` 을 전 CDU 에 쓴다(대칭 경로).
+    templates: tuple[CduCase, ...] | None = None
+
+    def __post_init__(self) -> None:
+        if len(self.load_before_percents) != len(self.load_after_percents):
+            raise ValueError("스텝 전후 부하 목록의 길이가 다르다")
+        if self.templates is not None and len(self.templates) != len(
+            self.load_after_percents
+        ):
+            raise ValueError("CDU 별 템플릿 수가 부하 목록 길이와 다르다")
+
+    def cdu_templates(self) -> tuple[CduCase, ...]:
+        """CDU 별 템플릿 — 주어지지 않았으면 `template` 을 복제한다."""
+        if self.templates is None:
+            return (self.template,) * len(self.load_after_percents)
+        return self.templates
 
     def plant_at(self, load_percents: tuple[float, ...]) -> PlantCase:
-        return plant_case(self.label, load_percents, self.template)
+        return plant_case_from_templates(
+            self.label, load_percents, self.cdu_templates()
+        )
 
 
 @dataclass(frozen=True)
