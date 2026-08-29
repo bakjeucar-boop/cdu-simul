@@ -51,6 +51,7 @@ from cdu_simul.dynamics import (
     LoadStepCase,
     _derivative,
     holdup_bounds,
+    storage_times_s,
 )
 from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
 from cdu_simul.model import (
@@ -470,7 +471,14 @@ def integrate_plant_load_step(
         rtol=INTEGRATION_RTOL,
         atol=INTEGRATION_ATOL,
         dense_output=True,
-        t_eval=np.linspace(0.0, t_end_s, 2001),
+        # **저장 격자만 바꿨다 — 적분 설정(RK45·rtol·atol·구간)은 그대로다**
+        # [세션 5.5-D · C3]. 종전에는 균등 2001점을 썼는데 `dynamics` 의 단일 CDU
+        # 경로가 쓰는 `storage_times_s`(스텝 직후 조밀한 비균등 201점)와 격자가
+        # 달라, `dataset.py` 가 뒤에서 가장 가까운 점을 골라 맞추고 있었다.
+        # 여기서 같은 격자를 쓰면 그 보정이 필요 없어진다.
+        # `t_eval` 은 `solve_ivp` 의 스텝 선택에 영향하지 않는다 — dense output 을
+        # 어느 시각에서 평가할지만 정한다. 그래서 해 자체는 이동하지 않는다.
+        t_eval=storage_times_s(t_end_s, tau_theory_s),
     )
 
     final_temps = tuple(
