@@ -9,6 +9,22 @@
 
 행 단위 = **(시나리오 × CDU × 시각)** 하나당 한 행. 랙별 값은 열로 편다
 (rack0..rack7) — 행으로 펴면 CDU 총계가 8번 중복된다.
+**열 목록은 이 코드가 정본이다**(5-1 「데이터셋 스키마 규약」).
+
+**전이 행을 `cdu_config` 로 갈라 읽어야 한다 — 자극 형태가 다르다** [세션 5.5-D]::
+
+    cdu_config = single           누출이 t=0 에 **스텝으로** 들어온다. 부하는 불변.
+                                  → 관측되는 전이는 **누출이 만든 것**이다.
+    cdu_config = dual_asymmetric  **부하가 t=0 에 스텝**한다(CDU A 만).
+                                  누출은 **t=0 이전부터 있는 조건**이고 CDU
+                                  `LEAK_CDU_INDEX` 하나에만 걸린다.
+                                  → 관측되는 전이는 **부하 스텝이 만든 것**이고,
+                                    누출은 그 전이의 **모양을 바꾸는** 조건이다.
+
+두 전이를 같은 자극으로 보면 안 된다. 다중 CDU 전이에서 누출의 효과를 보려면
+같은 부하 스텝 안에서 `leak_level_percent` 를 가로질러 비교한다.
+**다중 전이도 누출을 스텝으로 넣을지는 사람이 정한다** — 세션 5.5-D 는 바꾸지
+않았고 의견만 보고했다.
 
 **실패한 solver 의 행을 버리지 않는다.** 버리면 데이터셋이 성공만 담아 편향된다 —
 플래그를 전 행에 담고 실패도 그대로 남긴다.
@@ -42,7 +58,6 @@ from cdu_simul.dynamics import (
     LeakStepCase,
     holdup_bounds,
     integrate_leak_step,
-    storage_times_s,
 )
 from cdu_simul.leak import leak_case, leak_levels
 from cdu_simul.model import (
@@ -71,6 +86,22 @@ CONFIG_DUAL_ASYMMETRIC = "dual_asymmetric"
 #: 사용자가 그 동치성을 데이터셋 안에서 직접 확인할 수 있는 재료가 된다.
 TRANSIENT_CONFIGS = (CONFIG_SINGLE, CONFIG_DUAL_ASYMMETRIC)
 
+#: 누출을 거는 CDU 번호 [시나리오 정의: 5-1 「누출 주입 지점」의 적용 · 세션 5.5-D].
+#:
+#: 5-1 은 "**랙 1개**에 주입한다 · 전 랙 동시 누출은 5장에 근거가 없어 돌리지
+#: 않는다" 라고만 적는다. CDU 가 2대인 플랜트에서 그 규정을 지키려면 누출점이
+#: 계 전체에 **하나**여야 하고, 그러려면 어느 CDU 인지를 골라야 한다. 5-1 이 랙
+#: 번호에 대해 쓴 논리(대칭이므로 번호 선택이 새 숫자를 만들지 않는다)를 그대로
+#: 쓴다 — CDU 사양은 전부 같다(`PlantCase` docstring · 5-1 「CDU 대수」).
+#: **정상상태 경로는 세션 5.5-B 부터 이미 CDU 0 에만 걸고 있었다** — 이 상수는
+#: 그 이미 있던 선택에 이름을 붙이고 전이 경로에도 같게 적용하는 것이다.
+#:
+#: **한계**: 비대칭 전이에서 CDU A 는 부하가 **스텝하는** 쪽이고 B 는 **불변인**
+#: 쪽이다. 즉 두 CDU 는 사양은 같아도 **역할이 다르므로**, 누출을 A 에 고정하면
+#: 데이터셋은 "부하가 움직이는 CDU 에 누출이 있는 경우"만 담는다. 「누출이 정지
+#: 상태의 CDU 에 있고 옆 CDU 가 부하 변동을 겪는」 조합은 이 데이터셋에 없다.
+LEAK_CDU_INDEX: int = 0
+
 
 @dataclass(frozen=True)
 class ScenarioSpec:
@@ -91,6 +122,23 @@ class ScenarioSpec:
     @property
     def leak_level_percent(self) -> float:
         return (self.leak_multiplier - 1.0) * 100.0
+
+    @property
+    def leak_cdu_index(self) -> int | str:
+        """누출이 걸린 CDU 번호. **누출이 없으면 빈 값**이다 [세션 5.5-D].
+
+        빈 값을 쓰는 이유: 이 스키마에서 「이 행에 해당 없음」은 이미 빈 칸으로
+        표기한다(`t_s`·`holdup_mass_kg`·`hx_duty_kW`·랙별 열). -1 같은 표지값을
+        새로 만들면 규약이 둘이 된다.
+
+        **주의 — `leak_rack_index` 와 다르게 동작한다.** `leak_rack_index` 는
+        세션 5.5-B 부터 누출 유무와 무관하게 항상 0 을 싣는다("누출이 있다면
+        걸릴 자리"). 그 동작은 이 판의 범위 밖이라 바꾸지 않았다. 누출 유무의
+        판정에는 `leak_level_percent == 0` 또는 이 열의 빈 칸을 쓴다.
+        """
+        if self.leak_multiplier == 1.0:
+            return ""
+        return LEAK_CDU_INDEX
 
     @property
     def scenario_kind(self) -> str:
@@ -215,6 +263,7 @@ def _base_row(spec: ScenarioSpec, cdu_index: int) -> dict[str, object]:
         "cdu_index": cdu_index,
         "leak_level_percent": spec.leak_level_percent,
         "leak_rack_index": LEAK.injection_rack_index,
+        "leak_cdu_index": spec.leak_cdu_index,
         "load_percent": _load_percents(spec)[cdu_index],
         "holdup_mass_kg": holdup_mass_kg,
         "t_s": "",
@@ -238,7 +287,7 @@ def steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
     else:
         cdus = tuple(
             _apply_leak(replace(spec.template, load_percent=load), spec)
-            if index == 0
+            if index == LEAK_CDU_INDEX
             else replace(spec.template, load_percent=load)
             for index, load in enumerate(loads)
         )
@@ -281,8 +330,10 @@ def steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
 def transient_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
     """전이 시나리오 하나의 행들 (CDU × 시각).
 
-    자극은 **누출 스텝**이다 — 정격 운전 중 t=0 에 K값이 계단으로 오른다.
-    배율 1.0(정상)도 같은 경로를 돌아 "아무 일도 일어나지 않는" 기준선이 된다.
+    **자극이 구성마다 다르다**(모듈 docstring 참조). 단일 CDU 는 **누출 스텝** —
+    정격 운전 중 t=0 에 K값이 계단으로 오른다. 다중 CDU 는 **부하 스텝**이고
+    누출은 t=0 이전부터 CDU `LEAK_CDU_INDEX` 하나에 걸려 있다.
+    배율 1.0(정상)도 같은 경로를 돌아 "누출이 없는" 기준선이 된다.
 
     **전이 행에는 랙별 값을 담지 않는다** — 2노드 온도 모델이 시간에 따라 내는
     것은 공급·환수 헤더 온도이고, 랙별 분해는 정상상태 대수식에서만 나온다.
@@ -326,12 +377,17 @@ def transient_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
     # 학습하면 누출이 전이를 만들지 않는다고 배운다. 그래서 CDU A 에 **부하 스텝**을
     # 준다(다른 쪽 수준 → `spec.load_percent`), CDU B 는 그대로 둔다.
     #
-    # 누출은 **t=0 이전부터 있는 조건**으로 넣는다 — 템플릿에 걸어 두 CDU 의 랙 0 에
-    # 적용된다. `plant.PlantLoadStepCase` 가 CDU 마다 다른 템플릿을 받지 않고
-    # **`plant.py` 는 이 판의 범위 밖**이라, CDU 하나에만 누출을 거는 것은 여기서
-    # 만들 수 없다. 단일 CDU 전이는 누출이 **스텝으로** 들어오고 다중 CDU 전이는
-    # **기왕에 있는 조건**이라는 차이를 `cdu_config` 로 구분해 읽어야 한다
-    # (세션 5.5-B 보고에 적었고 사람의 확인이 필요하다).
+    # 누출은 **t=0 이전부터 있는 조건**이고 **CDU `LEAK_CDU_INDEX` 하나에만** 건다
+    # [세션 5.5-D · 미해결 #34 닫음]. 세션 5.5-B 는 `PlantLoadStepCase` 가 CDU 마다
+    # 다른 템플릿을 받지 못해 **두 CDU 의 랙 0 에 동시에** 걸고 있었고, 그것은
+    # 5-1 「누출 주입 지점」(랙 1개)의 규정 밖이었으며 양쪽 대칭이라 2차측 배분이
+    # 움직이지 않아 **CDU 간 연동이 상쇄**됐다.
+    #
+    # **자극 형태가 단일 CDU 전이와 다르다는 사실은 그대로 남는다** — 단일은 누출이
+    # **스텝으로** 들어오고(부하 불변), 다중은 **부하가 스텝**이고 누출은 t=0
+    # 이전부터 있다. `cdu_config` 로 구분해 읽어야 하며 두 전이를 같은 자극으로 보면
+    # 안 된다. 다중 전이도 누출을 스텝으로 넣을지는 **사람이 정한다**(세션 5.5-D
+    # C4 의견 — 이 판에서 바꾸지 않았다).
     other = (
         LOAD_PROFILE.idle_load_percent
         if spec.load_percent == LOAD_PROFILE.rated_load_percent
@@ -341,17 +397,23 @@ def transient_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
         PlantLoadStepCase(
             label=spec.scenario_id,
             holdup=holdup,
-            template=_apply_leak(spec.template, spec),
+            template=spec.template,
+            templates=tuple(
+                _apply_leak(spec.template, spec) if index == LEAK_CDU_INDEX
+                else spec.template
+                for index in range(len(loads))
+            ),
             load_before_percents=(other,) + tuple(loads[1:]),
             load_after_percents=loads,
         )
     )
-    keep = _storage_indices(dual.t_s, dual.tau_theory_s)
+    # 저장 격자를 `plant.py` 가 직접 `storage_times_s` 로 잡는다(세션 5.5-D C3) —
+    # 세션 5.5-B 가 여기서 하던 최근접 점 선택이 필요 없어졌다.
     return _transient_rows_from(
         spec=spec,
-        times=dual.t_s[keep],
-        supply_series=[series[keep] for series in dual.T_supply_C],
-        return_series=[series[keep] for series in dual.T_return_C],
+        times=dual.t_s,
+        supply_series=dual.T_supply_C,
+        return_series=dual.T_return_C,
         flow_pairs=((None, None),) * len(dual.T_supply_C),
         head_pairs=((None, None),) * len(dual.T_supply_C),
         shares=dual.secondary_shares_final_Lps,
@@ -359,27 +421,6 @@ def transient_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
         hydraulic_ok=dual.hydraulic_solver_converged,
         plant_ier=1 if dual.hydraulic_solver_converged else 0,
     )
-
-
-def _storage_indices(times: np.ndarray, tau_s: float) -> np.ndarray:
-    """다중 CDU 전이의 저장 표본 인덱스 — 비균등 격자에 **가장 가까운** 점을 고른다.
-
-    `dynamics.integrate_leak_step` 은 적분 단계에서 `storage_times_s` 로 비균등
-    표본을 받지만, `plant.integrate_plant_load_step` 은 균등 2001점을 쓴다.
-    **`plant.py` 는 세션 5.5-B 범위 밖**이라 그쪽 `t_eval` 을 고치지 않았고,
-    대신 여기서 같은 목표 격자에 가장 가까운 점을 **골라** 두 경로의 시간 격자를
-    맞춘다(세션 5.5-B 보고에 적었다).
-
-    보간하지 않는다 — 적분기가 실제로 돌려준 값만 쓴다. 균등 2001점의 간격이
-    0.015τ 로 목표 격자의 앞쪽 간격(0.02τ)보다 촘촘하므로, 고른 시각과 목표
-    시각의 차이는 0.0075τ 이하다.
-
-    같은 인덱스가 두 번 뽑히면 중복을 없앤다 — 뒤쪽에서 목표 간격이 균등 간격보다
-    좁아지는 일은 현재 설정에 없지만, 설정이 바뀌어도 행이 중복되지 않게 한다.
-    """
-    targets = storage_times_s(float(times[-1]), tau_s)
-    indices = np.abs(times[None, :] - targets[:, None]).argmin(axis=1)
-    return np.unique(indices)
 
 
 def _transient_rows_from(
