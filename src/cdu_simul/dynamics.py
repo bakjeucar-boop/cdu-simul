@@ -67,8 +67,8 @@ from cdu_simul.hydraulics import (
 from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
 from cdu_simul.model import (
     CduCase,
-    _property_temperature_from_state,
     hx_capacity_terms,
+    property_temperature_from_state,
     solve_cdu_steady_state,
 )
 
@@ -165,7 +165,7 @@ def holdup_reference_density_kgm3() -> float:
     (평형 온도를 결정하는 cp·ρ 는 아래 미분방정식 안에서 매 시점 다시 평가한다 —
     그래야 t→∞ 극한이 1-B 해와 정확히 일치한다.)
     """
-    reference_T_C = _property_temperature_from_state(
+    reference_T_C = property_temperature_from_state(
         SCENARIO.T_primary_supply_C, SCENARIO.T_primary_return_C, "bulk_mean"
     )
     return coolant_density_kgm3(reference_T_C)
@@ -301,7 +301,7 @@ def _derivative(
     2차측). `None` 이면 세션 4까지와 같은 경로다 — `model.hx_capacity_terms` 가
     그 분기를 한 곳에서 처리하므로 물리를 두 번 적지 않는다.
     """
-    T_property_C = _property_temperature_from_state(T_supply_C, T_return_C, "bulk_mean")
+    T_property_C = property_temperature_from_state(T_supply_C, T_return_C, "bulk_mean")
     rho_kgm3 = coolant_density_kgm3(T_property_C)
     cp_Jkg_K = coolant_cp_Jkg_K(T_property_C)
 
@@ -387,7 +387,7 @@ def integrate_load_step(
 
     final_flow = solve_flow_distribution(
         case.hydraulic,
-        _property_temperature_from_state(
+        property_temperature_from_state(
             float(solution.y[0][-1]), float(solution.y[1][-1]), "bulk_mean"
         ),
     )
@@ -584,7 +584,7 @@ def integrate_leak_step(
 
     final_flow = solve_flow_distribution(
         hydraulic_after,
-        _property_temperature_from_state(
+        property_temperature_from_state(
             float(solution.y[0][-1]), float(solution.y[1][-1]), "bulk_mean"
         ),
     )

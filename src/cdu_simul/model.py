@@ -307,10 +307,17 @@ def _state_at_property_temperature(
     )
 
 
-def _property_temperature_from_state(
+def property_temperature_from_state(
     T_supply_C: float, T_return_C: float, cp_rule: CpRule
 ) -> float:
-    """cp·ρ 를 평가할 온도를 규칙에 따라 고른다."""
+    """cp·ρ 를 평가할 온도를 규칙에 따라 고른다 (순수 함수).
+
+    **공개 이름이다.** `dynamics` 가 이 함수를 쓴다 — cp 평가 규칙
+    [프로젝트정리 5-1 「cp·ρ 평가 온도」]을 정상상태와 시간적분 두 곳에 적지
+    않으려는 것이 원래 의도이고(collaboration.md ④ 「물리를 한 곳에만 적는다」),
+    세션 2 는 `model.py` 수정 금지라 비공개 이름인 채로 import 하고 있었다
+    (미해결 #22). 세션 5.7 에서 이름만 승격했다 — **본문은 그대로다.**
+    """
     if cp_rule == "bulk_mean":
         return 0.5 * (T_supply_C + T_return_C)
     if cp_rule == "supply":
@@ -342,7 +349,7 @@ def solve_steady_state(case: SteadyStateCase) -> SteadyStateResult:
     def residual(x: list[float]) -> list[float]:
         T_prop_C = float(x[0])
         state = _state_at_property_temperature(T_prop_C, case)
-        rule_T_C = _property_temperature_from_state(
+        rule_T_C = property_temperature_from_state(
             state.T_supply_C, state.T_return_C, case.cp_rule
         )
         return [rule_T_C - T_prop_C]
@@ -531,7 +538,7 @@ def cdu_property_temperature_residual(
     """
     thermal_case, _flow = cdu_thermal_case_at(case, T_property_C, secondary_flow_Lps)
     state = _state_at_property_temperature(T_property_C, thermal_case)
-    rule_T_C = _property_temperature_from_state(
+    rule_T_C = property_temperature_from_state(
         state.T_supply_C, state.T_return_C, case.cp_rule
     )
     return rule_T_C - T_property_C
