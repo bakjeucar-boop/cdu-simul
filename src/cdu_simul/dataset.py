@@ -102,6 +102,33 @@ TRANSIENT_CONFIGS = (CONFIG_SINGLE, CONFIG_DUAL_ASYMMETRIC)
 #: 상태의 CDU 에 있고 옆 CDU 가 부하 변동을 겪는」 조합은 이 데이터셋에 없다.
 LEAK_CDU_INDEX: int = 0
 
+#: 데이터셋 판본 식별자 [사람 결정 · 세션 5.7].
+#:
+#: 값은 **그 판본을 만든 세션 번호**다. 이 저장소의 판본 축이 세션이기 때문이고,
+#: 다음 판본은 자기 세션 번호를 붙여 그대로 이어붙이면 된다. 앞선 두 판본은 이
+#: 열 자체가 없다 — **열의 부재가 곧 5.7 이전**이라는 표지이며, 열 수로도 갈린다
+#: (48열본 = 세션 5.5-B · 49열본 = 세션 5.5-D · **52열본 = 세션 5.7**).
+#: 파일명은 바꾸지 않는다(`cdu_dataset.csv`) — 판본은 파일 안에서 읽는다.
+DATASET_VERSION: str = "session-5.7"
+
+#: 누출을 무엇으로 모사했는가 [사람 결정 · 세션 5.7]. **전 행 상수**다.
+#:
+#: 이 데이터셋의 누출은 전부 **배관 K값 증가 근사**다(절대 규칙 8 · 5장 누출
+#: 시나리오). 질량손실 모사는 `leak_massloss.py` 에만 있고 데이터셋 생성 경로에
+#: 들어가지 않는다(세션 5.6). 두 모사는 총유량·누출랙 유량의 **부호가 반대**이므로
+#: (세션 5.6 · 미해결 #36) 이 열이 없으면 나중에 어느 쪽 데이터인지 알 수 없다.
+LEAK_MODEL_K_APPROX: str = "K_approx"
+
+#: 전이 행의 자극 종류 — `ScenarioSpec.stimulus_kind` 가 이 셋 중 하나를 낸다.
+#:
+#: **새 시나리오를 만들지 않는다.** 이미 있는 행이 무엇으로 자극됐는지를 라벨로
+#: 적을 뿐이다 [사람이 정한 것 — 세션 5.7 ⑵]. 단일 CDU 전이는 정격 운전 중
+#: **누출이 계단으로** 들어오고(부하 불변), 다중 CDU 전이는 **부하가 계단**이고
+#: 누출은 t=0 이전부터 있다. 두 전이를 같은 자극으로 읽으면 안 된다.
+STIMULUS_NONE: str = "none"
+STIMULUS_LEAK_STEP: str = "leak_step"
+STIMULUS_LOAD_STEP: str = "load_step"
+
 
 @dataclass(frozen=True)
 class ScenarioSpec:
@@ -122,6 +149,27 @@ class ScenarioSpec:
     @property
     def leak_level_percent(self) -> float:
         return (self.leak_multiplier - 1.0) * 100.0
+
+    @property
+    def stimulus_kind(self) -> str:
+        """이 행을 움직인 자극 [세션 5.7]. **기존 케이스 정의에서 읽는다.**
+
+        새 시나리오를 만들지 않는다 — `regime` 과 `cdu_config` 가 이미 결정하고
+        있던 것에 이름을 붙이는 것뿐이다(`transient_rows` 참조)::
+
+            steady                      → none        (자극 없음)
+            transient · single          → leak_step   (부하 불변 · 누출이 계단)
+            transient · dual_asymmetric → load_step   (누출은 t=0 이전 · 부하가 계단)
+
+        정상상태 행도 빈 칸이 아니라 `none` 을 싣는다 — 전 행 일관이 요건이고,
+        빈 칸은 이 스키마에서 「해당 없음」이 아니라 「이 행에 값이 없다」로 이미
+        쓰이고 있다(`t_s`·`holdup_mass_kg`).
+        """
+        if self.regime == "steady":
+            return STIMULUS_NONE
+        if self.cdu_config == CONFIG_SINGLE:
+            return STIMULUS_LEAK_STEP
+        return STIMULUS_LOAD_STEP
 
     @property
     def leak_cdu_index(self) -> int | str:
@@ -256,14 +304,17 @@ def _base_row(spec: ScenarioSpec, cdu_index: int) -> dict[str, object]:
         else ""
     )
     return {
+        "dataset_version": DATASET_VERSION,
         "scenario_id": spec.scenario_id,
         "scenario_kind": spec.scenario_kind,
         "regime": spec.regime,
+        "stimulus_kind": spec.stimulus_kind,
         "cdu_config": spec.cdu_config,
         "cdu_index": cdu_index,
         "leak_level_percent": spec.leak_level_percent,
         "leak_rack_index": LEAK.injection_rack_index,
         "leak_cdu_index": spec.leak_cdu_index,
+        "leak_model": LEAK_MODEL_K_APPROX,
         "load_percent": _load_percents(spec)[cdu_index],
         "holdup_mass_kg": holdup_mass_kg,
         "t_s": "",
