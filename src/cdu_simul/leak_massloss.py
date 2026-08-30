@@ -300,6 +300,42 @@ _QUANTITIES: tuple[tuple[str, str], ...] = (
 )
 
 
+@dataclass(frozen=True)
+class MismatchRow:
+    """공급·환수 유량 불일치 한 케이스 — **세션 5.6-B 출력용**.
+
+    **계산이 아니라 재출력이다.** 세션 5.6 이 이미 푼 해에서 값을 읽기만 하며,
+    `solve_massloss` 의 식·solver 설정·스윕 범위·배치 정의를 하나도 바꾸지 않는다.
+
+    `return_flow_Lps` 는 `solve_massloss` 안의 `Q_return_Lps = Q_supply_Lps -
+    leak_flow_Lps` 를 **그대로 되읽은 것**이다 — 따라서 Δ = Q_leak 은 물리 검산이
+    아니라 **코드가 정의대로 계산했는지 보는 항등식**이다(세션 5.6-B 판정 기준
+    「먼저 적어 두는 것」).
+    """
+
+    path_label: str
+    case_label: str
+    size_index: int
+    supply_flow_Lps: float
+    return_flow_Lps: float
+    leak_flow_Lps: float
+
+    @property
+    def mismatch_Lps(self) -> float:
+        """Δ = 공급유량 − 환수유량."""
+        return self.supply_flow_Lps - self.return_flow_Lps
+
+    @property
+    def mismatch_percent(self) -> float:
+        """Δ 의 공급유량 대비 상대값 [%]."""
+        return self.mismatch_Lps / self.supply_flow_Lps * 100.0
+
+    @property
+    def identity_residual_Lps(self) -> float:
+        """기준 A — Δ 와 누출 유량의 차. 항등식의 부동소수점 잔차다."""
+        return self.mismatch_Lps - self.leak_flow_Lps
+
+
 def sign_summary(values: list[float]) -> str:
     """부호 요약 — 전 조합에서 일정하면 `+`/`-`/`0`, 갈리면 `갈림`."""
     has_pos = any(v > _SIGN_ZERO_TOL for v in values)
@@ -317,6 +353,21 @@ def span(values: list[float]) -> str:
     return f"{min(values):+.3e} ~ {max(values):+.3e}"
 
 
+def _mismatch_row(result: MassLossResult, size_index: int) -> MismatchRow:
+    """푼 해에서 불일치 행을 읽어낸다 (순수 함수 · 세션 5.6-B).
+
+    환수유량은 `solve_massloss` 의 정의 `Q_ret = Q_sup - Q_leak` 를 그대로 쓴다.
+    """
+    return MismatchRow(
+        path_label=result.topology.label,
+        case_label=result.case.label,
+        size_index=size_index,
+        supply_flow_Lps=result.supply_flow_Lps,
+        return_flow_Lps=result.supply_flow_Lps - result.leak_flow_Lps,
+        leak_flow_Lps=result.leak_flow_Lps,
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 실행 · 결과표
 # ─────────────────────────────────────────────────────────────────────────────
@@ -328,6 +379,8 @@ class ComparisonRun:
     rack_index: int
     k_deltas: dict[str, list[SignalDeltas]]
     massloss_deltas: dict[str, list[SignalDeltas]]
+    #: 세션 5.6-B 재출력용. 계산에 관여하지 않는다 — 푼 해를 읽어 담을 뿐이다.
+    mismatch_rows: list[MismatchRow]
     leak_bounds_Lps: list[float]
     isolation_max_abs_diff_Lps: float
     massloss_max_rack_asymmetry_Lps: float
@@ -345,6 +398,7 @@ def run_comparison(rack_index: int = LEAK.injection_rack_index) -> ComparisonRun
 
     k_deltas: dict[str, list[SignalDeltas]] = {label: [] for label, _ in levels[1:]}
     ml_deltas: dict[str, list[SignalDeltas]] = {t.label: [] for t in topologies}
+    mismatch_rows: list[MismatchRow] = []
     bounds: list[float] = []
     isolation_diff = 0.0
     asymmetry = 0.0
@@ -359,6 +413,18 @@ def run_comparison(rack_index: int = LEAK.injection_rack_index) -> ComparisonRun
         )
         for index, (label, _multiplier) in enumerate(levels[1:], start=1):
             k_deltas[label].append(k_approx_deltas(k_results, index, rack_index))
+        # K 근사에는 계통 밖으로 나가는 경로가 없다 — 환수유량 = 총유량이다.
+        mismatch_rows += [
+            MismatchRow(
+                path_label="K 근사",
+                case_label=case.label,
+                size_index=index,
+                supply_flow_Lps=result.total_flow_Lps,
+                return_flow_Lps=result.total_flow_Lps,
+                leak_flow_Lps=0.0,
+            )
+            for index, result in enumerate(k_results)
+        ]
 
         bound = leak_flow_bound_Lps(k_results)
         bounds.append(bound)
@@ -379,7 +445,8 @@ def run_comparison(rack_index: int = LEAK.injection_rack_index) -> ComparisonRun
                     )
                 ),
             )
-            for fraction in _SWEEP_FRACTIONS[1:]:
+            mismatch_rows.append(_mismatch_row(normal, 0))
+            for size_index, fraction in enumerate(_SWEEP_FRACTIONS[1:], start=1):
                 leaked = solve_massloss(case, fraction * bound, topology, T_C)
                 n_solves += 1
                 max_residual = max(
@@ -394,12 +461,14 @@ def run_comparison(rack_index: int = LEAK.injection_rack_index) -> ComparisonRun
                 ml_deltas[topology.label].append(
                     massloss_deltas(normal, leaked, rack_index)
                 )
+                mismatch_rows.append(_mismatch_row(leaked, size_index))
 
     return ComparisonRun(
         T_property_C=T_C,
         rack_index=rack_index,
         k_deltas=k_deltas,
         massloss_deltas=ml_deltas,
+        mismatch_rows=mismatch_rows,
         leak_bounds_Lps=bounds,
         isolation_max_abs_diff_Lps=isolation_diff,
         massloss_max_rack_asymmetry_Lps=asymmetry,
@@ -502,12 +571,111 @@ def format_comparison_table(run: ComparisonRun) -> str:
     return "\n".join(lines)
 
 
+def format_mismatch_table(run: ComparisonRun) -> str:
+    """[표 4] 공급·환수 유량 불일치 (세션 5.6-B · 순수 함수).
+
+    **새로 푼 것이 없다** — 세션 5.6 의 272 회 해를 다른 양으로 읽었을 뿐이다.
+    """
+    rows = run.mismatch_rows
+    k_rows = [r for r in rows if r.path_label == "K 근사"]
+    lines = [
+        "[표 4] 공급·환수 유량 불일치 Δ = Q_sup − Q_ret (세션 5.6-B · 재출력)",
+        "  Δ 는 열교환기 1차측 입구가 펌프 공급보다 얼마나 모자라는가다.",
+        "  K 근사에는 계통 밖으로 나가는 경로가 없어 이 양이 원리적으로 0 이다.",
+        "",
+    ]
+    header = (
+        f"{'경로 · 배치':<24}{'Δ [L/s]':>26}{'Δ/Q_sup [%]':>26}"
+        f"{'항등식 잔차 [L/s]':>22}{'단조':>8}"
+    )
+    lines += [header, "-" * len(header)]
+
+    def monotone(path_label: str) -> str:
+        """같은 조합 안에서 누출 크기 순으로 Δ 가 엄격히 증가하는가.
+
+        K 근사에는 누출 크기 축 자체가 없고(축은 K 배율이다) Δ 가 항상 0 이므로
+        기준 B 의 대상이 아니다 — `해당없음` 으로 적는다.
+        """
+        if path_label == "K 근사":
+            return "해당없음"
+        by_case: dict[str, list[tuple[int, float]]] = {}
+        for r in rows:
+            if r.path_label == path_label:
+                by_case.setdefault(r.case_label, []).append(
+                    (r.size_index, r.mismatch_Lps)
+                )
+        for series in by_case.values():
+            values = [v for _i, v in sorted(series)]
+            if any(b <= a for a, b in zip(values, values[1:], strict=False)):
+                return "아니오"
+        return "예"
+
+    for path_label in ["K 근사"] + [t.label for t in leak_topologies()]:
+        group = k_rows if path_label == "K 근사" else [
+            r for r in rows if r.path_label == path_label
+        ]
+        lines.append(
+            f"{path_label:<24}"
+            f"{span([r.mismatch_Lps for r in group]):>26}"
+            f"{span([r.mismatch_percent for r in group]):>26}"
+            f"{max(abs(r.identity_residual_Lps) for r in group):>22.3e}"
+            f"{monotone(path_label):>8}"
+        )
+    lines += ["-" * len(header), ""]
+
+    ml_identity_max = max(
+        abs(r.identity_residual_Lps) for r in rows if r.path_label != "K 근사"
+    )
+    degenerate = [r for r in rows if r.path_label == "g=0.0/펌프=공급"]
+    nonzero = [r for r in degenerate if r.size_index > 0]
+    lines += [
+        "기준 B — 단조: 질량손실 전 배치에서 Δ 가 누출 크기 4수준에 대해 엄격히",
+        "  증가한다. K 근사는 누출 크기 축이 없고 Δ ≡ 0 이라 대상이 아니다.",
+        "",
+        "기준 A — 검산:",
+        f"  · 질량손실 Δ 와 누출 유량의 차 최대 {ml_identity_max:.3e} L/s",
+        f"  · K 근사 Δ 최대 {max(abs(r.mismatch_Lps) for r in k_rows):.3e} L/s",
+        "  · **이 둘은 구성상 항등식이다** — `solve_massloss` 가 환수유량을",
+        "    Q_ret = Q_sup − Q_leak 으로 정의하고, K 근사에는 유출 경로가 없다.",
+        "    통과의 뜻은 「코드가 정의대로 계산한다」까지이고 **질량보존의 물리적",
+        "    검증이 아니다**(세션 5.6-B 판정 기준 「먼저 적어 두는 것」).",
+        "",
+        "기준 C — 배치 불변: 같은 (조합 · 누출 크기)에서 배치 6 에 걸친 Δ 의 최대 편차 "
+        f"{_mismatch_spread_across_topologies(rows):.3e} L/s",
+        f"  · `g=0.0/펌프=공급` 배치의 Δ (누출 크기 4수준): "
+        f"{span([r.mismatch_Lps for r in nonzero])} L/s",
+        "    — 세션 5.6 관측 ④ 에서 다섯 양이 전부 정확히 0 이었던 배치다.",
+        "",
+        "※ " + ASSUMPTION_TAG,
+        "※ Δ 가 크게 나와도 **계측 가능하다는 뜻이 아니다**(계측기 사양 없음) ·",
+        "   **실제 누출에 가깝다는 뜻도 아니다**(실측 없음).",
+        "※ 세션 5.6 이 낸 네 양과 크기를 비교하지 않았다 — 크기 비교는 계측기",
+        "   사양이 있어야 뜻이 생긴다.",
+    ]
+    return "\n".join(lines)
+
+
+def _mismatch_spread_across_topologies(rows: list[MismatchRow]) -> float:
+    """같은 (조합 · 누출 크기)에서 배치별 Δ 가 얼마나 벌어지는가 [L/s]."""
+    grouped: dict[tuple[str, int], list[float]] = {}
+    for row in rows:
+        if row.path_label == "K 근사":
+            continue
+        grouped.setdefault((row.case_label, row.size_index), []).append(
+            row.mismatch_Lps
+        )
+    return max(max(v) - min(v) for v in grouped.values())
+
+
 def main() -> int:
     import sys
 
     if hasattr(sys.stdout, "reconfigure"):  # Windows 콘솔 기본 인코딩 대비
         sys.stdout.reconfigure(encoding="utf-8")
-    print(format_comparison_table(run_comparison()))
+    run = run_comparison()
+    print(format_comparison_table(run))
+    print()
+    print(format_mismatch_table(run))
     return 0
 
 
