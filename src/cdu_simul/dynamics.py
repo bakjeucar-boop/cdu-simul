@@ -7,13 +7,17 @@ quasi-steady 대수, 온도는 시간적분"이 여기서 완성된다 — `solv
 호출될 때마다 그 시점의 1차측 벌크 평균온도로 `hydraulics.solve_flow_distribution`
 을 다시 풀어 랙별 유량을 받는다. 유량을 상수로 얼려 두지 않는다.
 
-**M 의 8랙 해석은 세션 2 그대로 두었다.** 5-1 이 등가길이를 "랙 1개 회로의 왕복
-전체"로 읽으므로 `holdup_bounds()` 가 내는 M 은 **랙 1개 회로분**이다. 랙이 8개가
-되면 계통 전체 보유량을 어떻게 읽어야 하는지(분기는 8벌·헤더는 공용) 5장에도
-5-1 에도 답이 없다 — **새 숫자를 만들지 않고 세션 2 값을 그대로 쓴다**(절대 규칙 1).
-그 결과 아래 τ·t63·t95 의 **절대값은 8랙에서 해석할 수 없다**. 이 판이 판정하는
-방향성·비발산은 M 의 크기와 무관하므로(정상상태는 M 에 의존하지 않고, 전이의
-부호도 M>0 이면 바뀌지 않는다) 게이트에는 영향이 없다.
+**M 의 8랙 해석이 세션 5.7 에서 닫혔다(미해결 #31).** 5-1 이 등가길이를 "랙 1개
+회로의 왕복 전체"로 읽으므로 종전 `holdup_bounds()` 는 **랙 1개 회로분**을 냈다.
+사람이 정한 규칙대로 **양 끝을 둘 다 8배**로 읽어 계통 전체 보유량으로 고쳤다 —
+8 은 5장 「CDU당 연결 랙 수」를 읽은 값이라 **추가 숫자가 0**이다. 노드 배분
+(공급 50% · 환수 50%)은 5-1 그대로이며 8배는 총량에만 걸린다.
+
+**그래도 τ·t63·t95 의 절대값은 여전히 해석하지 않는다.** #31 이 닫혀도
+**#21**(HX·CDU 내부·콜드플레이트 M 결손) · **#25**(등가길이의 과대 방향 오차) ·
+**#23**(배관 규격 계열)이 그대로 열려 있다. 이 판이 판정하는 방향성·비발산은 M 의
+크기와 무관하므로(정상상태는 M 에 의존하지 않고, 전이의 부호도 M>0 이면 바뀌지
+않는다) 게이트에는 영향이 없다.
 
 **2차측 동특성을 만들지 않는다**(절대 규칙 7). 2차측 공급온도는 고정 경계조건이다.
 
@@ -177,35 +181,64 @@ class HoldupBound:
 
     label: str
     inner_diameter_mm: float
+    #: 5-1 이 주는 등가길이 — **랙 1개 회로의 왕복 전체**다. 8배를 여기 곱하지
+    #: 않는다(5-1 값을 그대로 남긴다). 계통 전체는 `mass_kg` 쪽에 반영돼 있다.
     equivalent_length_m: float
+    #: **계통 전체** 보유 냉각액 질량 [kg] — 랙 1개 회로분 × `n_rack_circuits`.
     mass_kg: float
+    #: 위 곱수. 5장 「CDU당 연결 랙 수」를 읽은 것이며 새 숫자가 아니다 (#31).
+    n_rack_circuits: int
 
 
 def holdup_bounds() -> tuple[HoldupBound, HoldupBound]:
-    """M 의 하한·상한 두 값 (프로젝트정리 5-1).
+    """M 의 하한·상한 두 값 — **8랙 계통 전체** (프로젝트정리 5-1 · 세션 5.7).
 
     하한 = 전부 25A + 등가길이 하한, 상한 = 전부 80A + 등가길이 상한.
     구경과 등가길이가 **둘 다** 5장에서 범위로 주어졌으므로, M 의 실제 범위를
     내려면 양쪽 끝을 함께 취해야 한다. 중간값은 만들지 않는다.
+
+    **8랙 해석 (미해결 #31 · 세션 5.7 에서 닫힘)**
+
+    5-1 이 등가길이를 「랙 **1개** 회로의 왕복 전체」로 읽으므로 그대로 쓰면 M 이
+    랙 1개 회로분이 되고, 8랙 계통의 τ 를 그 값으로 읽을 수 없었다. 사람이 정한
+    규칙은 이것이다 [PROCEED.md 「사람이 정한 것 — 세션 5.5-D 마무리」⑷]::
+
+        M 의 양 끝(전부 25A 하한 · 전부 80A 상한)을 **둘 다 8배**로 읽는다.
+
+    5-1 이 이미 두 극단으로 쓰고 있으므로 **각각을 8벌로 읽는 것**이며, 8 은 5장
+    「CDU당 연결 랙 수」(`SCENARIO.racks_per_cdu`)를 읽은 값이라 **추가 숫자가 0**
+    이다. 이 파일에 8 을 박지 않는다(절대 규칙 1·2).
+
+    노드 배분(공급 50% · 환수 50%)은 5-1 그대로다 — 8배는 **총량에만** 걸린다.
+
+    **한계 — 이 정정이 메우지 않는 것**: M 에는 여전히 열교환기·CDU 내부·랙
+    콜드플레이트 보유량이 빠져 있고(**#21**), 등가길이는 압력강하용 개념이라
+    과대 방향 오차를 갖고(**#25**), 배관 규격 계열에 따라 약 7% 이동한다(**#23**).
+    셋 다 열려 있으므로 **6장 「수렴시간」은 이 정정 뒤에도 판정 불가다.**
     """
     rho_kgm3 = holdup_reference_density_kgm3()
     d_low_mm, d_high_mm = PIPING.holdup_bound_inner_diameters_mm
+    n_circuits = SCENARIO.racks_per_cdu
     return (
         HoldupBound(
-            label="M 하한 (전부 25A · 등가길이 하한)",
+            label="M 하한 (전부 25A · 등가길이 하한 · 8랙)",
             inner_diameter_mm=d_low_mm,
             equivalent_length_m=PIPING.equivalent_length_m.low,
-            mass_kg=system_coolant_mass_kg(
+            mass_kg=n_circuits
+            * system_coolant_mass_kg(
                 d_low_mm * _M_PER_MM, PIPING.equivalent_length_m.low, rho_kgm3
             ),
+            n_rack_circuits=n_circuits,
         ),
         HoldupBound(
-            label="M 상한 (전부 80A · 등가길이 상한)",
+            label="M 상한 (전부 80A · 등가길이 상한 · 8랙)",
             inner_diameter_mm=d_high_mm,
             equivalent_length_m=PIPING.equivalent_length_m.high,
-            mass_kg=system_coolant_mass_kg(
+            mass_kg=n_circuits
+            * system_coolant_mass_kg(
                 d_high_mm * _M_PER_MM, PIPING.equivalent_length_m.high, rho_kgm3
             ),
+            n_rack_circuits=n_circuits,
         ),
     )
 
@@ -340,7 +373,8 @@ def integrate_load_step(
     M 의 노드 배분은 **공급 50% · 환수 50%** 다 [규약: 5-1 「계통 보유수량 M의
     노드 배분」 · 세션 3 확정] — `assumptions.py` 에서 읽는다(미해결 #20 종결).
 
-    **M 자체는 세션 2 값 그대로다**(랙 1개 회로분). 8랙에서의 계통 전체 보유량은
+    **M 은 세션 5.7 에서 8랙 계통 전체로 고쳤다**(#31). 종전 값(랙 1개 회로분)의
+    8배이며, 8랙에서의 계통 전체 보유량은
     5장·5-1 에 답이 없어 새로 만들지 않았다 — 모듈 docstring 참조. 방향성·비발산은
     M 의 크기와 무관하므로 게이트에는 영향이 없고, τ·t63·t95 의 절대값만 해석할
     수 없다.
@@ -530,8 +564,8 @@ def integrate_leak_step(
     부하는 그대로다. `solve_ivp` 의 `success` 와 수력 `fsolve` 의 `ier` 를 **둘 다**
     확인한다(절대 규칙 5).
 
-    **전이 시간 규모의 절대값을 해석하지 않는다** — M 결손(#21)과 8랙 해석 부재
-    (#31)가 둘 다 열려 있다.
+    **전이 시간 규모의 절대값을 해석하지 않는다** — 8랙 해석(#31)은 세션 5.7 에서
+    닫혔으나 M 결손(#21) · 등가길이 과대(#25) · 배관 규격 계열(#23)이 열려 있다.
     """
     before = solve_cdu_steady_state(case.steady_case(case.hydraulic))
     if not before.solver_converged:
@@ -670,8 +704,9 @@ def format_results_table(results: list[TransientResult]) -> str:
         "세션 3-B · 8랙 CDU · 부하 스텝에 대한 T_return 응답 (수력 매 시점 결합)",
         "※ " + ASSUMPTION_TAG,
         "※ M 은 배관 보유량만 — 열교환기·CDU 내부·콜드플레이트 보유량 제외(과소평가).",
-        "   게다가 **M 은 랙 1개 회로분**이고 8랙 계통 전체 보유량은 5장·5-1 에 답이",
-        "   없어 만들지 않았다. 따라서 아래 tau·t63·t95 의 **절대값은 해석하지 않는다.**",
+        "   **M 의 8랙 해석은 세션 5.7 에서 닫혔다**(#31 — 양 끝을 둘 다 8배). 그러나",
+        "   #21(M 결손)·#25(등가길이 과대)·#23(배관 규격 계열)이 열려 있으므로 아래",
+        "   tau·t63·t95 의 **절대값은 여전히 해석하지 않는다.**",
         "",
         header,
         units,

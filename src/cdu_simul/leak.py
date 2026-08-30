@@ -281,7 +281,8 @@ def format_transient_table(results: list[LeakTransientResult]) -> str:
     lines = [
         "세션 4 · 누출 스텝 전이 (정격 정상운전 중 t=0 에 K값 계단 주입)",
         "※ " + ASSUMPTION_TAG,
-        "※ tau·t63·t95 의 **절대값은 해석하지 않는다** — M 결손(#21)·8랙 해석 부재(#31).",
+        "※ tau·t63·t95 의 **절대값은 해석하지 않는다** — #31(8랙 해석)은 세션 5.7 에서",
+        "   닫혔으나 M 결손(#21)·등가길이 과대(#25)·배관 규격 계열(#23)이 열려 있다.",
         "",
         header,
         units,

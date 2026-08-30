@@ -411,7 +411,8 @@ def integrate_plant_load_step(
     새로 호출해 초기조건을 명시적으로 리셋한다(collaboration.md 결함유형 ④).
 
     `solve_ivp` 의 `success` 와 매 시점 수력 `fsolve` 의 수렴을 **둘 다** 본다.
-    **전이 시간 규모의 절대값은 해석하지 않는다**(#21 · #31).
+    **전이 시간 규모의 절대값은 해석하지 않는다** — #31 은 세션 5.7 에서 닫혔으나
+    #21 · #25 · #23 이 열려 있다.
     """
     before = solve_plant_steady_state(case.plant_at(case.load_before_percents))
     if not before.solver_converged:
@@ -516,7 +517,8 @@ def format_plant_transient_table(results: list[PlantTransientResult]) -> str:
     lines = [
         "세션 5 · 비대칭 부하 스텝에서의 CDU 간 연동 (동적)",
         "※ " + ASSUMPTION_TAG,
-        "※ tau·전이 시간의 절대값은 해석하지 않는다 — #21 · #31.",
+        "※ tau·전이 시간의 절대값은 해석하지 않는다 — #31 은 세션 5.7 에서 닫혔으나",
+        "   #21 · #25 · #23 이 열려 있다.",
         "",
         header,
         "-" * len(header),
