@@ -465,7 +465,7 @@ def format_comparison_table(run: ComparisonRun) -> str:
         lines.append(row)
     lines += ["-" * len(header2), ""]
 
-    lines.append("[표 3] 질량손실 — 배치별 변화 범위 (부호가 0 이 아닌 배치만)")
+    lines.append("[표 3] 질량손실 — 배치별 변화 범위 (배치 전수)")
     header3 = f"{'배치':<24}" + "".join(f"{name:>26}" for name, _ in _QUANTITIES)
     lines += [header3, "-" * len(header3)]
     for topology in leak_topologies():
