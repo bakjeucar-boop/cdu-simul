@@ -611,3 +611,125 @@ def format_m_consistency_table(runs: list[ConvergenceRun]) -> str:
         lines.append(f"{n_nodes:>4}{text:>28}{len(ratios):>8}")
     lines += ["-" * 78]
     return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2단 — 반례 확인 (판정 기준 C·D 를 전 조합에서)
+# ─────────────────────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class CounterexampleRun:
+    """전 조합 반례 확인 결과."""
+
+    n_coarse: int
+    n_fine: int
+    #: 신호 넷의 (거친 N, 고운 N) 쌍. D 의 부호 대조가 읽는다.
+    signals: tuple[tuple[LeakSignal, LeakSignal], ...]
+    #: 케이스별 파형 최대 편차 [K] 와 순신호 대비 비율 [%].
+    deviations_K: tuple[float, ...]
+    deviation_ratios_percent: tuple[float, ...]
+    t63_ratios: tuple[float, ...]
+    solver_failures: tuple[str, ...]
+
+    @property
+    def n_cases(self) -> int:
+        return len(self.signals)
+
+
+def run_counterexample_sweep(n_fine: int) -> CounterexampleRun:
+    """2단 — 전 조합 384 를 N=2 와 `n_fine` 둘로 돌린다.
+
+    **`n_fine` 은 「수렴한 N」이 아니다** — 1단이 N≤64 안에서 수렴을 찾지 못했다.
+    60분 정지선 안에서 전 조합을 볼 수 있는 가장 고운 격자로 고른 것이고,
+    그 사정을 결과에 함께 적는다(§6 — 줄인 것과 이유).
+    """
+    signals: list[tuple[LeakSignal, LeakSignal]] = []
+    deviations: list[float] = []
+    ratios: list[float] = []
+    t63_ratios: list[float] = []
+    failures: list[str] = []
+
+    for template in full_cases(2):
+        pair: list[LagResult] = []
+        for n_nodes in (2, n_fine):
+            case = LagCase(
+                label=template.label,
+                holdup=template.holdup,
+                hydraulic=template.hydraulic,
+                k_multiplier=template.k_multiplier,
+                T_secondary_supply_C=template.T_secondary_supply_C,
+                ntu=template.ntu,
+                load_percent=template.load_percent,
+                n_nodes=n_nodes,
+            )
+            result = integrate_leak_step_n_cstr(case)
+            if not result.solver_success:
+                failures.append(
+                    f"{template.label} / N={n_nodes}: {result.solver_message}"
+                )
+            pair.append(result)
+
+        coarse, fine = pair
+        coarse_signal, fine_signal = leak_signal(coarse), leak_signal(fine)
+        signals.append((coarse_signal, fine_signal))
+
+        deviation = fine.max_abs_deviation_K(coarse)
+        deviations.append(deviation)
+        if coarse_signal.T_return_C != 0.0:
+            ratios.append(deviation / abs(coarse_signal.T_return_C) * 100.0)
+        coarse_t63, fine_t63 = coarse.time_to_fraction_s(0.63), fine.time_to_fraction_s(
+            0.63
+        )
+        if coarse_t63 and fine_t63:
+            t63_ratios.append(fine_t63 / coarse_t63)
+
+    return CounterexampleRun(
+        n_coarse=2,
+        n_fine=n_fine,
+        signals=tuple(signals),
+        deviations_K=tuple(deviations),
+        deviation_ratios_percent=tuple(ratios),
+        t63_ratios=tuple(t63_ratios),
+        solver_failures=tuple(failures),
+    )
+
+
+_SIGNAL_FIELDS: tuple[tuple[str, str], ...] = (
+    ("⑴ 총유량", "total_flow_Lps"),
+    ("⑵ 펌프 양정", "pump_head_mAq"),
+    ("⑶ 누출랙 출구온도", "rack_outlet_C"),
+    ("⑷ CDU 환수온도", "T_return_C"),
+)
+
+
+def format_counterexample_table(run: CounterexampleRun) -> str:
+    """기준 D — 누출 신호의 부호가 N 에 뒤집히는가 (순수 함수)."""
+    lines = [
+        f"표 3. 누출 신호의 부호 — 판정 기준 D (N={run.n_coarse} 대 N={run.n_fine})",
+        "  정상상태 사이의 순변화다. 기준 A 가 성립하면 N 에 불변이어야 한다.",
+        "",
+        f"{'양':<22}{f'N={run.n_coarse} 부호':>12}{f'N={run.n_fine} 부호':>12}"
+        f"{'최대 |차이|':>18}",
+        "-" * 78,
+    ]
+    for title, field in _SIGNAL_FIELDS:
+        coarse = [getattr(c, field) for c, _f in run.signals]
+        fine = [getattr(f, field) for _c, f in run.signals]
+        gap = max(abs(a - b) for a, b in zip(coarse, fine, strict=True))
+        lines.append(
+            f"{title:<22}{sign_summary(coarse):>12}{sign_summary(fine):>12}{gap:>18.3e}"
+        )
+    excursions = [f.opposite_sign_excursion_K for _c, f in run.signals]
+    lines += [
+        "-" * 78,
+        f"전 조합 {run.n_cases}건 × N 2수준 = {run.n_cases * 2} 적분.",
+        f"전이 경로가 순변화와 **반대 부호**로 벗어난 최대폭: "
+        f"{max(excursions):.3e} K (N={run.n_fine})",
+        "  0 이면 경로가 부호를 뒤집지 않았다는 뜻이다.",
+        "",
+        f"파형 편차 (N={run.n_coarse} 대 N={run.n_fine}):",
+        f"  절대  {min(run.deviations_K):.3e} ~ {max(run.deviations_K):.3e} K",
+        f"  순신호 대비  {min(run.deviation_ratios_percent):.2f} ~ "
+        f"{max(run.deviation_ratios_percent):.2f} %",
+        f"  t63 비  {min(run.t63_ratios):.4f} ~ {max(run.t63_ratios):.4f}",
+    ]
+    return "\n".join(lines)
