@@ -232,7 +232,7 @@ def leak_flow_bound_Lps(k_results: list[FlowDistributionResult]) -> float:
 
 
 #: 스윕 지점 — 0(정상)부터 상한까지. 지점 개수는 부호 판정에 영향하지 않는다.
-_SWEEP_FRACTIONS: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0)
+SWEEP_FRACTIONS: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -446,7 +446,7 @@ def run_comparison(rack_index: int = LEAK.injection_rack_index) -> ComparisonRun
                 ),
             )
             mismatch_rows.append(_mismatch_row(normal, 0))
-            for size_index, fraction in enumerate(_SWEEP_FRACTIONS[1:], start=1):
+            for size_index, fraction in enumerate(SWEEP_FRACTIONS[1:], start=1):
                 leaked = solve_massloss(case, fraction * bound, topology, T_C)
                 n_solves += 1
                 max_residual = max(
