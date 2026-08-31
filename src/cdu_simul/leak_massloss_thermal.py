@@ -791,7 +791,8 @@ def run_plant_sweep() -> PlantSweep:
 
 def _strictly_monotonic(values: list[float]) -> bool:
     """누출 0 을 제외한 구간에서 엄격 단조인가 (증가·감소 어느 쪽이든)."""
-    diffs = [b - a for a, b in zip(values, values[1:], strict=True)]
+    # 인접 쌍이므로 길이가 1 다르다 — strict 를 쓰지 않는다.
+    diffs = [b - a for a, b in zip(values, values[1:])]  # noqa: B905
     if all(abs(d) <= _SIGN_ZERO_TOL_K for d in diffs):
         return True
     return all(d > 0.0 for d in diffs) or all(d < 0.0 for d in diffs)
