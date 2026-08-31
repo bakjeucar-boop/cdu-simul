@@ -11,7 +11,7 @@ CSV 자체는 사람이 읽을 물건이 아니다 — 그래서 읽을 수 있�
 
 from __future__ import annotations
 
-from cdu_simul.assumptions import ASSUMPTION_TAG
+from cdu_simul.assumptions import ASSUMPTION_TAG, PLANT
 from cdu_simul.dataset import (
     DATASET_VERSION,
     LEAK_MODEL_K_APPROX,
@@ -310,6 +310,22 @@ OPEN_LIMITS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _steady_rows_by_leak_level() -> list[tuple[float, int]]:
+    """정상상태 행수를 누출 수준별로 센다 (순수 함수) — 미해결 #37.
+
+    행 수는 시나리오 수가 아니다 — 다중 CDU 시나리오는 CDU 마다 한 행을 낸다
+    (5-1 「데이터셋 스키마 규약」). 세는 대상은 **행**이다.
+    """
+    counts: dict[float, int] = {}
+    for spec in enumerate_specs():
+        if spec.regime != "steady":
+            continue
+        n_rows = 1 if spec.cdu_config == "single" else PLANT.cdu_count
+        level = round(spec.leak_level_percent)
+        counts[level] = counts.get(level, 0) + n_rows
+    return sorted(counts.items())
+
+
 def format_report() -> str:
     """파일럿 종료 판단용 요약 (순수 함수). **판정하지 않는다.**"""
     specs = enumerate_specs()
@@ -325,6 +341,32 @@ def format_report() -> str:
         f"데이터셋: 시나리오 {len(specs):,}개 "
         f"(정상상태 {steady:,} · 전이 {len(specs) - steady:,}) · "
         f"열 {len(column_names())}개 · 판본 `{DATASET_VERSION}`",
+        "",
+        "─" * 78,
+        "정상 표본을 어떻게 고르는가 — `stimulus_kind` 를 누출 유무로 읽지 않는다"
+        " (미해결 #37)",
+        "─" * 78,
+        "  **`stimulus_kind` 는 자극의 종류를 뜻하며 누출 유무를 뜻하지 않는다.**",
+        "  세션 5.7 이 붙인 라벨이고 `regime`·`cdu_config` 에서 읽어 온 것이라,",
+        "  `stimulus_kind=none` 은 「t=0 에 걸리는 자극이 없다」는 뜻일 뿐이다 —",
+        "  정상상태 행에는 누출 축(`leak_level_percent`)이 **그대로 살아 있다.**",
+        "",
+        "  정상상태 행의 누출 수준별 행수 (세션 5.7-D 가 CSV 를 읽어 확인했다):",
+        *(
+            f"    leak_level_percent = {level:>2}  →  {rows:>5,} 행"
+            + ("   ← 정상 표본" if level == 0 else "   (누출이 걸려 있다)")
+            for level, rows in _steady_rows_by_leak_level()
+        ),
+        "",
+        "  → **정상상태에서 「정상」 표본을 고르려면 `leak_level_percent == 0` 으로",
+        f"     거른다.** 그 결과가 {_steady_rows_by_leak_level()[0][1]:,} 행이다.",
+        "     `stimulus_kind=none` 으로 거르면 정상상태 전체가 들어와",
+        "     **누출 행이 75% 섞인다** — 정상 대비 누출 대조가 성립하지 않는다.",
+        "",
+        "  · 세션 4·5·5.5 의 게이트는 조합 안에서 정상 해를 따로 풀어 비교하므로",
+        "    **영향받지 않는다.** 걸리는 것은 **CSV 를 그대로 골라 쓰는 쪽**이다.",
+        "  · **데이터셋 자체의 결함이 아니라 읽는 법의 문제**이고, 이 절이 그것을",
+        "    적어 둔 것이다 — 데이터셋과 열 정의를 고치지 않았다.",
         "",
         "─" * 78,
         "생성 환경 — 재현 대조용 기록 (미해결 #35 · 고정하지 않는다)",
