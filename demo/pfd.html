@@ -2,11 +2,12 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>CDU 시연 — 랙 중심 화면 (가정값 기반 · 실측 아님)</title>
+<title>CDU 시연 — 서버실 · 계통도 (가정값 기반 · 실측 아님)</title>
 <style>
-/* 색은 여섯만 쓴다 (세션 7.3 C3). 계조는 --cold ↔ --hot 사이 보간이다. */
+/* 색은 여섯만 쓴다 (세션 7.3 C3 · 7.4 C5). 계조는 --cold ↔ --hot 사이 보간이다.
+   --faced 는 새 색이 아니라 --face(흰색)의 밝기 88% — 등축 옆면 명암용이다. */
 :root{
-  --ground:#EDF0F2; --face:#FFFFFF; --ink:#3E4C56;
+  --ground:#EDF0F2; --face:#FFFFFF; --faced:#E0E0E0; --ink:#3E4C56;
   --cold:#2E7FA8; --hot:#C2452D; --warn:#E8A33D;
 }
 *{box-sizing:border-box}
@@ -17,7 +18,7 @@ body{margin:0;padding:9px 16px 5px;background:var(--ground);color:var(--ink);
 .num{font-variant-numeric:tabular-nums}
 .band{background:var(--face);border:1px solid var(--ink);border-radius:3px}
 
-/* ── ⑴ 시나리오 띠 ───────────────────────────────────────────────── */
+/* ── ⑴ 시나리오 띠 (탭 위에 공유) ─────────────────────────────────── */
 #scen{flex:none;display:flex;align-items:stretch;gap:14px;padding:7px 10px}
 #scen-btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center;max-width:430px}
 button{font:inherit;font-size:12px;padding:3px 9px;border:1px solid var(--ink);
@@ -45,7 +46,33 @@ input[type=range]{width:112px;accent-color:#3E4C56}
       background:linear-gradient(to right,var(--cold),var(--hot))}
 #legend .lr{display:flex;justify-content:space-between;width:120px}
 
-/* ── ⑵ 랙 · ⑶ CDU 계통 띠 ─────────────────────────────────────────── */
+/* ── ⑵ 탭 ────────────────────────────────────────────────────────── */
+#tabs{flex:none;display:flex;gap:6px}
+#tabs button{font-size:13px;padding:4px 16px}
+.pane{flex:1;min-height:0;display:flex;flex-direction:column;gap:7px}
+
+/* ── ⑶ 서버실 탭 (등축 뷰) ───────────────────────────────────────── */
+#roomwrap{flex:1;min-height:0}
+#room{display:block;width:100%;height:100%}
+#room text{fill:var(--ink);font-variant-numeric:tabular-nums}
+.fc{stroke:var(--ink);stroke-width:1.2;stroke-linejoin:round}
+.f-top,.f-front{fill:var(--face)}
+.f-side{fill:var(--faced)}
+.edge{fill:none;stroke:var(--ink);stroke-width:1.2}
+.sil{fill:none;stroke:none}
+.rack.hit .sil,.cdu.hit .sil{stroke:var(--warn);stroke-width:3.5}
+.rfill{transition:transform .2s ease,fill .2s ease}
+.ret{stroke:var(--ink);fill:none;stroke-linecap:round;
+     transition:stroke-width .2s ease,stroke .2s ease}
+.sup{stroke:var(--ink);fill:none;stroke-width:3;opacity:.5}
+.hdrp{stroke:var(--ink);fill:none;stroke-width:5;stroke-linecap:round}
+.secp{stroke:var(--ink);fill:none;stroke-width:4;opacity:.6;stroke-linecap:round}
+.tile{stroke:var(--ink);stroke-width:1;opacity:.13}
+.t-dim{opacity:.72}
+.t-warn{fill:var(--warn);font-weight:bold}
+#devstrip{flex:none;display:flex;align-items:center;padding:6px 10px}
+
+/* ── ⑷ 계통도 탭 (세션 7.3 화면 그대로) ──────────────────────────── */
 #stage{flex:1;min-height:0;display:flex;flex-direction:column;gap:7px}
 .blk{flex:1;min-height:0;display:flex;flex-direction:column}
 .rackrow{flex:1;min-height:0;display:flex;gap:9px;align-items:stretch}
@@ -88,7 +115,6 @@ input[type=range]{width:112px;accent-color:#3E4C56}
 .badge{font-size:11px;color:var(--warn);font-variant-numeric:tabular-nums;font-weight:bold}
 .tag{font-size:11px;opacity:.7}
 
-/* ── ⑷ 2차측 띠 ──────────────────────────────────────────────────── */
 #sec{flex:none;display:flex;align-items:center;padding:6px 10px}
 footer{flex:none;text-align:center;font-size:11px;opacity:.8;padding:1px 0 0}
 #msg{color:var(--hot);font-size:12px;padding-left:12px}
@@ -111,28 +137,40 @@ footer{flex:none;text-align:center;font-size:11px;opacity:.8;padding:1px 0 0}
     <div class="grp"><label>랙 배관 저항 증가</label><span id="resbtns"></span></div>
   </div>
   <div id="legend">
-    <div>출구온도 = 색</div>
+    <div id="leg-title">출구온도 = 색</div>
     <div id="grad"></div>
-    <div class="lr num"><span>30.0 ℃</span><span>43.9 ℃</span></div>
+    <div class="lr num"><span id="leg-lo">30.0 ℃</span><span id="leg-hi">43.9 ℃</span></div>
   </div>
 </div>
 
-<div id="stage"></div>
+<div id="tabs">
+  <button data-tab="room">서버실</button><button data-tab="sch">계통도</button>
+</div>
 
-<div id="sec" class="band"></div>
+<div id="pane-room" class="pane">
+  <div id="roomwrap"></div>
+  <div id="devstrip" class="band"></div>
+</div>
+
+<div id="pane-sch" class="pane">
+  <div id="stage"></div>
+  <div id="sec" class="band"></div>
+</div>
 
 <footer id="foot">가정값 기반 — 실측 아님 · 프로젝트정리 5장<span id="msg"></span></footer>
 
 <script>
 /* ═══ 순수 표시 함수 — DOM 없이도 돈다 (대조 검증용) ═════════════════
-   화면은 계산하지 않는다. 허용 산술은 셋뿐이다:
-   ⑴ L/s × 3.6 = m³/h   ⑵ 표시 자릿수 반올림   ⑶ 같은 파일 안 두 케이스의 차(Δ)
-   막대 길이·채움 높이·계조 색은 값을 화소로 옮긴 것이지 새 값이 아니다. */
+   화면은 계산하지 않는다. 허용 산술은 넷뿐이다:
+   ⑴ L/s × 3.6 = m³/h   ⑵ 표시 자릿수 반올림
+   ⑶ 같은 케이스 안 값들의 차·평균   ⑷ 등축 좌표 변환
+   막대 길이·채움 높이·계조 색·배관 굵기는 값을 화소로 옮긴 것이지 새 값이 아니다. */
 const RACKS = 8;
 const RES = [0, 5, 20, 50];
 const LOADS = [20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100];
-const T_LO = 30.0, T_HI = 43.9;          // 계조 고정 범위 [℃] — 전 136 케이스 범위
-const Q_LO = 6.11, Q_HI = 7.33;          // 리본 고정 범위 [m³/h] — 전 136 케이스 범위
+const T_LO = 30.0, T_HI = 43.9;          // 계통도 탭 계조 [℃] — 전 136 케이스 범위
+const D_LO = -1.5, D_HI = 1.5;           // 서버실 탭 계조 [K] — 8랙 평균 대비 · 고정
+const Q_LO = 6.11, Q_HI = 7.33;          // 굵기 고정 범위 [m³/h] — 전 136 케이스 범위
 const DEV_PX = 77, DEV_MAX = 50;         // 편차 막대: 랙과 총유량이 같은 축척을 쓴다
 const DASH = "—";
 
@@ -152,6 +190,8 @@ function view(c, base) {
     converged: c.cdus.every(u => u.solver.all_converged),
     cdus: c.cdus.map((u, n) => {
       const b = base.cdus[n];
+      // 8랙 평균 — 같은 케이스·같은 CDU 안에서만 낸다 (허용 산술 ⑶)
+      const tmean = u.rack_outlet_C.reduce((s, t) => s + t, 0) / u.rack_outlet_C.length;
       return {
         load: F.pct(u.load_percent),
         duty: F.kW(u.hx_duty_kW),
@@ -168,6 +208,7 @@ function view(c, base) {
           fillPct: u.load_percent,
           qv: q * 3.6,
           tv: u.rack_outlet_C[i],
+          tdev: u.rack_outlet_C[i] - tmean,
           dev: (q - b.rack_flows_Lps[i]) * 3.6,
         })),
       };
@@ -175,14 +216,199 @@ function view(c, base) {
   };
 }
 
-function tempColor(t) {                  // --cold ↔ --hot 계조 (다른 색을 만들지 않는다)
-  const u = Math.min(1, Math.max(0, (t - T_LO) / (T_HI - T_LO)));
+function lerpColor(u) {                  // --cold ↔ --hot (다른 색을 만들지 않는다)
+  u = Math.min(1, Math.max(0, u));
   const a = [0x2E, 0x7F, 0xA8], b = [0xC2, 0x45, 0x2D];
   return "rgb(" + a.map((x, i) => Math.round(x + (b[i] - x) * u)).join(",") + ")";
 }
+function tempColor(t) { return lerpColor((t - T_LO) / (T_HI - T_LO)); }   // 계통도 탭 (절대온도)
+function devColor(d)  { return lerpColor((d - D_LO) / (D_HI - D_LO)); }   // 서버실 탭 (평균 대비)
 function ribbonPx(q) {
   const u = Math.min(1, Math.max(0, (q - Q_LO) / (Q_HI - Q_LO)));
   return (4 + u * 16).toFixed(1) + "px";
+}
+function pipeW(q) {                      // 배관 굵기 [모형 단위] — 같은 유량 범위를 쓴다
+  const u = Math.min(1, Math.max(0, (q - Q_LO) / (Q_HI - Q_LO)));
+  return +(5 + u * 15).toFixed(1);
+}
+
+/* ═══ 등축 기하 (세션 7.4 C2) ═══════════════════════════════════════
+   sx = (x − y)·cos30 · sy = (x + y)·sin30 − z.  단위는 모형 단위(viewBox)다. */
+const C30 = Math.cos(Math.PI / 6), S30 = 0.5;
+const iso = (x, y, z) => [(x - y) * C30, (x + y) * S30 - z];
+
+const G = {
+  RW: 84, RD: 50, RH: 118,        // 랙 (폭·깊이·높이)
+  PITCH: 140,                     // 랙 간격 — RW+RD 이상이라 바운딩 박스가 겹치지 않는다
+  ROWDX: 300,                     // dual 의 두 열 간격
+  CW: 110, CD: 110, CH: 150, CX: -13,   // CDU (랙 열 중앙에 맞춘다)
+  CGAP: 200,                      // 랙 01 ↔ CDU 사이
+  SUPX: -46, RETX: 154,           // 공급 헤더 · 환수 헤더의 x
+  PZ: 12,                         // 바닥 위 배관 높이
+  TILE: 70,                       // 바닥 타일
+  FX0: -180, FX1: 190,            // 바닥 patch x 범위 (열 하나분)
+  FY0: -70, FY1: 1350,
+  SECY: 1480,                     // 2차측 배관이 나가는 y (벽 밖)
+  PAD: 34,
+};
+const rackY = i => (7 - i) * G.PITCH;              // 랙 01 이 앞(y 큼) · 랙 08 이 뒤
+const CDUY = 7 * G.PITCH + G.RD + G.CGAP;          // = 1230
+const rowX = g => (g === "A" ? 0 : G.ROWDX);
+
+function boxFaces(x0, y0, w, d, h) {
+  return {
+    top:   [[x0, y0, h], [x0 + w, y0, h], [x0 + w, y0 + d, h], [x0, y0 + d, h]],
+    side:  [[x0 + w, y0, 0], [x0 + w, y0 + d, 0], [x0 + w, y0 + d, h], [x0 + w, y0, h]],
+    front: [[x0, y0 + d, 0], [x0 + w, y0 + d, 0], [x0 + w, y0 + d, h], [x0, y0 + d, h]],
+    sil:   [[x0, y0 + d, 0], [x0 + w, y0 + d, 0], [x0 + w, y0, 0],
+            [x0 + w, y0, h], [x0, y0, h], [x0, y0 + d, h]],
+  };
+}
+function boxBBox(x0, y0, w, d, h) {      // 화면 바운딩 박스 [sx0, sy0, sx1, sy1]
+  let b = [1e9, 1e9, -1e9, -1e9];
+  for (const x of [x0, x0 + w]) for (const y of [y0, y0 + d]) for (const z of [0, h]) {
+    const [sx, sy] = iso(x, y, z);
+    b = [Math.min(b[0], sx), Math.min(b[1], sy), Math.max(b[2], sx), Math.max(b[3], sy)];
+  }
+  return b;
+}
+const rackBBox = (g, i) => boxBBox(rowX(g), rackY(i), G.RW, G.RD, G.RH);
+const cduBBox  = g => boxBBox(rowX(g) + G.CX, CDUY, G.CW, G.CD, G.CH);
+
+/* 글자상자 폭 추정 — 한글은 1em, 그 밖은 0.56em 으로 잡는다 (겹침 검사용) */
+const textW = (s, fs) => [...s].reduce((a, ch) => a + (ch.charCodeAt(0) > 0x2000 ? 1 : 0.56), 0) * fs;
+
+/* 서버실 SVG 를 통째로 만든다 — 순수 함수다. 그린 점을 전부 모아
+   viewBox 를 그 bbox 에서 낸다(잘림이 원리적으로 생기지 않는다). */
+function buildRoom() {
+  const bx = { A: [1e9, 1e9, -1e9, -1e9], B: [1e9, 1e9, -1e9, -1e9] };
+  const texts = [];                       // 글자상자 (겹침 검사용)
+  const mark = (g, sx, sy) => { const b = bx[g];
+    if (sx < b[0]) b[0] = sx; if (sy < b[1]) b[1] = sy;
+    if (sx > b[2]) b[2] = sx; if (sy > b[3]) b[3] = sy; };
+  const p = (g, q) => { const [sx, sy] = iso(q[0], q[1], q[2]); mark(g, sx, sy);
+                        return sx.toFixed(1) + "," + sy.toFixed(1); };
+  const poly = (g, arr, attr) => `<polygon points="${arr.map(q => p(g, q)).join(" ")}" ${attr}/>`;
+  const line = (g, a, b2, attr) => {
+    const [x1, y1] = iso(a[0], a[1], a[2]), [x2, y2] = iso(b2[0], b2[1], b2[2]);
+    mark(g, x1, y1); mark(g, x2, y2);
+    return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" ${attr}/>`;
+  };
+  /* 글자: (sx, sy) 는 이미 화면좌표다. resv = 자리를 잡아둘 최장 문자열 */
+  const txt = (g, sx, sy, fs, s, o) => {
+    o = o || {};
+    const w = textW(o.resv || s, fs), anc = o.anchor || "middle";
+    const x0 = anc === "middle" ? sx - w / 2 : anc === "end" ? sx - w : sx;
+    const box = [x0, sy - fs * 0.8, x0 + w, sy + fs * 0.25];
+    mark(g, box[0], box[1]); mark(g, box[2], box[3]);
+    texts.push({ g, box, s: o.resv || s });
+    return `<text ${o.id ? `id="${o.id}" ` : ""}x="${sx.toFixed(1)}" y="${sy.toFixed(1)}"` +
+           ` font-size="${fs}" text-anchor="${anc}"` +
+           (o.cls ? ` class="${o.cls}"` : "") + (o.w ? ` font-weight="bold"` : "") +
+           `>${s}</text>`;
+  };
+
+  let defs = "", out = { A: "", B: "" };
+
+  for (const g of ["A", "B"]) {
+    const X = rowX(g), k = "R" + g;
+    let s = "";
+
+    /* ① 바닥 타일 */
+    for (let x = G.FX0; x <= G.FX1; x += G.TILE) s += line(g, [X + x, G.FY0, 0], [X + x, G.FY1, 0], 'class="tile"');
+    for (let y = G.FY0; y <= G.FY1; y += G.TILE) s += line(g, [X + G.FX0, y, 0], [X + G.FX1, y, 0], 'class="tile"');
+
+    /* ② 공급 헤더 (랙 뒤) + 갈래 — 랙보다 먼저 그린다 */
+    s += line(g, [X + G.SUPX, -30, G.PZ], [X + G.SUPX, CDUY, G.PZ], 'class="hdrp"');
+    s += line(g, [X + G.SUPX, CDUY, G.PZ], [X + G.CX, CDUY, G.PZ], 'class="hdrp"');
+    for (let i = 0; i < RACKS; i++) {
+      const yc = rackY(i) + G.RD / 2;
+      s += line(g, [X, yc, G.PZ], [X + G.SUPX, yc, G.PZ], 'class="sup"');
+    }
+
+    /* ③ 랙 8개 — 먼 것부터 (랙 08 → 랙 01) */
+    for (let i = RACKS - 1; i >= 0; i--) {
+      const f = boxFaces(X, rackY(i), G.RW, G.RD, G.RH);
+      const cid = `clip-${k}${i}`;
+      defs += `<clipPath id="${cid}">${poly(g, f.front, "")}</clipPath>`;
+      const bb = rackBBox(g, i), cx = (bb[0] + bb[2]) / 2;
+      s += `<g class="rack" id="${k}-rack${i}">` +
+           poly(g, f.top, 'class="fc f-top"') +
+           poly(g, f.side, 'class="fc f-side"') +
+           poly(g, f.front, 'class="fc f-front"') +
+           `<g clip-path="url(#${cid})">` +
+             poly(g, f.front, `class="rfill" id="${k}-fill${i}"`) +
+           `</g>` +
+           poly(g, f.front, 'class="edge"') +
+           poly(g, f.sil, 'class="sil"') +
+           `</g>`;
+      /* 라벨·숫자는 랙 위에 쌓는다 — 좌우로 랙 한 칸 안에 들어간다 */
+      s += txt(g, cx, bb[1] - 72, 20, `RACK 0${i + 1}`, { cls: "t-dim" });
+      if (g === "A") s += txt(g, cx, bb[1] - 44, 26, DASH, { id: `${k}-q${i}`, resv: "7.33", w: 1 });
+      s += txt(g, cx, bb[1] - 16, 22, DASH, { id: `${k}-t${i}`, resv: "43.908" });
+    }
+
+    /* ④ 환수 헤더 (앞 통로) + 갈래 — 굵기 = 유량 · 색 = 평균 대비 편차 */
+    s += line(g, [X + G.RETX, -30, G.PZ], [X + G.RETX, CDUY, G.PZ], 'class="hdrp"');
+    s += line(g, [X + G.RETX, CDUY, G.PZ], [X + G.CX + G.CW, CDUY, G.PZ], 'class="hdrp"');
+    for (let i = 0; i < RACKS; i++) {
+      const yc = rackY(i) + G.RD / 2;
+      s += line(g, [X + G.RW, yc, G.PZ], [X + G.RETX, yc, G.PZ],
+                g === "A" ? `class="ret" id="${k}-pipe${i}"` : 'class="ret" stroke-width="5"');
+    }
+
+    /* ⑤ CDU 설비 박스 */
+    const cf = boxFaces(X + G.CX, CDUY, G.CW, G.CD, G.CH), cb = cduBBox(g);
+    s += `<g class="cdu" id="${k}-cdu">` +
+         poly(g, cf.top, 'class="fc f-top"') +
+         poly(g, cf.side, 'class="fc f-side"') +
+         poly(g, cf.front, 'class="fc f-front"') +
+         poly(g, cf.sil, 'class="sil"') + `</g>`;
+    const ccx = (cb[0] + cb[2]) / 2;
+    if (g === "A") {                     // CDU A 는 상자 위에 쌓는다
+      s += txt(g, ccx, cb[1] - 156, 26, "CDU A", { w: 1 });
+      s += txt(g, ccx, cb[1] - 128, 21, DASH, { id: `${k}-load`, resv: "부하 100 %" });
+      s += txt(g, ccx, cb[1] - 100, 21, DASH, { id: `${k}-duty`, resv: "열교환기 6400 kW" });
+      s += txt(g, ccx, cb[1] - 72, 21, DASH, { id: `${k}-Tsup`, resv: "공급 43.908 ℃" });
+      s += txt(g, ccx, cb[1] - 44, 21, DASH, { id: `${k}-Tret`, resv: "환수 43.908 ℃" });
+      s += txt(g, ccx, cb[1] - 16, 25, DASH, { id: `${k}-tot`, resv: "총유량 55.59 m³/h", w: 1 });
+    } else {                             // CDU B 는 상자 아래 — 위는 CDU A 의 랙 01 자리다
+      s += txt(g, ccx, cb[3] + 28, 24, "CDU B", { w: 1 });
+      s += txt(g, ccx, cb[3] + 54, 20, DASH, { id: `${k}-load`, resv: "부하 100 % 고정", cls: "t-dim" });
+      s += txt(g, ccx, cb[3] + 80, 21, DASH, { id: `${k}-Tret`, resv: "환수 43.908 ℃" });
+    }
+
+    /* ⑥ 2차측 — 벽 밖으로 나가는 배관 두 줄과 라벨만 (냉각탑·드라이쿨러를 그리지 않는다) */
+    const sy0 = CDUY + G.CD;
+    s += line(g, [X + G.CX + 25, sy0, G.PZ], [X + G.CX + 25, G.SECY, G.PZ], 'class="secp"');
+    s += line(g, [X + G.CX + 80, sy0, G.PZ], [X + G.CX + 80, G.SECY, G.PZ], 'class="secp"');
+    const [ex, ey] = iso(X + G.CX + 52, G.SECY, G.PZ);
+    if (g === "A") {
+      s += txt(g, ex, ey + 32, 21, DASH, { id: "R-Tsec", resv: "2차측 공급 27.000 ℃" });
+      s += txt(g, ex, ey + 58, 21, DASH, { id: `${k}-share`, resv: "배분 · CDU A 55.78 m³/h" });
+    } else {
+      // CDU B 의 글자 묶음이 상자 아래에 오므로 2차측 라벨을 그만큼 내린다
+      s += txt(g, ex, ey + 56, 20, "2차측 공유", { cls: "t-dim" });
+      s += txt(g, ex, ey + 82, 21, DASH, { id: `${k}-share`, resv: "배분 · CDU B 55.92 m³/h" });
+      s += txt(g, ex, ey + 106, 19, "", { id: `${k}-shared`, resv: "Δ +1.2e-02 m³/h", cls: "t-warn" });
+      s += txt(g, ex, ey + 128, 19, "", { id: `${k}-Tretd`, resv: "환수 Δ +1.2e-03 K", cls: "t-warn" });
+      s += txt(g, ex, ey + 152, 18, "유량은 표시 자릿수에서 움직이지 않아 싣지 않는다", { cls: "t-dim" });
+    }
+
+    /* 헤더 이름은 SVG 안에 두지 않는다 — 등축에서 어느 자리에 놓아도
+       다른 열의 랙 도형·글자와 겹친다(C12). 아래 띠의 설명줄이 이름을 진다. */
+    out[g] = s;
+  }
+
+  const pad = G.PAD;
+  const vb = b => [b[0] - pad, b[1] - pad, b[2] - b[0] + 2 * pad, b[3] - b[1] + 2 * pad]
+                    .map(v => v.toFixed(1)).join(" ");
+  const uni = [Math.min(bx.A[0], bx.B[0]), Math.min(bx.A[1], bx.B[1]),
+               Math.max(bx.A[2], bx.B[2]), Math.max(bx.A[3], bx.B[3])];
+  const VB = { single: vb(bx.A), dual: vb(uni) };
+  const svg = `<svg id="room" viewBox="${VB.single}" preserveAspectRatio="xMidYMid meet">` +
+              `<defs>${defs}</defs><g id="room-A">${out.A}</g><g id="room-B">${out.B}</g></svg>`;
+  return { svg, VB, box: bx, texts };
 }
 
 /* ═══ 화면 ══════════════════════════════════════════════════════════ */
@@ -198,13 +424,17 @@ const SCEN = [
   { name: "CDU 2대 · 부하 20 → 100%", sub: "CDU 2대 (dual_asymmetric) · 랙 배관 저항 증가 0%",
     fix: { cfg: "dual", res: 0 }, axis: "load", steps: LOADS, ms: 700 },
 ];
+const LEG = {
+  room: ["출구온도 — 8랙 평균 대비", "−1.5 K", "+1.5 K"],
+  sch:  ["출구온도 = 색", "30.0 ℃", "43.9 ℃"],
+};
 
-let CASES = null, timer = null, sc = 1, si = 0;
+let CASES = null, timer = null, sc = 1, si = 0, tab = "room";
 let cfg = "single", load = 100, res = 0, axisKind = "res";
 
 const $ = id => document.getElementById(id);
 
-/* ── 골격 ─────────────────────────────────────────────────────────── */
+/* ── 골격 · 계통도 탭 (세션 7.3 그대로) ───────────────────────────── */
 function rackHtml(k, i, withFlow) {
   return `<div class="rack" id="${k}-rack${i}">
     <div class="rname">랙 ${i + 1}</div>
@@ -266,6 +496,19 @@ $("sec").innerHTML = `
   <div class="cell" id="cell-Bshare"><span class="lb">2차측 배분 · CDU B</span><span class="v num" id="B-share">${DASH}</span><span class="u">m³/h</span>
     <span class="badge" id="B-shared"></span></div>`;
 
+/* ── 골격 · 서버실 탭 ─────────────────────────────────────────────── */
+const ROOM = buildRoom();
+$("roomwrap").innerHTML = ROOM.svg;
+$("devstrip").innerHTML = `
+  <div class="cell"><span class="tag">채움 높이 = 부하 · 앞면 색 = 출구온도(8랙 평균 대비) ·
+    숫자 두 줄 = 유량 [m³/h] · 출구온도 [℃]<br>바닥 배관 = 공급 헤더(랙 뒤) ·
+    환수 헤더(랙 앞, 굵기 = 유량)</span></div>
+  <div class="cell"><span class="lb">CDU A 총유량 · 정상 대비</span>
+    <span class="dev" style="width:110px;height:12px"><i id="R-totdev"></i></span></div>
+  <div class="cell"><span class="lb">주입 랙 유량 · 정상 대비</span>
+    <span class="dev" style="width:110px;height:12px"><i id="R-hitdev"></i></span></div>
+  <div class="cell"><span class="tag">두 막대는 같은 축척이다 (1 m³/h = 77 px)</span></div>`;
+
 $("scen-btns").innerHTML =
   SCEN.map((s, i) => `<button data-s="${i}">${s.name}</button>`).join("") +
   `<button id="halt">멈춤</button>`;
@@ -310,6 +553,46 @@ function paintCdu(k, v, withFlow, hit) {
   }
 }
 
+function paintRoomCdu(k, v, withFlow, hit) {
+  for (let i = 0; i < RACKS; i++) {
+    const r = v.racks[i], f = $(`${k}-fill${i}`);
+    f.style.transform = `translate(0px,${(G.RH * (1 - r.fillPct / 100)).toFixed(1)}px)`;
+    f.style.fill = devColor(r.tdev);
+    setText(`${k}-t${i}`, r.t);
+    $(`${k}-rack${i}`).classList.toggle("hit", i === hit);
+    if (withFlow) {
+      setText(`${k}-q${i}`, r.q);
+      const pipe = $(`${k}-pipe${i}`);
+      pipe.style.strokeWidth = pipeW(r.qv);
+      pipe.style.stroke = devColor(r.tdev);
+    }
+  }
+  setText(`${k}-load`, withFlow ? `부하 ${v.load} %` : `부하 ${v.load} % 고정`);
+  setText(`${k}-Tret`, `환수 ${v.Tret} ℃`);
+  setText(`${k}-share`, `배분 · CDU ${k.slice(1)} ${v.share} m³/h`);
+  if (withFlow) {
+    setText(`${k}-duty`, `열교환기 ${v.duty} kW`);
+    setText(`${k}-Tsup`, `공급 ${v.Tsup} ℃`);
+    setText(`${k}-tot`, `총유량 ${v.tot} m³/h`);
+  }
+}
+
+function paintRoom(v, dual) {
+  $("room").setAttribute("viewBox", dual ? ROOM.VB.dual : ROOM.VB.single);
+  $("room-B").style.display = dual ? "" : "none";
+  setText("R-Tsec", `2차측 공급 ${v.T_sec} ℃`);
+  paintRoomCdu("RA", v.cdus[0], true, v.hitCdu === 0 ? v.hitRack : -1);
+  if (dual) {
+    paintRoomCdu("RB", v.cdus[1], false, v.hitCdu === 1 ? v.hitRack : -1);
+    const on = res !== 0;                 // R0 에서는 배지를 띄우지 않는다
+    setText("RB-shared", on ? `Δ ${F.sig2(v.cdus[1].shareDelta)} m³/h` : "");
+    setText("RB-Tretd", on ? `환수 Δ ${F.sig2(v.cdus[1].TretDelta)} K` : "");
+  }
+  devBar("R-totdev", v.cdus[0].totDev);
+  const hv = v.hitRack >= 0 ? v.cdus[v.hitCdu].racks[v.hitRack].dev : 0;
+  devBar("R-hitdev", hv);
+}
+
 function paintAxis() {
   const s = SCEN[sc];
   $("axisname").innerHTML = `<b>${s.name}</b> &nbsp;<span>${s.sub}</span>`;
@@ -340,10 +623,22 @@ function paint() {
     $("B-shared").textContent = on ? `Δ ${F.sig2(v.cdus[1].shareDelta)} m³/h` : "";
     $("B-Tretd").textContent = on ? `Δ ${F.sig2(v.cdus[1].TretDelta)} K` : "";
   }
+  paintRoom(v, dual);
   paintAxis();
 }
 
 /* ── 컨트롤 ───────────────────────────────────────────────────────── */
+function setTab(t) {
+  tab = t;
+  $("pane-room").style.display = t === "room" ? "" : "none";
+  $("pane-sch").style.display = t === "sch" ? "" : "none";
+  const L = LEG[t];
+  $("leg-title").textContent = L[0];
+  $("leg-lo").textContent = L[1];
+  $("leg-hi").textContent = L[2];
+  for (const b of document.querySelectorAll("#tabs button"))
+    b.setAttribute("aria-pressed", String(b.dataset.tab === t));
+}
 function syncControls() {
   $("load").value = load;
   $("load-out").textContent = load + " %";
@@ -375,6 +670,10 @@ function runScen(n) {
   step();
 }
 
+$("tabs").addEventListener("click", e => {   // 탭을 바꿔도 케이스·시나리오는 그대로다
+  const b = e.target.closest("button");
+  if (b) setTab(b.dataset.tab);
+});
 $("scen").addEventListener("click", e => {
   const b = e.target.closest("button");
   if (!b || !CASES) return;
@@ -394,6 +693,7 @@ $("load").addEventListener("input", e => {
   if (CASES) paint();
 });
 
+setTab("room");
 fetch("demo_steady.json")
   .then(r => r.json())
   .then(d => {
