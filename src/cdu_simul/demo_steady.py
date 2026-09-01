@@ -34,7 +34,6 @@ from typing import Any
 from cdu_simul.assumptions import (
     ASSUMPTION_TAG,
     HEAT_EXCHANGER,
-    LEAK,
     LOAD_PROFILE,
     PIPING,
     PLANT,
@@ -54,7 +53,7 @@ from cdu_simul.plant import PlantCase, solve_plant_steady_state
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[2] / "demo"
 OUTPUT_FILENAME = "demo_steady.json"
 
-DEMO_VERSION = "demo-7.2"
+DEMO_VERSION = "demo-7.2-B"
 
 #: L/s × kg/m³ → kg/h 환산계수. 1 L = 1e-3 m³ · 1 h = 3600 s 이므로 3.6 이다.
 #: **단위 환산이며 가정치가 아니다**(절대 규칙 9 — 변환 지점을 한 곳에 둔다).
@@ -64,6 +63,14 @@ LPS_TO_KGPH_PER_DENSITY: float = 3.6
 #: 모델 기본값은 균등이고 이 시연만 명시적으로 켠다 — 기존 시험·데이터셋·게이트
 #: 기록은 균등 그대로다.
 USE_RACK_LENGTH_DISTRIBUTION = True
+
+#: 저항을 거는 랙 = **가장 먼 랙**(마지막 인덱스 · 세션 7.2-B · 5-1 「누출 주입
+#: 지점」). 랙별 배분을 켜면 랙이 대칭이 아니므로 랙 번호가 결과에 영향한다 —
+#: 가장 가까운 랙(K 배수 0.8)에 +50% 를 걸면 0.8 × 1.5 = 1.2 로 가장 먼 랙과
+#: 정확히 겹친다(미해결 #45). 가장 먼 랙에 걸면 1.2 × 1.5 = 1.8 이라 어느 랙과도
+#: 겹치지 않는다. **랙 개수에서 유도하며 새 숫자가 아니다.** 균등 경로(52열본
+#: 데이터셋)는 랙 대칭이 성립하므로 `LEAK.injection_rack_index` 그대로 둔다.
+RESISTANCE_RACK_INDEX = SCENARIO.racks_per_cdu - 1
 
 CONFIG_SINGLE = "single"
 CONFIG_DUAL_ASYMMETRIC = "dual_asymmetric"
@@ -268,7 +275,7 @@ def _case_header(
         "resistance_increase_percent": level.increase_percent,
         "resistance_k_multiplier": level.k_multiplier,
         "resistance_label": level.label,
-        "resistance_rack_index": LEAK.injection_rack_index,
+        "resistance_rack_index": RESISTANCE_RACK_INDEX,
         "resistance_cdu_index": RESISTANCE_CDU_INDEX,
         "leak_model": LEAK_MODEL_K_APPROX,
         "caveats": CASE_CAVEATS,
@@ -280,6 +287,7 @@ def single_case(load_percent: float, level: ResistanceLevel) -> dict[str, Any]:
     case = leak_case(
         replace(fixed_case_template(), load_percent=load_percent),
         _leak_level_for(level),
+        RESISTANCE_RACK_INDEX,
     )
     result = solve_cdu_steady_state(case)
     header = _case_header(
@@ -299,11 +307,13 @@ def dual_case(load_percent: float, level: ResistanceLevel) -> dict[str, Any]:
     오르면 그쪽 1차측 유량이 이동하고 비례 배분이 따라 이동해 **CDU 1 의 배분과
     온도가 바뀐다** — 부하를 올리지 않은 쪽이 움직이는 것이 시연 재료다.
 
-    저항 증가는 CDU 0 의 랙 0 에만 건다(5-1 「누출 주입 지점」 · 랙 1개).
+    저항 증가는 CDU 0 의 **가장 먼 랙**에만 건다(5-1 「누출 주입 지점」 · 랙 1개).
     """
     template = fixed_case_template()
     driven = leak_case(
-        replace(template, load_percent=load_percent), _leak_level_for(level)
+        replace(template, load_percent=load_percent),
+        _leak_level_for(level),
+        RESISTANCE_RACK_INDEX,
     )
     fixed = replace(template, load_percent=FIXED_LOAD_PERCENT)
     cdus = (driven, fixed) if RESISTANCE_CDU_INDEX == 0 else (fixed, driven)
