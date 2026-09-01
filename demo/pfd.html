@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>CDU 시연 PFD — 정상상태 (가정값 기반 · 실측 아님)</title>
+<style>
+  :root { --ink:#111; --line:#555; --box:#fff; --bg:#f4f4f0; --tag:#0a3d62; --hot:#c0392b; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif; font-size:13px; }
+  header { position:sticky; top:0; z-index:10; background:#fffbe6; border-bottom:2px solid #b8860b;
+           padding:6px 10px; }
+  header h1 { margin:0 0 4px; font-size:14px; }
+  header ul { margin:0; padding-left:16px; font-size:11px; line-height:1.45; }
+  header li { margin:0; }
+  .warn { color:#8a6d00; font-weight:bold; }
+  #controls { padding:8px 10px; display:flex; gap:18px; align-items:center; flex-wrap:wrap;
+              border-bottom:1px solid #ccc; background:#fff; }
+  #controls label { font-weight:bold; }
+  button { font:inherit; padding:2px 10px; border:1px solid #888; background:#eee; cursor:pointer; }
+  button[aria-pressed="true"] { background:var(--tag); color:#fff; border-color:var(--tag); }
+  #legend { font-size:11px; color:#555; }
+  #missing { color:var(--hot); font-weight:bold; padding:0 10px; }
+  svg { display:block; margin:6px auto; background:#fff; border:1px solid #ddd; max-width:100%; }
+  .dev { fill:#fff; stroke:var(--line); stroke-width:1.2; }
+  .cdu { fill:none; stroke:#999; stroke-width:1; stroke-dasharray:6 4; }
+  .pipe { stroke:var(--line); stroke-width:1.4; fill:none; }
+  .pipe2 { stroke:#2e7d32; stroke-width:1.6; fill:none; }
+  .lbl { font-size:11px; fill:#333; }
+  .ttl { font-size:12px; font-weight:bold; fill:#111; }
+  .val { font-size:11px; fill:var(--tag); font-variant-numeric:tabular-nums; }
+  .unit { font-size:10px; fill:#777; }
+  .badge { font-size:10px; fill:var(--hot); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CDU 시연 PFD — 정상상태 · <span class="warn">가정값 기반 — 실측 아님</span></h1>
+  <ul>
+    <li><span class="warn">가정값 기반 — 실측 아님.</span> 업계 공개자료 전형범위 · 프로젝트정리 5장.</li>
+    <li>케이스 전환은 <b>시간 경과가 아니다</b> — 전이 파형은 노드 수에 수렴하지 않는다 (미해결 #40).</li>
+    <li><code>resistance_increase</code> = 랙 배관 저항 증가. 실제 <b>질량손실 사고의 대용</b>이며 신호 방향이
+        같지 않다 — 파일럿 종료 판정 5-b: <b>X</b>.</li>
+    <li>양정 · 분기 ΔP · 밸브 ΔP 는 5장 범위의 <b>한쪽 끝으로 고정된 한 조합</b>이며 화면에 싣지 않는다.</li>
+    <li><code>T_supply_C</code> 의 저항 응답은 <b>비단조</b>이고 중간부하에서 부호가 뒤집힌다 —
+        전 범위 |변화| ≤ 0.009 K · 미해결 #42.</li>
+  </ul>
+</header>
+
+<div id="controls">
+  <span><label>구성</label>
+    <button id="btn-single" data-cfg="single" aria-pressed="true">single</button><button
+            id="btn-dual" data-cfg="dual" aria-pressed="false">dual</button></span>
+  <span><label for="load">부하</label>
+    <input id="load" type="range" min="20" max="100" step="5" value="20">
+    <span id="load-out">20 %</span></span>
+  <span><label>저항 증가</label>
+    <span id="res"></span></span>
+  <span id="legend">깜빡임 = 표시 문자열이 바뀐 태그 · <b>케이스 전환 — 시간 경과가 아님</b></span>
+  <span id="conv"></span>
+</div>
+<div id="missing"></div>
+
+<svg id="pfd" viewBox="0 0 520 590" width="1000"></svg>
+
+<script>
+const RES = [0, 5, 20, 50];
+const RACKS = 8;
+const F = { T: v => v.toFixed(3), Q: v => v.toFixed(4), kW: v => v.toFixed(1), pct: v => String(Math.round(v)) };
+const DASH = "—";
+
+let CASES = null;                       // case_id -> case
+let cfg = "single", load = 20, res = 0;
+
+/* ── PFD 골격 (CDU 한 대) ─────────────────────────────────────────────
+   좌표는 그룹 로컬. 2차측 공급 헤더는 y=-28 에 있는 상위 선에서 내려온다. */
+function cduSvg(k, title) {
+  const rows = [];
+  for (let i = 0; i < RACKS; i++) {
+    const y = 196 + i * 30, m = y + 12;
+    rows.push(`
+      <path class="pipe" d="M150 ${m} H230"/>
+      <path class="pipe" d="M400 ${m} H440"/>
+      <rect class="dev" x="230" y="${y}" width="170" height="24"/>
+      <text class="lbl" x="238" y="${m + 4}">랙 ${i}</text>
+      <text class="val" id="${k}-rf${i}" x="152" y="${m - 4}">${DASH}</text>
+      <text class="val" id="${k}-ro${i}" x="404" y="${m - 4}">${DASH}</text>`);
+  }
+  return `<g id="g-${k}">
+    <rect class="cdu" x="0" y="30" width="460" height="430"/>
+    <text class="ttl" x="6" y="24">${title}</text>
+
+    <path class="pipe2" d="M65 -28 V60"/>
+    <text class="lbl" x="72" y="-14">2차측 배분유량</text>
+    <text class="val" id="${k}-secondary_share_Lps" x="72" y="-2">${DASH}</text>
+    <text class="unit" x="132" y="-2">L/s</text>
+    <text class="badge" id="${k}-d-secondary_share_Lps" x="72" y="10"></text>
+
+    <rect class="dev" x="20" y="60" width="90" height="70"/>
+    <text class="lbl" x="34" y="88">열교환기</text>
+    <text class="val" id="${k}-hx_duty_kW" x="34" y="104">${DASH}</text>
+    <text class="unit" x="86" y="104">kW</text>
+
+    <path class="pipe" d="M65 130 V170 H150 V430"/>
+    <circle class="dev" cx="112" cy="170" r="14"/>
+    <text class="lbl" x="98" y="196">펌프</text>
+    <text class="lbl" x="156" y="150">1차측 공급</text>
+    <text class="val" id="${k}-T_supply_C" x="156" y="162">${DASH}</text>
+    <text class="unit" x="196" y="162">℃</text>
+    <text class="val" id="${k}-total_flow_Lps" x="222" y="162">${DASH}</text>
+    <text class="unit" x="270" y="162">L/s</text>
+    <text class="badge" id="${k}-d-T_supply_C" x="156" y="174"></text>
+
+    <path class="pipe" d="M440 430 V110 H110"/>
+    <text class="lbl" x="330" y="98">1차측 환수</text>
+    <text class="val" id="${k}-T_return_C" x="392" y="98">${DASH}</text>
+    <text class="unit" x="432" y="98">℃</text>
+    <text class="badge" id="${k}-d-T_return_C" x="330" y="86"></text>
+
+    <text class="lbl" x="20" y="450">부하</text>
+    <text class="val" id="${k}-load_percent" x="46" y="450">${DASH}</text>
+    <text class="unit" x="66" y="450">%</text>
+    <text class="val" id="${k}-load_kW" x="88" y="450">${DASH}</text>
+    <text class="unit" x="130" y="450">kW</text>
+    ${rows.join("")}
+  </g>`;
+}
+
+document.getElementById("pfd").innerHTML = `
+  <text class="ttl" x="30" y="26">2차측 공급 (고정 경계조건 · 절대 규칙 7)</text>
+  <text class="val" id="T_secondary_supply_C" x="330" y="26">${DASH}</text>
+  <text class="unit" x="370" y="26">℃</text>
+  <path class="pipe2" id="sec-header" d="M30 52 H500"/>
+  <g transform="translate(20,80)">${cduSvg("A", "CDU A · 부하 CDU")}</g>
+  <g transform="translate(520,80)">${cduSvg("B", "CDU B · 고정 CDU · 부하 100% 고정")}</g>`;
+
+/* ── 표시 ───────────────────────────────────────────────────────────── */
+function setText(id, s) {
+  const el = document.getElementById(id);
+  if (el.textContent === s) return;          // 반올림 후 같으면 깜빡이지 않는다
+  el.textContent = s;
+  el.animate([{ fill: "#c0392b" }, { fill: "#c0392b", offset: .45 }, { fill: "#0a3d62" }],
+             { duration: 900 });
+}
+
+function badge(id, d) {                       // Δ = 같은 부하 · 저항 0 대비
+  const el = document.getElementById(id);
+  if (d === null) { el.textContent = ""; return; }
+  const s = Math.abs(d) < 1e-3 ? Math.abs(d).toExponential(1) : Math.abs(d).toPrecision(2);
+  el.textContent = `Δ ${d < 0 ? "−" : "+"}${s}  (같은 부하 · 저항 0 대비)`;
+}
+
+function paintCdu(k, c, base) {
+  for (const [tag, f] of [["T_supply_C", F.T], ["T_return_C", F.T], ["total_flow_Lps", F.Q],
+                          ["secondary_share_Lps", F.Q], ["hx_duty_kW", F.kW],
+                          ["load_percent", F.pct], ["load_kW", F.kW]])
+    setText(`${k}-${tag}`, c ? f(c[tag]) : DASH);
+  for (let i = 0; i < RACKS; i++) {
+    setText(`${k}-rf${i}`, c ? F.Q(c.rack_flows_Lps[i]) : DASH);
+    setText(`${k}-ro${i}`, c ? F.T(c.rack_outlet_C[i]) : DASH);
+  }
+  for (const tag of ["T_return_C", "T_supply_C", "secondary_share_Lps"])
+    badge(`${k}-d-${tag}`, base && c ? c[tag] - base[tag] : null);
+}
+
+function render() {
+  const dual = cfg === "dual";
+  const c = CASES[`${cfg}/L${load}/R${res}`];
+  document.getElementById("missing").textContent = c ? "" : "해당 케이스 없음 — 보간하지 않는다";
+  document.getElementById("pfd").setAttribute("viewBox", dual ? "0 0 1000 590" : "0 0 520 590");
+  document.getElementById("sec-header").setAttribute("d", dual ? "M30 52 H970" : "M30 52 H500");
+  document.getElementById("g-B").style.display = dual ? "" : "none";
+  document.getElementById("conv").textContent =
+    c ? `all_converged: ${c.cdus.every(x => x.solver.all_converged)}` : "";
+  setText("T_secondary_supply_C", c ? F.T(c.cdus[0].T_secondary_supply_C) : DASH);
+
+  const b = CASES[`${cfg}/L${load}/R0`];
+  paintCdu("A", c && c.cdus[0], null);                          // 부하 CDU 에는 배지를 붙이지 않는다
+  paintCdu("B", dual && c && c.cdus[1], dual && res !== 0 && b ? b.cdus[1] : null);
+}
+
+/* ── 컨트롤 ─────────────────────────────────────────────────────────── */
+document.getElementById("res").innerHTML =
+  RES.map(r => `<button data-res="${r}" aria-pressed="${r === 0}">${r}%</button>`).join("");
+
+document.getElementById("controls").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b || !CASES) return;
+  if (b.dataset.cfg) cfg = b.dataset.cfg;
+  if (b.dataset.res) res = +b.dataset.res;
+  for (const x of document.querySelectorAll("#controls button"))
+    x.setAttribute("aria-pressed", String(x.dataset.cfg === cfg || +x.dataset.res === res));
+  render();
+});
+
+document.getElementById("load").addEventListener("input", e => {
+  load = +e.target.value;
+  document.getElementById("load-out").textContent = `${load} %`;
+  if (CASES) render();
+});
+
+fetch("demo_steady.json")
+  .then(r => r.json())
+  .then(d => {
+    CASES = Object.fromEntries(d.cases.map(c => [c.case_id, c]));
+    render();
+  })
+  .catch(() => {
+    document.getElementById("missing").textContent =
+      "demo_steady.json 을 읽지 못했다 — 저장소 루트에서 python -m http.server 로 연다 (file:// 은 fetch 가 막힌다)";
+  });
+</script>
+</body>
+</html>
