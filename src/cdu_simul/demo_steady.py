@@ -43,6 +43,8 @@ from cdu_simul.assumptions import (
     VALVE,
 )
 from cdu_simul.dataset import LEAK_MODEL_K_APPROX
+from cdu_simul.fluid import coolant_density_kgm3
+from cdu_simul.hydraulics import bulk_mean_temperature_C
 from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
 from cdu_simul.leak import LeakLevel, leak_case, leak_levels
 from cdu_simul.model import CduCase, CduSteadyStateResult, solve_cdu_steady_state
@@ -52,7 +54,16 @@ from cdu_simul.plant import PlantCase, solve_plant_steady_state
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[2] / "demo"
 OUTPUT_FILENAME = "demo_steady.json"
 
-DEMO_VERSION = "demo-7.0"
+DEMO_VERSION = "demo-7.2"
+
+#: L/s × kg/m³ → kg/h 환산계수. 1 L = 1e-3 m³ · 1 h = 3600 s 이므로 3.6 이다.
+#: **단위 환산이며 가정치가 아니다**(절대 규칙 9 — 변환 지점을 한 곳에 둔다).
+LPS_TO_KGPH_PER_DENSITY: float = 3.6
+
+#: 랙별 등가길이 배분을 **켠다**(세션 7.2 · 5-1 「랙별 등가길이 배분」).
+#: 모델 기본값은 균등이고 이 시연만 명시적으로 켠다 — 기존 시험·데이터셋·게이트
+#: 기록은 균등 그대로다.
+USE_RACK_LENGTH_DISTRIBUTION = True
 
 CONFIG_SINGLE = "single"
 CONFIG_DUAL_ASYMMETRIC = "dual_asymmetric"
@@ -111,6 +122,11 @@ def fixed_case_template() -> CduCase:
     if hydraulic.pump != PUMP.curve_coefficients_at_head_low:
         raise ValueError(
             f"수력 케이스 0 ({hydraulic.label}) 이 양정 하단 조합이 아니다"
+        )
+    if USE_RACK_LENGTH_DISTRIBUTION:
+        hydraulic = replace(
+            hydraulic,
+            branch_K_multipliers=PIPING.rack_branch_K_multipliers(hydraulic.n_racks),
         )
     return CduCase(
         hydraulic=hydraulic,
@@ -204,16 +220,28 @@ def _cdu_tags(
     절대 규칙 5: solver 플래그를 전부 싣는다. **실패해도 버리지 않는다.**
     """
     case = result.case
+    # 질량유량의 ρ 는 5-1 「수력 계산의 물성 평가 온도」 규칙 그대로 **1차측
+    # 벌크평균온도**에서 얻는다(세션 7.2 C3). 새 상수를 만들지 않는다.
+    density_kgm3 = coolant_density_kgm3(
+        bulk_mean_temperature_C(result.thermal.T_supply_C, result.thermal.T_return_C)
+    )
+
+    def kgph(flow_Lps: float) -> float:
+        return flow_Lps * density_kgm3 * LPS_TO_KGPH_PER_DENSITY
+
     return {
         "load_percent": case.load_percent,
         "load_kW": case.rack_load_kW * SCENARIO.racks_per_cdu,
         "T_supply_C": result.thermal.T_supply_C,
         "T_return_C": result.thermal.T_return_C,
         "total_flow_Lps": result.flow.total_flow_Lps,
+        "total_flow_kgph": kgph(result.flow.total_flow_Lps),
         "hx_duty_kW": result.thermal.hx_duty_kW,
         "T_secondary_supply_C": case.T_secondary_supply_C,
         "secondary_share_Lps": secondary_share_Lps,
+        "secondary_share_kgph": kgph(secondary_share_Lps),
         "rack_flows_Lps": list(result.flow.rack_flows_Lps),
+        "rack_flows_kgph": [kgph(q) for q in result.flow.rack_flows_Lps],
         "rack_outlet_C": list(result.thermal.rack_return_temps_C),
         "solver": {
             "hydraulic_ier": result.flow.solver_ier,
@@ -322,6 +350,32 @@ def build_document() -> dict[str, Any]:
             "racks_per_cdu": SCENARIO.racks_per_cdu,
             "cdu_count_dual": PLANT.cdu_count,
             "secondary_total_flow_Lps": PLANT.secondary_total_flow_Lps,
+            "mass_flow_density_rule": (
+                "질량유량 [kg/h] = 유량 [L/s] × ρ [kg/m³] × 3.6. ρ 는 5-1 "
+                "「수력 계산의 물성 평가 온도」 규칙대로 **1차측 벌크평균온도**"
+                "(T_supply+T_return)/2 에서 CoolProp 으로 얻는다 — 새 상수를 "
+                "만들지 않았다. **secondary_share_kgph 도 같은 ρ 를 쓴다** — "
+                "2차측 유체는 1차측과 같은 PG25 이나 온도가 다르므로(2차측 공급 "
+                "27℃) 그 스트림의 실제 밀도와는 다르다. 2차측 물성 평가 온도는 "
+                "5-1 이 정한 바 없어 새 규칙을 만들지 않았다"
+            ),
+            "rack_equivalent_length_m": (
+                list(PIPING.rack_equivalent_lengths_m(SCENARIO.racks_per_cdu))
+                if USE_RACK_LENGTH_DISTRIBUTION
+                else None
+            ),
+            "rack_branch_K_multipliers": (
+                list(PIPING.rack_branch_K_multipliers(SCENARIO.racks_per_cdu))
+                if USE_RACK_LENGTH_DISTRIBUTION
+                else None
+            ),
+            "rack_length_note": (
+                "랙별 등가길이 배분을 **켠 상태**로 냈다(5-1 「랙별 등가길이 "
+                "배분」 · 세션 7.2). 5장 20~30 m 를 랙 8개의 공간 분포로 읽고 "
+                "K 를 8랙 평균(25 m) 기준으로 스케일했다 — 계통 전체 저항은 "
+                "보존되고 랙 간 배분만 바뀐다. 모델 기본값은 균등이며 "
+                "데이터셋(52열본)과 기존 게이트 기록은 균등 그대로다"
+            ),
             "load_step_percent": LOAD_STEP_PERCENT,
             "load_points_percent": list(load_points_percent()),
             "resistance_increase_percent_levels": [
@@ -378,6 +432,10 @@ TAG_KEYS: tuple[str, ...] = (
     "secondary_share_Lps",
     "rack_flows_Lps",
     "rack_outlet_C",
+    # 질량유량 (세션 7.2 C3) — L/s 열은 지우지 않고 함께 둔다.
+    "total_flow_kgph",
+    "secondary_share_kgph",
+    "rack_flows_kgph",
 )
 
 
