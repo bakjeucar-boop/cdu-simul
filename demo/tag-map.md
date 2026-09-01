@@ -33,9 +33,20 @@ PFD 화면에 붙일 스트림 태그가 **어느 열에서 오는지** 정한 �
 | 열교환기 duty [kW] | ⑴ | `hx_duty_kW` | `SteadyStateResult.hx_duty_kW` |
 | CDU 부하 [%] | ⑴ | `load_percent` | 케이스 입력 |
 | CDU 부하 [kW] | ⑵ | 없음 | `CduCase.rack_load_kW × SCENARIO.racks_per_cdu` |
+| 랙별 질량유량 [kg/h] | ⑵ | 없음 | `rack_flows_Lps × ρ × 3.6` (`rack_flows_kgph[0..7]`) |
+| CDU 1차측 총질량유량 [kg/h] | ⑵ | 없음 | `total_flow_Lps × ρ × 3.6` (`total_flow_kgph`) |
+| 2차측 배분 질량유량 [kg/h] | ⑵ | 없음 | `secondary_share_Lps × ρ × 3.6` (`secondary_share_kgph`) |
 
-⑵ 는 하나뿐이고 **곱셈 하나**다 — 5장 랙당 발열량 × 부하율 × 랙 수이며 새 숫자가
-아니다.
+⑵ 는 **곱셈 하나씩**이고 새 숫자가 없다 — 부하 [kW] 는 5장 랙당 발열량 × 부하율
+× 랙 수, 질량유량 3종은 부피유량 × ρ × 3.6(1 L = 1e-3 m³ · 1 h = 3600 s 환산).
+**ρ 는 5-1 「수력 계산의 물성 평가 온도」 그대로 1차측 벌크평균온도에서 CoolProp
+으로 얻으며, `secondary_share_kgph` 도 같은 ρ 를 쓴다** — 2차측 스트림의 실제
+밀도와는 다르다(2차측 물성 평가 온도를 5-1 이 정한 바 없어 새 규칙을 만들지
+않았다 · 세션 7.2). 시연 JSON 의 `meta.mass_flow_density_rule` 에 같은 문장이
+실린다.
+
+**부피유량 태그를 대체하지 않는다** — 화면은 L/s 태그를 그대로 쓰고 m³/h 가
+필요하면 L/s × 3.6 으로 환산한다. 질량유량 태그는 별도로 얹는 것이다.
 
 **solver 플래그도 함께 싣는다**(절대 규칙 5). 실패 케이스를 버리지 않는다.
 
