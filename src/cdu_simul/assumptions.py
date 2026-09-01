@@ -328,6 +328,45 @@ class PipingAssumptions:
     header_65A_inner_diameter_mm: float = 62.71  # 65A (NPS 2½)
     header_80A_inner_diameter_mm: float = 77.92  # 80A (NPS 3)
 
+    # ── 랙별 등가길이 배분 ──────────────────────────────────────────────────
+    # [가정값: 프로젝트정리 5-1 「랙별 등가길이 배분」 · 세션 7.2 확정]
+    # 위 `equivalent_length_m` 범위를 **랙 8개의 공간 분포**로 읽는다. 새 숫자를
+    # 만들지 않는다 — 범위의 양 끝을 그대로 쓰고 사이를 균등 배분할 뿐이다.
+    def rack_equivalent_lengths_m(
+        self, n_racks: int = ScenarioConditions().racks_per_cdu
+    ) -> tuple[float, ...]:
+        """랙별 등가길이 [m] — 가장 가까운 랙 하한, 가장 먼 랙 상한, 사이는 균등.
+
+        [가정값: 프로젝트정리 5-1 「랙별 등가길이 배분」 · 세션 7.2]
+
+        5장 등가길이 20~30 m 를 불확실성 범위가 아니라 **헤더로부터의 거리 분포**
+        로 읽는다. 범위 밖으로 나가지 않으므로 새 가정치가 아니다.
+        """
+        if n_racks < 2:
+            raise ValueError("랙이 2개 미만이면 분포가 성립하지 않는다")
+        low, high = self.equivalent_length_m.low, self.equivalent_length_m.high
+        step = (high - low) / (n_racks - 1)
+        return tuple(low + step * i for i in range(n_racks))
+
+    def rack_branch_K_multipliers(
+        self, n_racks: int = ScenarioConditions().racks_per_cdu
+    ) -> tuple[float, ...]:
+        """랙별 분기 K 배수 [-] — 등가길이에 비례하고 **8랙 평균이 1.0** 이다.
+
+        [가정값: 프로젝트정리 5-1 「랙별 등가길이 배분」 · 세션 7.2]
+
+        역산 규칙(5-1 「배관 K값 (랙 분기)」)은 그대로 두고 등가길이만 스케일한다.
+        평균을 기준으로 잡아야 **계통 전체 저항이 보존**되고 바뀌는 것이 랙 간
+        배분뿐이다 — 다른 랙을 기준으로 잡으면 정격점이 이동해 5장 「랙당
+        ΔP 2~3 mAq @ 1.94 L/s」와 어긋난다(5-1 근거란).
+
+        **기본은 균등이다** — 이 배수는 명시적으로 켤 때만
+        `HydraulicCase.branch_K_multipliers` 에 넣는다.
+        """
+        lengths = self.rack_equivalent_lengths_m(n_racks)
+        mean_m = sum(lengths) / len(lengths)
+        return tuple(length / mean_m for length in lengths)
+
     @property
     def holdup_bound_inner_diameters_mm(self) -> tuple[float, float]:
         """계통 보유수량 M 의 범위를 내는 두 극단 구경 (하한, 상한) [mm].
