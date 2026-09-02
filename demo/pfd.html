@@ -75,9 +75,8 @@ input[type=range]{width:112px;accent-color:#3E4C56}
 .t-temp{transition:fill .2s ease}
 /* 단위 글자 (세션 7.9 C2) — 값보다 작고 옅다. 크기 비는 JS 의 UFS 와 같아야 한다 */
 .unit{font-size:.62em;opacity:.6}
-/* CDU 내부 그림 (세션 7.7) — 등축과 같은 선 굵기·색 여섯·시스템 폰트를 쓴다 */
-.eq{fill:var(--face);stroke:var(--ink);stroke-width:1.6}
-.frame{fill:var(--face);stroke:var(--ink);stroke-width:1.2}
+/* CDU 내부 그림 (세션 7.7) — 등축과 같은 선 굵기·색 여섯·시스템 폰트를 쓴다.
+   장치 셋은 등축 육면체라 서버실 랙과 같은 .fc/.f-* 를 그대로 쓴다 (세션 7.10 C1) */
 .stream{fill:none;stroke:var(--ink);stroke-width:9;stroke-linecap:round;
         stroke-linejoin:round;transition:stroke .2s ease}
 .secout{fill:none;stroke:var(--ink);stroke-width:5;stroke-dasharray:14 10;opacity:.6;
@@ -130,7 +129,6 @@ input[type=range]{width:112px;accent-color:#3E4C56}
 .devwrap{display:flex;align-items:center;gap:6px;font-size:11px;opacity:.9;margin-left:6px}
 .devwrap .dev{width:110px;height:12px}
 .badge{font-size:11px;color:var(--warn);font-variant-numeric:tabular-nums;font-weight:bold}
-.tag{font-size:11px;opacity:.7}
 
 #sec{flex:none;display:flex;align-items:center;padding:6px 10px}
 footer{flex:none;text-align:center;font-size:11px;opacity:.8;padding:1px 0 0}
@@ -300,19 +298,45 @@ function boxBBox(x0, y0, w, d, h) {      // 화면 바운딩 박스 [sx0, sy0, s
 const rackBBox = (g, i) => boxBBox(rowX(g), rackY(i), G.RW, G.RD, G.RH);
 const cduBBox  = g => boxBBox(rowX(g) + G.CX, CDUY, G.CW, G.CD, G.CH);
 
-/* ═══ CDU 내부 그림의 기하 (세션 7.7 C2) ════════════════════════════
+/* ═══ CDU 내부 그림의 기하 (세션 7.7 C2 · 세션 7.10 C1) ═══════════════
    등축 왼쪽 칸에 선다. 좌표는 등축과 같은 화면 축척의 국소 좌표
-   (0..P.W · 0..P.H) 다 — 등축 쪽 G 는 손대지 않는다. */
+   (0..P.W · 0..P.H) 다 — 등축 쪽 G 는 손대지 않는다.
+   장치 셋(CDU 경계 · 열교환기 · 2차측)은 서버실과 같은 iso()·boxFaces() 로
+   세운다 — 상자 치수는 모형 단위이고, 화면 원점만 이 칸으로 옮긴다.
+   스트림·화살촉·펌프는 평면으로 둔다 (C2·C3). */
 const P = { W: 560, H: 560, GAP: 60, LEAD: 40, L: 236 };   // L = 왼쪽 2차측 칸
 const PG = {
-  FR: [16, 56, 528, 396],          // CDU 경계 상자 (x, y, w, h)
-  HX: [60, 130, 160, 230],         // 열교환기 (x, y, w, h)
-  PUMP: [330, 170, 24],            // 펌프 (cx, cy, r)
-  SUP_Y: 170, RET_Y: 330,          // 1차측 공급·환수 스트림의 높이
-  OUT_X: 545, RET_END: 233,        // 랙 쪽(오른쪽) 끝 · 환수가 열교환기로 드는 끝
-  SEC: [-220, 160, 200, 170],      // 2차측 파선 상자 (x, y, w, h) — 파선이 「모델 밖」을 진다
-  SEC_TO: 190, SEC_FROM: 300,      // 상자 ↔ 열교환기 두 줄: 위가 나가는 쪽 · 아래가 드는 쪽
+  O:  [238, 235],                  // CDU 경계·열교환기가 함께 쓰는 화면 원점
+  FR: [0, 0, 240, 240, 165],       // CDU 경계 육면체 (x0, y0, w, d, h)
+  HX: [15, 125, 95, 105, 115],     // 열교환기 육면체 — 경계 안 앞왼쪽에 선다
+  SO:  [-129, 280],                // 2차측 상자의 화면 원점 (모델 밖이라 따로 선다)
+  SEC: [0, 0, 120, 120, 100],      // 2차측 육면체 — 파선이 「모델 밖」을 진다
+  PUMP: [330, 270, 24],            // 펌프 (cx, cy, r) — 심볼이라 평면이다 (C3)
+  SUP_Y: 270, RET_Y: 340,          // 1차측 공급·환수 스트림의 높이
+  OUT_X: 545,                      // 랙 쪽(오른쪽) 끝
+  SEC_TO: 255, SEC_FROM: 330,      // 상자 ↔ 열교환기 두 줄: 위가 나가는 쪽 · 아래가 드는 쪽
 };                                 // (1차측은 아래→위로 흐른다 — 두 줄은 그 반대, 대향류다)
+
+/* 육면체를 화면 원점 o 에 세운다 — 투영·면 구성은 서버실과 같은 것을 쓴다 */
+const pIso = (o, q) => { const [sx, sy] = iso(q[0], q[1], q[2]); return [o[0] + sx, o[1] + sy]; };
+const pPts = (o, arr) => arr.map(q => pIso(o, q).map(v => v.toFixed(1)).join(",")).join(" ");
+function isoSolid(o, b) {                 // 장비 면 흰색 · 옆면만 음영 (서버실 랙과 같은 규칙)
+  const f = boxFaces(b[0], b[1], b[2], b[3], b[4]);
+  return `<polygon points="${pPts(o, f.top)}" class="fc f-top"/>` +
+         `<polygon points="${pPts(o, f.side)}" class="fc f-side"/>` +
+         `<polygon points="${pPts(o, f.front)}" class="fc f-front"/>`;
+}
+function isoDashed(o, b) {                // 파선 육면체 — 실루엣 + 안쪽 모서리 셋
+  const [x0, y0, w, d, h] = b, f = boxFaces(x0, y0, w, d, h);
+  const v = pIso(o, [x0 + w, y0 + d, h]);
+  let s = `<polygon class="secout" points="${pPts(o, f.sil)}"/>`;
+  for (const e of [[x0, y0 + d, h], [x0 + w, y0, h], [x0 + w, y0 + d, 0]]) {
+    const p2 = pIso(o, e);
+    s += `<line class="secout" x1="${v[0].toFixed(1)}" y1="${v[1].toFixed(1)}"` +
+         ` x2="${p2[0].toFixed(1)}" y2="${p2[1].toFixed(1)}"/>`;
+  }
+  return s;
+}
 const TOTS = "총유량 55.59 m³/h";  // 총유량 라벨의 최장 문자열 — 편차 막대의 0 점을 여기서 낸다
 
 /* 편차 막대 (세션 7.8 C5) — (x0, ymid) 가 길이 0 의 자리이고 오른쪽으로 자란다.
@@ -477,42 +501,47 @@ function buildRoom() {
              ` text-anchor="${anc}"` + (o.cls ? ` class="${o.cls}"` : "") +
              (o.w ? ` font-weight="bold"` : "") + `>${str}</text>`;
     };
-    const [fx, fy, fw, fh] = PG.FR, [hx, hy, hw, hh] = PG.HX, [px, py, pr] = PG.PUMP;
-    const [sx0, sy0, sw, sh] = PG.SEC, sxr = sx0 + sw, scx = sx0 + sw / 2;
-    let q = `<rect class="frame" x="${fx}" y="${fy}" width="${fw}" height="${fh}" rx="4"/>`;
+    const O = PG.O, SO = PG.SO, [px, py, pr] = PG.PUMP;
+    const [hx0, hy0, hw, hd] = PG.HX;
+    const HXR = +pIso(O, [hx0 + hw, hy0, 0])[0].toFixed(1);      // 열교환기 오른쪽 모서리 — 1차측 두 줄이 붙는다
+    const HXL = +pIso(O, [hx0, hy0 + hd, 0])[0].toFixed(1);      // 왼쪽 모서리 — 2차측 두 줄이 붙는다
+    const SECR = +pIso(SO, [PG.SEC[2], 0, 0])[0].toFixed(1);     // 2차측 상자 오른쪽 모서리
+    const scx = SO[0];                                           // 2차측 상자의 화면 중심 (모형 x=y 라 sx=0)
+    /* 뒤에서 앞으로 그린다: 2차측 → CDU 경계 → 열교환기 → 스트림 → 펌프 → 화살촉 → 글자.
+       경계 육면체는 절개(cutaway)다 — 안의 장치를 그 위에 얹는다(평면판이 하던 규칙 그대로) */
+    let q = isoDashed(SO, PG.SEC) + isoSolid(O, PG.FR) + isoSolid(O, PG.HX);
     /* 스트림 — 1차 공급·1차 환수·2차 공급은 색이 온도를 진다(paint 가 칠한다).
        2차측으로 되돌아가는 줄은 모델 밖이라 온도가 없다 — 파선으로만 그리고
-       숫자를 붙이지 않는다. 파선 사각형이 「여기부터 모델 밖」을 진다 */
-    q += `<polyline class="stream" id="${k}-sSup" points="${hx + hw},${PG.SUP_Y} ${PG.OUT_X},${PG.SUP_Y}"/>`;
-    q += `<polyline class="stream" id="${k}-sRet" points="${PG.OUT_X},${PG.RET_Y} ${PG.RET_END},${PG.RET_Y}"/>`;
-    q += `<polyline class="stream" id="${k}-sSec" points="${sxr},${PG.SEC_TO} ${hx},${PG.SEC_TO}"/>`;
-    q += `<polyline class="secout" points="${hx},${PG.SEC_FROM} ${sxr},${PG.SEC_FROM}"/>`;
-    q += `<rect class="secout" x="${sx0}" y="${sy0}" width="${sw}" height="${sh}" rx="4"/>`;
-    q += `<rect class="eq" x="${hx}" y="${hy}" width="${hw}" height="${hh}" rx="3"/>`;
+       숫자를 붙이지 않는다. 파선 육면체가 「여기부터 모델 밖」을 진다.
+       네 줄 다 평면이다 (C2) — 끝점은 육면체의 옆 모서리 위에 있다 */
+    q += `<polyline class="stream" id="${k}-sSup" points="${HXR},${PG.SUP_Y} ${PG.OUT_X},${PG.SUP_Y}"/>`;
+    q += `<polyline class="stream" id="${k}-sRet" points="${PG.OUT_X},${PG.RET_Y} ${HXR},${PG.RET_Y}"/>`;
+    q += `<polyline class="stream" id="${k}-sSec" points="${SECR},${PG.SEC_TO} ${HXL},${PG.SEC_TO}"/>`;
+    q += `<polyline class="secout" points="${HXL},${PG.SEC_FROM} ${SECR},${PG.SEC_FROM}"/>`;
     q += `<circle class="pumpc" cx="${px}" cy="${py}" r="${pr}"/>`;
     q += `<polygon class="arrow" points="${px - 7},${py - 10} ${px + 11},${py} ${px - 7},${py + 10}"/>`;
-    q += arw(PG.OUT_X, PG.SUP_Y, "R") + arw(PG.RET_END, PG.RET_Y, "L") +
-         arw(hx - 15, PG.SEC_TO, "R") + arw(sxr + 15, PG.SEC_FROM, "L");
+    q += arw(PG.OUT_X, PG.SUP_Y, "R") + arw(HXR, PG.RET_Y, "L") +
+         arw(HXL - 15, PG.SEC_TO, "R") + arw(SECR + 15, PG.SEC_FROM, "L");
 
     q += t(280, 34, 28, `CDU ${g}`, { anchor: "middle", w: 1 });
-    q += A ? t(140, 118, 21, DASH, { anchor: "middle", id: `${k}-duty`, resv: "열교환기 6400 kW" })
-           : t(140, 118, 21, "열교환기", { anchor: "middle" });
-    q += t(330, 216, 20, "펌프", { anchor: "middle", cls: "t-dim" });
-    /* 2차측 파선 상자 안 — 이름 하나와 운전값 둘. A·B 양쪽에 선다 */
-    q += t(scx, 200, 22, "2차측", { anchor: "middle" });
-    q += t(scx, 248, 21, DASH, { anchor: "middle", id: `${k}-Tsec`, resv: "27.000 ℃" });
-    q += t(scx, 286, 21, DASH, { anchor: "middle", id: `${k}-share`, resv: "55.92 m³/h" });
+    q += A ? t(170, 180, 21, DASH, { anchor: "middle", id: `${k}-duty`, resv: "열교환기 6400 kW" })
+           : t(170, 180, 21, "열교환기", { anchor: "middle" });
+    q += t(330, 316, 20, "펌프", { anchor: "middle", cls: "t-dim" });
+    /* 2차측 파선 육면체 안 — 이름 하나와 운전값 둘. A·B 양쪽에 선다 */
+    q += t(scx, 232, 22, "2차측", { anchor: "middle" });
+    q += t(scx, 275, 21, DASH, { anchor: "middle", id: `${k}-Tsec`, resv: "27.000 ℃" });
+    q += t(scx, 313, 21, DASH, { anchor: "middle", id: `${k}-share`, resv: "55.92 m³/h" });
     if (A) {
-      q += t(450, 140, 21, DASH, { anchor: "middle", id: `${k}-Tsup`, resv: "공급 43.908 ℃" });
-      q += t(330, 246, 21, DASH, { anchor: "middle", id: `${k}-tot`, resv: TOTS, w: 1 });
-      q += devMark(`${k}-devtot`, 330 + textW(TOTS, 21) / 2 + 12, 246 - 21 * 0.35);
-      q += t(420, 305, 21, DASH, { anchor: "middle", id: `${k}-Tret`, resv: "환수 43.908 ℃" });
+      q += t(450, 250, 21, DASH, { anchor: "middle", id: `${k}-Tsup`, resv: "공급 43.908 ℃" });
+      q += t(330, 226, 21, DASH, { anchor: "middle", id: `${k}-tot`, resv: TOTS, w: 1 });
+      q += devMark(`${k}-devtot`, 330 + textW(TOTS, 21) / 2 + 12, 226 - 21 * 0.35);
+      q += t(450, 320, 21, DASH, { anchor: "middle", id: `${k}-Tret`, resv: "환수 43.908 ℃" });
     } else {
       /* CDU B 는 총유량·랙별 유량·duty·공급온도를 띄우지 않는다 — 라벨 자체를 뺀다
          (빈 값을 「—」 로 채우지 않는다 · 세션 7.7 C4) */
-      q += t(420, 272, 19, "", { anchor: "middle", id: `${k}-Tretd`, resv: "환수 Δ +1.2e-03 K", cls: "t-warn" });
-      q += t(420, 305, 21, DASH, { anchor: "middle", id: `${k}-Tret`, resv: "환수 43.908 ℃" });
-      q += t(scx, 314, 19, "", { anchor: "middle", id: `${k}-shared`, resv: "Δ +1.2e-02 m³/h", cls: "t-warn" });
+      q += t(450, 292, 19, "", { anchor: "middle", id: `${k}-Tretd`, resv: "환수 Δ +1.2e-03 K", cls: "t-warn" });
+      q += t(450, 320, 21, DASH, { anchor: "middle", id: `${k}-Tret`, resv: "환수 43.908 ℃" });
+      q += t(scx, 341, 19, "", { anchor: "middle", id: `${k}-shared`, resv: "Δ +1.2e-02 m³/h", cls: "t-warn" });
     }
 
     out[g] += `<g transform="translate(${ox.toFixed(1)},${oy.toFixed(1)})">${q}</g>`;
@@ -597,14 +626,14 @@ const SYS_A = `
     <span class="devwrap">정상 대비<span class="dev"><i id="A-totdev"></i></span></span></div>`;
 
 /* CDU B 는 총유량·랙별 유량을 크게 띄우지 않는다 — 표시 자릿수에서 움직이지 않는다.
-   실제로 움직이는 둘(2차측 배분 · 환수온도)만 Δ 배지와 함께 낸다 (C5). */
+   실제로 움직이는 둘(2차측 배분 · 환수온도)만 Δ 배지와 함께 낸다.
+   그 사정을 설명하던 문구는 걷었다 — 화면에는 장치 이름과 운전값만 남긴다 (세션 7.10 C5) */
 const SYS_B = `
   <div class="cell"><span class="lb">CDU B · 부하</span><span class="v num" id="B-load">${DASH}</span><span class="u">% 고정</span></div>
   <div class="cell"><span class="lb">펌프</span><span class="pump"></span></div>
   <div class="cell"><span class="lb">열교환기</span><span class="v num" id="B-duty">${DASH}</span><span class="u">kW</span></div>
   <div class="cell"><span class="lb">환수 헤더</span><span class="v num" id="B-Tret">${DASH}</span><span class="u">℃</span>
-    <span class="badge" id="B-Tretd"></span></div>
-  <div class="cell"><span class="tag">유량은 표시 자릿수에서 움직이지 않아 싣지 않는다</span></div>`;
+    <span class="badge" id="B-Tretd"></span></div>`;
 
 $("stage").innerHTML =
   blkHtml("A", "CDU A", true, SYS_A) +
@@ -612,8 +641,8 @@ $("stage").innerHTML =
 
 $("sec").innerHTML = `
   <div class="cell"><span class="lb">2차측 공급온도 (고정 경계조건)</span><span class="v num" id="T-sec">${DASH}</span><span class="u">℃</span></div>
-  <div class="cell"><span class="lb">2차측 배분 · CDU A</span><span class="v num" id="A-share">${DASH}</span><span class="u">m³/h</span></div>
-  <div class="cell" id="cell-Bshare"><span class="lb">2차측 배분 · CDU B</span><span class="v num" id="B-share">${DASH}</span><span class="u">m³/h</span>
+  <div class="cell"><span class="lb">CDU A</span><span class="v num" id="A-share">${DASH}</span><span class="u">m³/h</span></div>
+  <div class="cell" id="cell-Bshare"><span class="lb">CDU B</span><span class="v num" id="B-share">${DASH}</span><span class="u">m³/h</span>
     <span class="badge" id="B-shared"></span></div>`;
 
 /* ── 골격 · 서버실 탭 ─────────────────────────────────────────────── */
