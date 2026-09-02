@@ -70,6 +70,11 @@ input[type=range]{width:112px;accent-color:#3E4C56}
 .tile{stroke:var(--ink);stroke-width:1;opacity:.13}
 .t-dim{opacity:.72}
 .t-warn{fill:var(--warn);font-weight:bold}
+/* 랙 출구온도 숫자 (세션 7.9 C3) — 우상단 색 범례와 같은 계조로 칠한다.
+   색은 도형과 같은 등급이라 200 ms 로 전이한다 (숫자 자체는 즉시 바뀐다) */
+.t-temp{transition:fill .2s ease}
+/* 단위 글자 (세션 7.9 C2) — 값보다 작고 옅다. 크기 비는 JS 의 UFS 와 같아야 한다 */
+.unit{font-size:.62em;opacity:.6}
 /* CDU 내부 그림 (세션 7.7) — 등축과 같은 선 굵기·색 여섯·시스템 폰트를 쓴다 */
 .eq{fill:var(--face);stroke:var(--ink);stroke-width:1.6}
 .frame{fill:var(--face);stroke:var(--ink);stroke-width:1.2}
@@ -169,7 +174,7 @@ footer{flex:none;text-align:center;font-size:11px;opacity:.8;padding:1px 0 0}
   <div id="sec" class="band"></div>
 </div>
 
-<footer id="foot">가정값 기반 — 실측 아님 · 프로젝트정리 5장<span id="msg"></span></footer>
+<footer id="foot">가정값 기반 — 실측 아님<span id="msg"></span></footer>
 
 <script>
 /* ═══ 순수 표시 함수 — DOM 없이도 돈다 (대조 검증용) ═════════════════
@@ -188,6 +193,7 @@ const A_LO = 27.0, A_HI = 44.0;          // CDU 내부 그림 스트림 색 [℃
 const Q_LO = 6.11, Q_HI = 7.33;          // 굵기 고정 범위 [m³/h] — 전 136 케이스 범위
 const DEV_PX = 77, DEV_MAX = 50;         // 편차 막대: 랙과 총유량이 같은 축척을 쓴다
 const DASH = "—";
+const UFS = 0.62;                        // 단위 글자 크기 비 — CSS .unit 의 font-size 와 같다
 
 const F = {
   T: v => v.toFixed(3),                  // 온도 [℃] 소수 3자리
@@ -345,10 +351,12 @@ function buildRoom() {
     mark(g, x1, y1); mark(g, x2, y2);
     return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" ${attr}/>`;
   };
-  /* 글자: (sx, sy) 는 이미 화면좌표다. resv = 자리를 잡아둘 최장 문자열 */
+  /* 글자: (sx, sy) 는 이미 화면좌표다. resv = 자리를 잡아둘 최장 문자열.
+     o.unit 이 있으면 값 뒤에 작은 단위가 붙는다 — 그 폭까지 잡아둔다 */
   const txt = (g, sx, sy, fs, s, o) => {
     o = o || {};
-    const w = textW(o.resv || s, fs), anc = o.anchor || "middle";
+    const w = textW(o.resv || s, fs) + (o.unit ? textW(" " + o.unit, fs * UFS) : 0),
+          anc = o.anchor || "middle";
     const x0 = anc === "middle" ? sx - w / 2 : anc === "end" ? sx - w : sx;
     const box = [x0, sy - fs * 0.8, x0 + w, sy + fs * 0.25];
     mark(g, box[0], box[1]); mark(g, box[2], box[3]);
@@ -393,17 +401,22 @@ function buildRoom() {
            poly(g, f.front, 'class="edge"') +
            poly(g, f.sil, 'class="sil"') +
            `</g>`;
-      /* 라벨·숫자는 랙 위에 쌓는다 — 좌우로 랙 한 칸 안에 들어간다 */
+      /* 라벨·숫자는 랙 위에 쌓는다 — 좌우로 랙 한 칸 안에 들어간다.
+         단위는 랙 01 에만 붙인다 (세션 7.9 C2) — 등축에서 가장 앞·왼쪽에
+         서서 시선이 먼저 닿는 랙이다. 나머지 일곱은 숫자만 진다 */
+      const first = i === 0;
       s += txt(g, cx, bb[1] - 72, 20, `RACK 0${i + 1}`, { cls: "t-dim" });
       if (g === "A") {
-        s += txt(g, cx, bb[1] - 44, 26, DASH, { id: `${k}-q${i}`, resv: "7.33", w: 1 });
+        s += txt(g, cx, bb[1] - 44, 26, DASH,
+                 { id: `${k}-q${i}`, resv: "7.33", unit: first ? "m³/h" : "", w: 1 });
         if (i === RACKS - 1) {         // 저항이 드는 랙 08 — 유량 숫자 오른쪽에 편차 막대
           const dx = cx + textW("7.33", 26) / 2 + 12, dy = bb[1] - 44 - 26 * 0.35;
           mark(g, dx, dy - 6); mark(g, dx + DEV_MAX, dy + 6);
           s += devMark(`${k}-devrack`, dx, dy);
         }
       }
-      s += txt(g, cx, bb[1] - 16, 22, DASH, { id: `${k}-t${i}`, resv: "43.908" });
+      s += txt(g, cx, bb[1] - 16, 22, DASH,
+               { id: `${k}-t${i}`, resv: "43.908", unit: first ? "℃" : "", cls: "t-temp" });
     }
 
     /* ④ 환수 헤더 (앞 통로) + 갈래 — 굵기 = 유량 · 색 = 평균 대비 편차 */
@@ -613,10 +626,16 @@ $("scen-btns").innerHTML =
 $("resbtns").innerHTML = RES.map(r => `<button data-res="${r}">${r}%</button>`).join("");
 
 /* ── 표시 ─────────────────────────────────────────────────────────── */
-function setText(id, s) {                 // 숫자는 즉시 바뀌고 한 번 깜빡인다
+function setText(id, s, unit) {            // 숫자는 즉시 바뀌고 한 번 깜빡인다
   const el = $(id);
-  if (!el || el.textContent === s) return; // 표시 문자열이 같으면 깜빡이지 않는다
-  el.textContent = s;
+  if (!el) return;
+  /* unit 이 있으면 값 뒤에 작은 단위가 붙는다 (세션 7.9 C2).
+     붙은 뒤의 textContent 가 곧 표시 문자열이므로 깜빡임 규칙은 그대로다 —
+     단위만 같고 값이 바뀌면 깜빡이고, 값도 같으면 안 깜빡인다 */
+  const full = unit ? `${s} ${unit}` : s;
+  if (el.textContent === full) return;     // 표시 문자열이 같으면 깜빡이지 않는다
+  if (unit) el.innerHTML = `${s}<tspan class="unit"> ${unit}</tspan>`;
+  else el.textContent = s;
   el.animate([{ opacity: 1 }, { opacity: .15, offset: .4 }, { opacity: 1 }], { duration: 420 });
 }
 function devBar(id, d) {                  // 랙과 총유량이 같은 축척(DEV_PX)을 쓴다
@@ -661,10 +680,13 @@ function paintRoomCdu(k, v, withFlow, hit, Tsec) {
     const r = v.racks[i], f = $(`${k}-fill${i}`);
     f.style.transform = `translate(0px,${(G.RH * (1 - r.fillPct / 100)).toFixed(1)}px)`;
     f.style.fill = devColor(r.tdev);
-    setText(`${k}-t${i}`, r.t);
+    /* 단위는 랙 01 에만 (C2) · 온도 숫자는 슬래브와 같은 계조로 칠한다 (C3) —
+       우상단 색 범례가 재는 값과 같은 값임이 색으로 읽힌다 */
+    setText(`${k}-t${i}`, r.t, i === 0 ? "℃" : "");
+    $(`${k}-t${i}`).style.fill = devColor(r.tdev);
     $(`${k}-rack${i}`).classList.toggle("hit", i === hit);
     if (withFlow) {
-      setText(`${k}-q${i}`, r.q);
+      setText(`${k}-q${i}`, r.q, i === 0 ? "m³/h" : "");
       const pipe = $(`${k}-pipe${i}`);
       pipe.style.strokeWidth = pipeW(r.qv);
       pipe.style.stroke = devColor(r.tdev);
