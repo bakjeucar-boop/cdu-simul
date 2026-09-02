@@ -4,3 +4,7 @@
 
 # 파이썬 소스는 체크아웃도 LF 로 고정한다.
 *.py text eol=lf
+
+# 셸 스크립트도 체크아웃을 LF 로 고정한다 (미해결 #53 — demo/start.sh 가
+# CRLF 로 체크아웃되면 macOS·Linux 에서 실행되지 않는다).
+*.sh text eol=lf
