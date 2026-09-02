@@ -76,7 +76,10 @@ input[type=range]{width:112px;accent-color:#3E4C56}
 /* 단위 글자 (세션 7.9 C2) — 값보다 작고 옅다. 크기 비는 JS 의 UFS 와 같아야 한다 */
 .unit{font-size:.62em;opacity:.6}
 /* CDU 내부 그림 (세션 7.7) — 등축과 같은 선 굵기·색 여섯·시스템 폰트를 쓴다.
-   장치 셋은 등축 육면체라 서버실 랙과 같은 .fc/.f-* 를 그대로 쓴다 (세션 7.10 C1) */
+   장치 둘(열교환기·2차측)은 등축 육면체라 서버실 랙과 같은 .fc/.f-* 를 그대로 쓴다
+   (세션 7.10 C1). CDU 경계는 배경이라 평면으로 물러난다 (세션 7.11 C1) —
+   면을 칠하지 않아 지면색(--ground)이 그대로 비치고, 선은 장치(1.2)보다 얇고 옅다 */
+.frame{fill:none;stroke:var(--ink);stroke-width:1;opacity:.45}
 .stream{fill:none;stroke:var(--ink);stroke-width:9;stroke-linecap:round;
         stroke-linejoin:round;transition:stroke .2s ease}
 .secout{fill:none;stroke:var(--ink);stroke-width:5;stroke-dasharray:14 10;opacity:.6;
@@ -298,17 +301,19 @@ function boxBBox(x0, y0, w, d, h) {      // 화면 바운딩 박스 [sx0, sy0, s
 const rackBBox = (g, i) => boxBBox(rowX(g), rackY(i), G.RW, G.RD, G.RH);
 const cduBBox  = g => boxBBox(rowX(g) + G.CX, CDUY, G.CW, G.CD, G.CH);
 
-/* ═══ CDU 내부 그림의 기하 (세션 7.7 C2 · 세션 7.10 C1) ═══════════════
+/* ═══ CDU 내부 그림의 기하 (세션 7.7 C2 · 세션 7.10 C1 · 세션 7.11 C1) ═══
    등축 왼쪽 칸에 선다. 좌표는 등축과 같은 화면 축척의 국소 좌표
    (0..P.W · 0..P.H) 다 — 등축 쪽 G 는 손대지 않는다.
-   장치 셋(CDU 경계 · 열교환기 · 2차측)은 서버실과 같은 iso()·boxFaces() 로
+   장치 둘(열교환기 · 2차측)은 서버실과 같은 iso()·boxFaces() 로
    세운다 — 상자 치수는 모형 단위이고, 화면 원점만 이 칸으로 옮긴다.
-   스트림·화살촉·펌프는 평면으로 둔다 (C2·C3). */
+   3차원으로 서는 것은 장치이지 경계가 아니다 — CDU 경계는 평면 사각형
+   하나로 두어 배경으로 물러난다 (세션 7.11 C1).
+   스트림·화살촉·펌프도 평면이다 (C2·C3). */
 const P = { W: 560, H: 560, GAP: 60, LEAD: 40, L: 236 };   // L = 왼쪽 2차측 칸
 const PG = {
-  O:  [238, 235],                  // CDU 경계·열교환기가 함께 쓰는 화면 원점
-  FR: [0, 0, 240, 240, 165],       // CDU 경계 육면체 (x0, y0, w, d, h)
-  HX: [15, 125, 95, 105, 115],     // 열교환기 육면체 — 경계 안 앞왼쪽에 선다
+  O:  [238, 235],                  // 열교환기 육면체의 화면 원점
+  FR: [24, 148, 520, 280],         // CDU 경계 — 평면 사각형 (x, y, w, h)
+  HX: [15, 125, 95, 105, 115],     // 열교환기 육면체 — 경계 안에 선다
   SO:  [-129, 280],                // 2차측 상자의 화면 원점 (모델 밖이라 따로 선다)
   SEC: [0, 0, 120, 120, 100],      // 2차측 육면체 — 파선이 「모델 밖」을 진다
   PUMP: [330, 270, 24],            // 펌프 (cx, cy, r) — 심볼이라 평면이다 (C3)
@@ -508,8 +513,11 @@ function buildRoom() {
     const SECR = +pIso(SO, [PG.SEC[2], 0, 0])[0].toFixed(1);     // 2차측 상자 오른쪽 모서리
     const scx = SO[0];                                           // 2차측 상자의 화면 중심 (모형 x=y 라 sx=0)
     /* 뒤에서 앞으로 그린다: 2차측 → CDU 경계 → 열교환기 → 스트림 → 펌프 → 화살촉 → 글자.
-       경계 육면체는 절개(cutaway)다 — 안의 장치를 그 위에 얹는다(평면판이 하던 규칙 그대로) */
-    let q = isoDashed(SO, PG.SEC) + isoSolid(O, PG.FR) + isoSolid(O, PG.HX);
+       경계는 평면 사각형이고 면을 칠하지 않는다 — 배경으로 물러나 안의 장치를 덮지 않는다 */
+    const [fx, fy, fw, fh] = PG.FR;
+    let q = isoDashed(SO, PG.SEC) +
+            `<rect class="frame" x="${fx}" y="${fy}" width="${fw}" height="${fh}" rx="4"/>` +
+            isoSolid(O, PG.HX);
     /* 스트림 — 1차 공급·1차 환수·2차 공급은 색이 온도를 진다(paint 가 칠한다).
        2차측으로 되돌아가는 줄은 모델 밖이라 온도가 없다 — 파선으로만 그리고
        숫자를 붙이지 않는다. 파선 육면체가 「여기부터 모델 밖」을 진다.
