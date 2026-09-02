@@ -79,7 +79,10 @@ input[type=range]{width:112px;accent-color:#3E4C56}
         stroke-linecap:round;stroke-linejoin:round}
 .arrow{fill:var(--ink)}
 .pumpc{fill:var(--face);stroke:var(--ink);stroke-width:2.5}
-#devstrip{flex:none;display:flex;align-items:center;padding:6px 10px}
+/* 편차 막대 (세션 7.8 C5) — 값 오른쪽에 선다. 길이 0 이면 아무것도 안 보인다.
+   scaleX 로 늘린다: 폭 속성 대신 transform 을 쓰는 이유는 전이가 확실히 걸려서다 */
+.devbar{fill:var(--warn);transform-box:fill-box;transform-origin:0 0;
+        transition:transform .2s ease}
 
 /* ── ⑷ 계통도 탭 (세션 7.3 화면 그대로) ──────────────────────────── */
 #stage{flex:1;min-height:0;display:flex;flex-direction:column;gap:7px}
@@ -146,6 +149,7 @@ footer{flex:none;text-align:center;font-size:11px;opacity:.8;padding:1px 0 0}
     <div class="grp"><label>랙 배관 저항 증가</label><span id="resbtns"></span></div>
   </div>
   <div id="legend">
+    <div id="leg-load">부하 = 슬래브 높이</div>
     <div id="leg-title">출구온도 = 색</div>
     <div id="grad"></div>
     <div class="lr num"><span id="leg-lo">30.0 ℃</span><span id="leg-hi">43.9 ℃</span></div>
@@ -158,7 +162,6 @@ footer{flex:none;text-align:center;font-size:11px;opacity:.8;padding:1px 0 0}
 
 <div id="pane-room" class="pane">
   <div id="roomwrap"></div>
-  <div id="devstrip" class="band"></div>
 </div>
 
 <div id="pane-sch" class="pane">
@@ -294,16 +297,25 @@ const cduBBox  = g => boxBBox(rowX(g) + G.CX, CDUY, G.CW, G.CD, G.CH);
 /* ═══ CDU 내부 그림의 기하 (세션 7.7 C2) ════════════════════════════
    등축 왼쪽 칸에 선다. 좌표는 등축과 같은 화면 축척의 국소 좌표
    (0..P.W · 0..P.H) 다 — 등축 쪽 G 는 손대지 않는다. */
-const P = { W: 560, H: 560, GAP: 60, LEAD: 40 };
+const P = { W: 560, H: 560, GAP: 60, LEAD: 40, L: 236 };   // L = 왼쪽 2차측 칸
 const PG = {
   FR: [16, 56, 528, 396],          // CDU 경계 상자 (x, y, w, h)
   HX: [60, 130, 160, 230],         // 열교환기 (x, y, w, h)
   PUMP: [330, 170, 24],            // 펌프 (cx, cy, r)
   SUP_Y: 170, RET_Y: 330,          // 1차측 공급·환수 스트림의 높이
   OUT_X: 545, RET_END: 233,        // 랙 쪽(오른쪽) 끝 · 환수가 열교환기로 드는 끝
-  SEC_IN_X: 110, SEC_IN_Y: 400,    // 2차측 공급
-  SEC_OUT_X: 200, SEC_OUT_Y: 480,  // 2차측 환수 (모델 밖 — 숫자를 붙이지 않는다)
-};
+  SEC: [-220, 160, 200, 170],      // 2차측 파선 상자 (x, y, w, h) — 파선이 「모델 밖」을 진다
+  SEC_TO: 190, SEC_FROM: 300,      // 상자 ↔ 열교환기 두 줄: 위가 나가는 쪽 · 아래가 드는 쪽
+};                                 // (1차측은 아래→위로 흐른다 — 두 줄은 그 반대, 대향류다)
+const TOTS = "총유량 55.59 m³/h";  // 총유량 라벨의 최장 문자열 — 편차 막대의 0 점을 여기서 낸다
+
+/* 편차 막대 (세션 7.8 C5) — (x0, ymid) 가 길이 0 의 자리이고 오른쪽으로 자란다.
+   이 화면이 내는 두 편차(CDU A 총유량 · 랙 08 유량)는 전 136 케이스에서
+   ≤ 0 이다(저항이 늘면 줄기만 한다) — 막대는 그 크기를 진다. */
+function devMark(id, x0, ymid) {
+  return `<g transform="translate(${x0.toFixed(1)},${ymid.toFixed(1)})">` +
+         `<rect class="devbar" id="${id}" x="0" y="-6" width="1" height="12"/></g>`;
+}
 /* 삼각형 화살촉 — 흐름 방향만 진다(색은 구조선 하나) */
 function arw(x, y, d) {
   const a = 11, b = 8;
@@ -383,7 +395,14 @@ function buildRoom() {
            `</g>`;
       /* 라벨·숫자는 랙 위에 쌓는다 — 좌우로 랙 한 칸 안에 들어간다 */
       s += txt(g, cx, bb[1] - 72, 20, `RACK 0${i + 1}`, { cls: "t-dim" });
-      if (g === "A") s += txt(g, cx, bb[1] - 44, 26, DASH, { id: `${k}-q${i}`, resv: "7.33", w: 1 });
+      if (g === "A") {
+        s += txt(g, cx, bb[1] - 44, 26, DASH, { id: `${k}-q${i}`, resv: "7.33", w: 1 });
+        if (i === RACKS - 1) {         // 저항이 드는 랙 08 — 유량 숫자 오른쪽에 편차 막대
+          const dx = cx + textW("7.33", 26) / 2 + 12, dy = bb[1] - 44 - 26 * 0.35;
+          mark(g, dx, dy - 6); mark(g, dx + DEV_MAX, dy + 6);
+          s += devMark(`${k}-devrack`, dx, dy);
+        }
+      }
       s += txt(g, cx, bb[1] - 16, 22, DASH, { id: `${k}-t${i}`, resv: "43.908" });
     }
 
@@ -415,13 +434,13 @@ function buildRoom() {
     }
 
     /* ⑥ 2차측 — 벽 밖으로 나가는 배관 두 줄만 (냉각탑·드라이쿨러를 그리지 않는다).
-       값과 이름은 CDU 내부 그림의 2차측 스트림이 진다 (C3) */
+       값과 이름은 왼쪽 그림의 2차측 파선 상자가 진다 (미해결 #50) */
     const sy0 = CDUY + G.CD;
     s += line(g, [X + G.CX + 25, sy0, G.PZ], [X + G.CX + 25, G.SECY, G.PZ], 'class="secp"');
     s += line(g, [X + G.CX + 80, sy0, G.PZ], [X + G.CX + 80, G.SECY, G.PZ], 'class="secp"');
 
     /* 헤더 이름은 SVG 안에 두지 않는다 — 등축에서 어느 자리에 놓아도
-       다른 열의 랙 도형·글자와 겹친다(C12). 아래 띠의 설명줄이 이름을 진다. */
+       다른 열의 랙 도형·글자와 겹친다. 지금은 이름을 지는 데가 없다 (미해결 #47) */
     out[g] = s;
   }
 
@@ -432,7 +451,7 @@ function buildRoom() {
   for (const g of ["A", "B"]) {
     const A = g === "A", k = "R" + g;
     const ox = ptx, oy = pty + (A ? 0 : P.H + P.GAP);
-    mark(g, ox, oy); mark(g, ox + P.W, oy + P.H);
+    mark(g, ox - P.L, oy); mark(g, ox + P.W, oy + P.H);
     /* 국소 좌표 글자 — 겹침 검사용 상자는 화면좌표로 담는다 */
     const t = (sx, sy, fs, str, o) => {
       o = o || {};
@@ -446,42 +465,42 @@ function buildRoom() {
              (o.w ? ` font-weight="bold"` : "") + `>${str}</text>`;
     };
     const [fx, fy, fw, fh] = PG.FR, [hx, hy, hw, hh] = PG.HX, [px, py, pr] = PG.PUMP;
-    const hxb = hy + hh;
+    const [sx0, sy0, sw, sh] = PG.SEC, sxr = sx0 + sw, scx = sx0 + sw / 2;
     let q = `<rect class="frame" x="${fx}" y="${fy}" width="${fw}" height="${fh}" rx="4"/>`;
-    /* 스트림 넷 — 1차 공급·1차 환수·2차 공급은 색이 온도를 진다(paint 가 칠한다).
-       2차 환수는 모델 밖이라 온도가 없다 — 파선 구조선으로만 그리고 숫자를 붙이지 않는다 */
+    /* 스트림 — 1차 공급·1차 환수·2차 공급은 색이 온도를 진다(paint 가 칠한다).
+       2차측으로 되돌아가는 줄은 모델 밖이라 온도가 없다 — 파선으로만 그리고
+       숫자를 붙이지 않는다. 파선 사각형이 「여기부터 모델 밖」을 진다 */
     q += `<polyline class="stream" id="${k}-sSup" points="${hx + hw},${PG.SUP_Y} ${PG.OUT_X},${PG.SUP_Y}"/>`;
     q += `<polyline class="stream" id="${k}-sRet" points="${PG.OUT_X},${PG.RET_Y} ${PG.RET_END},${PG.RET_Y}"/>`;
-    q += `<polyline class="stream" id="${k}-sSec" points="0,${PG.SEC_IN_Y} ${PG.SEC_IN_X},${PG.SEC_IN_Y} ${PG.SEC_IN_X},${hxb + 4}"/>`;
-    q += `<polyline class="secout" points="${PG.SEC_OUT_X},${hxb} ${PG.SEC_OUT_X},${PG.SEC_OUT_Y} 14,${PG.SEC_OUT_Y}"/>`;
+    q += `<polyline class="stream" id="${k}-sSec" points="${sxr},${PG.SEC_TO} ${hx},${PG.SEC_TO}"/>`;
+    q += `<polyline class="secout" points="${hx},${PG.SEC_FROM} ${sxr},${PG.SEC_FROM}"/>`;
+    q += `<rect class="secout" x="${sx0}" y="${sy0}" width="${sw}" height="${sh}" rx="4"/>`;
     q += `<rect class="eq" x="${hx}" y="${hy}" width="${hw}" height="${hh}" rx="3"/>`;
     q += `<circle class="pumpc" cx="${px}" cy="${py}" r="${pr}"/>`;
     q += `<polygon class="arrow" points="${px - 7},${py - 10} ${px + 11},${py} ${px - 7},${py + 10}"/>`;
     q += arw(PG.OUT_X, PG.SUP_Y, "R") + arw(PG.RET_END, PG.RET_Y, "L") +
-         arw(PG.SEC_IN_X, hxb + 13, "U") + arw(14, PG.SEC_OUT_Y, "L");
+         arw(hx - 15, PG.SEC_TO, "R") + arw(sxr + 15, PG.SEC_FROM, "L");
 
     q += t(280, 34, 28, `CDU ${g}`, { anchor: "middle", w: 1 });
     q += A ? t(140, 118, 21, DASH, { anchor: "middle", id: `${k}-duty`, resv: "열교환기 6400 kW" })
            : t(140, 118, 21, "열교환기", { anchor: "middle" });
     q += t(330, 216, 20, "펌프", { anchor: "middle", cls: "t-dim" });
+    /* 2차측 파선 상자 안 — 이름 하나와 운전값 둘. A·B 양쪽에 선다 */
+    q += t(scx, 200, 22, "2차측", { anchor: "middle" });
+    q += t(scx, 248, 21, DASH, { anchor: "middle", id: `${k}-Tsec`, resv: "27.000 ℃" });
+    q += t(scx, 286, 21, DASH, { anchor: "middle", id: `${k}-share`, resv: "55.92 m³/h" });
     if (A) {
       q += t(450, 140, 21, DASH, { anchor: "middle", id: `${k}-Tsup`, resv: "공급 43.908 ℃" });
-      q += t(330, 246, 21, DASH, { anchor: "middle", id: `${k}-tot`, resv: "총유량 55.59 m³/h", w: 1 });
+      q += t(330, 246, 21, DASH, { anchor: "middle", id: `${k}-tot`, resv: TOTS, w: 1 });
+      q += devMark(`${k}-devtot`, 330 + textW(TOTS, 21) / 2 + 12, 246 - 21 * 0.35);
       q += t(420, 305, 21, DASH, { anchor: "middle", id: `${k}-Tret`, resv: "환수 43.908 ℃" });
-      q += t(220, 388, 21, DASH, { id: "R-Tsec", resv: "2차측 공급 27.000 ℃" });
-      q += t(220, 416, 21, DASH, { id: `${k}-share`, resv: "배분 · CDU A 55.78 m³/h" });
     } else {
       /* CDU B 는 총유량·랙별 유량·duty·공급온도를 띄우지 않는다 — 라벨 자체를 뺀다
-         (빈 값을 「—」 로 채우지 않는다 · C4) */
+         (빈 값을 「—」 로 채우지 않는다 · 세션 7.7 C4) */
       q += t(420, 272, 19, "", { anchor: "middle", id: `${k}-Tretd`, resv: "환수 Δ +1.2e-03 K", cls: "t-warn" });
       q += t(420, 305, 21, DASH, { anchor: "middle", id: `${k}-Tret`, resv: "환수 43.908 ℃" });
-      q += t(220, 388, 21, "2차측 공유", { cls: "t-dim" });
-      q += t(220, 416, 21, DASH, { id: `${k}-share`, resv: "배분 · CDU B 55.92 m³/h" });
-      q += t(220, 442, 19, "", { id: `${k}-shared`, resv: "Δ +1.2e-02 m³/h", cls: "t-warn" });
-      q += t(280, 518, 18, "유량은 표시 자릿수에서 움직이지 않아 싣지 않는다", { anchor: "middle", cls: "t-dim" });
+      q += t(scx, 314, 19, "", { anchor: "middle", id: `${k}-shared`, resv: "Δ +1.2e-02 m³/h", cls: "t-warn" });
     }
-    q += t(220, 486, 20, "2차측 환수 — 모델 밖", { cls: "t-dim" });
-    q += t(280, 548, 19, "스트림 색 = 절대온도", { anchor: "middle", cls: "t-dim" });
 
     out[g] += `<g transform="translate(${ox.toFixed(1)},${oy.toFixed(1)})">${q}</g>`;
   }
@@ -495,8 +514,8 @@ function buildRoom() {
   const svg = `<svg id="room" viewBox="${VB.single}" preserveAspectRatio="xMidYMid meet">` +
               `<defs>${defs}</defs><g id="room-A">${out.A}</g><g id="room-B">${out.B}</g></svg>`;
   return { svg, VB, box: bx, texts, isoBox,
-           panel: { A: [ptx, pty, ptx + P.W, pty + P.H],
-                    B: [ptx, pty + P.H + P.GAP, ptx + P.W, pty + 2 * P.H + P.GAP] } };
+           panel: { A: [ptx - P.L, pty, ptx + P.W, pty + P.H],
+                    B: [ptx - P.L, pty + P.H + P.GAP, ptx + P.W, pty + 2 * P.H + P.GAP] } };
 }
 
 /* ═══ 화면 ══════════════════════════════════════════════════════════ */
@@ -587,15 +606,6 @@ $("sec").innerHTML = `
 /* ── 골격 · 서버실 탭 ─────────────────────────────────────────────── */
 const ROOM = buildRoom();
 $("roomwrap").innerHTML = ROOM.svg;
-$("devstrip").innerHTML = `
-  <div class="cell"><span class="tag">채움 높이 = 부하 · 앞면 색 = 출구온도(8랙 평균 대비) ·
-    숫자 두 줄 = 유량 [m³/h] · 출구온도 [℃]<br>바닥 배관 = 공급 헤더(랙 뒤) ·
-    환수 헤더(랙 앞, 굵기 = 유량)</span></div>
-  <div class="cell"><span class="lb">CDU A 총유량 · 정상 대비</span>
-    <span class="dev" style="width:110px;height:12px"><i id="R-totdev"></i></span></div>
-  <div class="cell"><span class="lb">주입 랙 유량 · 정상 대비</span>
-    <span class="dev" style="width:110px;height:12px"><i id="R-hitdev"></i></span></div>
-  <div class="cell"><span class="tag">두 막대는 같은 축척이다 (1 m³/h = 77 px)</span></div>`;
 
 $("scen-btns").innerHTML =
   SCEN.map((s, i) => `<button data-s="${i}">${s.name}</button>`).join("") +
@@ -615,6 +625,11 @@ function devBar(id, d) {                  // 랙과 총유량이 같은 축척(D
   const w = Math.min(DEV_MAX, Math.abs(d) * DEV_PX);
   el.style.width = w.toFixed(1) + "px";
   el.style.left = d < 0 ? `calc(50% - ${w.toFixed(1)}px)` : "50%";
+}
+function devBarSvg(id, d) {               // 서버실 탭 — 같은 축척(DEV_PX)으로 늘린다
+  const el = $(id);
+  if (!el) return;
+  el.style.transform = `scaleX(${Math.min(DEV_MAX, Math.abs(d) * DEV_PX).toFixed(1)})`;
 }
 
 function paintCdu(k, v, withFlow, hit) {
@@ -657,14 +672,15 @@ function paintRoomCdu(k, v, withFlow, hit, Tsec) {
   }
   setText(`${k}-load`, withFlow ? `부하 ${v.load} %` : `부하 ${v.load} % 고정`);
   setText(`${k}-Tret`, `환수 ${v.Tret} ℃`);
-  setText(`${k}-share`, `배분 · CDU ${k.slice(1)} ${v.share} m³/h`);
+  setText(`${k}-Tsec`, `${F.T(Tsec)} ℃`);          // 2차측 파선 상자 안 — 공급온도
+  setText(`${k}-share`, `${v.share} m³/h`);        // 2차측 파선 상자 안 — 그 CDU 몫
   if (withFlow) {
     setText(`${k}-duty`, `열교환기 ${v.duty} kW`);
     setText(`${k}-Tsup`, `공급 ${v.Tsup} ℃`);
     setText(`${k}-tot`, `총유량 ${v.tot} m³/h`);
   }
-  /* CDU 내부 그림의 스트림 색 — 절대온도(A_LO~A_HI 고정 · 범위 밖 클램프).
-     랙의 「평균 대비」 계조와 기준이 다르다 — 그림 아래 한 줄이 그것을 적는다 */
+  /* 스트림 색 — 절대온도(A_LO~A_HI 고정 · 범위 밖 클램프).
+     랙의 「평균 대비」 계조와 기준이 다르다 */
   $(`${k}-sSup`).style.stroke = absColor(v.TsupV);
   $(`${k}-sRet`).style.stroke = absColor(v.TretV);
   $(`${k}-sSec`).style.stroke = absColor(Tsec);
@@ -673,7 +689,6 @@ function paintRoomCdu(k, v, withFlow, hit, Tsec) {
 function paintRoom(v, dual) {
   $("room").setAttribute("viewBox", dual ? ROOM.VB.dual : ROOM.VB.single);
   $("room-B").style.display = dual ? "" : "none";
-  setText("R-Tsec", `2차측 공급 ${v.T_sec} ℃`);
   paintRoomCdu("RA", v.cdus[0], true, v.hitCdu === 0 ? v.hitRack : -1, v.T_secV);
   if (dual) {
     paintRoomCdu("RB", v.cdus[1], false, v.hitCdu === 1 ? v.hitRack : -1, v.T_secV);
@@ -681,9 +696,9 @@ function paintRoom(v, dual) {
     setText("RB-shared", on ? `Δ ${F.sig2(v.cdus[1].shareDelta)} m³/h` : "");
     setText("RB-Tretd", on ? `환수 Δ ${F.sig2(v.cdus[1].TretDelta)} K` : "");
   }
-  devBar("R-totdev", v.cdus[0].totDev);
-  const hv = v.hitRack >= 0 ? v.cdus[v.hitCdu].racks[v.hitRack].dev : 0;
-  devBar("R-hitdev", hv);
+  /* 막대는 제 옆에 선 숫자의 편차를 진다 — CDU A 총유량 · CDU A 랙 08 유량 */
+  devBarSvg("RA-devtot", v.cdus[0].totDev);
+  devBarSvg("RA-devrack", v.cdus[0].racks[RACKS - 1].dev);
 }
 
 function paintAxis() {
@@ -726,6 +741,7 @@ function setTab(t) {
   $("pane-room").style.display = t === "room" ? "" : "none";
   $("pane-sch").style.display = t === "sch" ? "" : "none";
   const L = LEG[t];
+  $("leg-load").style.display = t === "room" ? "" : "none";   // 슬래브는 서버실 탭에만 있다
   $("leg-title").textContent = L[0];
   $("leg-lo").textContent = L[1];
   $("leg-hi").textContent = L[2];
