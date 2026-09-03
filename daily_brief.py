@@ -17,6 +17,12 @@
 `--full` 을 주면 세션 5.5-B 까지와 같은 전문(「현재 상태」 절 전체 + 마지막 세션
 로그 블록 전체)을 낸다. **열린 미해결은 두 모드 모두 전문이다.**
 
+`--web` 은 **웹 대화창에 붙이는 축약**이다(세션 7.24). 셋만 낸다 — ⓐ 마지막 판
+한 줄(세션 로그의 마지막 `### ` 제목) · ⓑ 열린 미해결 **번호와 제목만** ·
+ⓒ 「현재 상태」 마지막 행의 「다음 세션 첫 작업」 **첫 문장만**. 본문·근거·크기 칸은 싣지
+않는다. 출처는 다른 두 모드와 같은 `PROCEED.md` 하나다 — 목록을 옮겨 적은 새
+파일을 만들지 않는다.
+
 **PROCEED.md 파싱 규칙 — 세션 5.5-C 에서 바뀐 것**
 
 - (기존) `## 현재 상태` · `## 세션 로그` · `## 미해결 목록` 절을 `## ` 경계로 자른다.
@@ -27,6 +33,10 @@
 - (신규) 마지막 세션 로그 블록 안에서 **`**다음이 알아야 할 것**` 로 시작하는
   문단**을 찾아 그 뒤부터 블록 끝까지를 축약형에 싣는다. 못 찾으면 블록 전체를
   싣는다(조용히 비우지 않는다).
+- (세션 7.24 · `--web` 전용) 미해결 「한 줄」 칸에서 **제목**을 뽑을 때, 머리의
+  `[신설 · 세션 7.22]` 같은 대괄호 표시를 떼고 첫 문장 경계(`. ` 또는 ` — `)
+  에서 자른다. **이 절단은 `--web` 안에서만 일어난다** — 기본·`--full` 은 그대로
+  전문이다.
 - (삭제) 열린 미해결의 88자 절단(`SUMMARY_MAX_CHARS`) 을 없앴다. 「한 줄」·「영향」
   두 칸을 **전문 그대로** 싣는다.
 
@@ -200,6 +210,45 @@ def format_open_items(items: list[tuple[str, str, str]]) -> str:
     return "\n".join(out).rstrip()
 
 
+#: `--web` 제목 추출 — 머리의 대괄호 표시(`[신설 · 세션 7.22]`)와 첫 문장 경계.
+_LEADING_TAG = re.compile(r"^\[[^\]]*\]\s*")
+_SENTENCE_END = re.compile(r"\. | — ")
+
+
+def web_title(summary: str) -> str:
+    """미해결 「한 줄」 칸에서 제목 한 줄만 뽑는다 (순수 함수).
+
+    `--web` 전용이다 — 기본·`--full` 은 이 함수를 쓰지 않고 전문을 싣는다.
+    """
+    return _SENTENCE_END.split(_LEADING_TAG.sub("", summary))[0].rstrip(".")
+
+
+def build_web_brief(text: str) -> str:
+    """웹 대화창용 축약 브리핑 (순수 함수) — ⓐ 마지막 판 · ⓑ 열린 미해결 제목 · ⓒ 다음.
+
+    읽는 곳은 `PROCEED.md` 하나다. 물리 수치를 싣지 않는다.
+    """
+    lines = text.splitlines()
+    block = _last_session_block(lines)
+    rows = current_state_rows(lines)
+    items = open_unresolved_items(lines)
+
+    head = _strip_markup(block[0].removeprefix("### ")) if block else ""
+    out = _wrap(f"현재: {head}" if head else "현재: 세션 로그를 읽지 못했다.")
+
+    out += ["", f"열린 미해결 {len(items)}건 (번호·제목만 — 본문은 PROCEED.md):"]
+    if not items:
+        out.append("  (없음 — 또는 「미해결 목록」 표 형식이 바뀌었다)")
+    for number, summary, _impact in items:
+        out += _wrap(f"  #{number} {web_title(summary)}", indent="      ")
+
+    out += ["", "다음 첫 작업 (「현재 상태」 마지막 행 · 첫 문장만):"]
+    # 「한 줄」 칸과 같은 규칙으로 첫 문장만 싣는다 — 뒤는 PROCEED.md 를 본다.
+    nxt = web_title(_strip_markup(rows[-1][3])) if rows else "(표를 읽지 못했다)"
+    out += _wrap(f"  {nxt}")
+    return "\n".join(out)
+
+
 REFERENCE_LINE = (
     "참조: 과대해석 금지 문구와 게이트 근거 수치는 PROCEED.md 「현재 상태」 아래 ※ 절과\n"
     "      `python -m cdu_simul.dataset_report` 에 있다. `daily_brief.py --full` = 전문."
@@ -239,10 +288,14 @@ def _headline(rows: list[list[str]]) -> str:
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     full = "--full" in args
-    unknown = [a for a in args if a != "--full"]
+    web = "--web" in args
+    unknown = [a for a in args if a not in ("--full", "--web")]
     if unknown:
         joined = " ".join(unknown)
-        print(f"모르는 인자: {joined} (쓸 수 있는 것: --full)", file=sys.stderr)
+        print(f"모르는 인자: {joined} (쓸 수 있는 것: --full · --web)", file=sys.stderr)
+        return 2
+    if full and web:
+        print("--full 과 --web 은 함께 쓸 수 없다.", file=sys.stderr)
         return 2
 
     if hasattr(sys.stdout, "reconfigure"):  # Windows 콘솔 기본 인코딩 대비
@@ -252,7 +305,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"PROCEED.md 를 찾을 수 없다: {PROCEED_PATH.name}", file=sys.stderr)
         return 1
 
-    brief = build_brief(PROCEED_PATH.read_text(encoding="utf-8"), full=full)
+    text = PROCEED_PATH.read_text(encoding="utf-8")
+    if web:
+        print(build_web_brief(text))
+        return 0
+
+    brief = build_brief(text, full=full)
     if not brief:
         print("PROCEED.md 에서 「현재 상태」·세션 로그를 찾지 못했다.", file=sys.stderr)
         return 1
