@@ -3,29 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI 데이터센터 냉각 시스템 — 짓기 전에 계산으로 먼저 돌려본다 (가정값 기반 · 실측 아님)</title>
+<title>AI 데이터센터 냉각 시스템 시뮬레이션 (가정값 기반 · 실측 아님)</title>
 
 <!--
   ─────────────────────────────────────────────────────────────────────────
   읽는 사람 = 사내 경영층 · 공학 배경 없음.
 
-  세션 7.18 이 **구성부터 다시 짰다.** 앞 판(7.17)의 14 절을 고쳐 쓴 것이
-  아니라 11 절로 새로 세웠다. 사람이 실물을 보고 낸 판정이 「14 절 중 5 절만
-  읽힌다 · 원인은 문장이 아니라 구성과 조형」이었다.
+  구성은 세션 7.18 이 세운 것이다(11 절). 세션 7.19 는 그것을 **다시 짜지
+  않고 고쳤다** — 사람이 실물을 처음부터 읽고 낸 지적 열넷을 반영했다.
 
-  ⓐ 뼈대를 「우리가 한 일」에서 「무엇이 새롭고 · 왜 막혀 있었고 ·
-     무엇이 열렸고 · 그래서 무엇을 할 수 있나」로 바꿨다.
-     「어떻게 계산하나」 다섯 절을 5 절 하나로 접었다.
-  ⓑ 절마다 2 단이다 — 왼쪽에 주장, 오른쪽에 근거·수치·그림.
-     표지 · 5 절 다이어그램 · 6 절 시연만 전폭이다.
-  ⓒ 묶음 이름(「왜 만들었나」·「무엇에 쓰나」)을 **없앴다.** 절 제목이
-     이미 문장이라 작은 회색 글씨가 목차 노릇을 못 했다. 순서는 절 번호가 진다.
-  ⓓ 글자를 키웠다 — 본문 17.5px · 절의 큰 문장 27px · 절 제목 28~37px.
-  ⓔ 시연 iframe 을 1600px 원본 크기로 두고 화면 폭에 맞춰 축소한다.
-     원본이 1600px 기준이라 좁히면 조작 막대가 겹친다 — 좁히지 않고 줄인다.
-  ⓕ **수치를 크게 줄였다.** 전체 자릿수 병기(.exact) · 코드 문자열(고정축
-     H22.4 / dPb2 / dPv3 따위) · 논증을 지지 않는 수치를 전부 뺐다.
-     남은 수치는 아홉이고, 각 자리에 figures 항목 번호를 주석으로 남겼다.
+  세션 7.19 가 바꾼 것
+  ⓐ 표지 — 제목이 가장 큰 글자가 됐다. 「짓기 전에」는 지은 뒤에도 돌려볼
+     수 있으므로 뺐다.
+  ⓑ 「가정값 기반 — 실측 아님」을 **표지에만** 둔다. 절마다 반복하지 않는다.
+     빌드 검사 ⑶ 도 「최소 한 번」으로 함께 바꿨다.
+  ⓒ 어휘 — 펌프 압력 · 밸브 개도율 · 배관 차압 · 열 교환 · 랙 발열 · 냉매.
+  ⓓ 04 절 다이어그램 1 층 다섯 상자에 대표 계산식을 각각 넣었다.
+     식은 프로젝트정리 5 장·5-1 에 있는 것만 쓴다.
+  ⓔ 09 절 = 옛 09(아직 못 하는 일) + 10(다음)을 **표 하나로** 합쳤다.
+     한계를 늘어놓는 문단을 두지 않고, 「할 수 있는 일」만 적는다.
+     시운전·운영의 왼쪽 칸이 비는 것이 그 표의 요점이다.
+  ⓕ **어두운 바탕.** 색은 아래 :root 한 벌에 모았고 SVG 도형도 그 변수를
+     쓴다 — 밝은 쪽으로 되돌리려면 :root 블록 하나만 바꾼다.
+     인쇄는 @media print 에서 흰 바탕·검은 글자로 나간다.
+
+  세션 7.18 이 세워 그대로 둔 것
+  · 뼈대 = 「무엇이 새롭고 · 왜 막혀 있었고 · 무엇이 열렸고 · 그래서 무엇을
+    할 수 있나」 · 절마다 2 단(왼쪽 주장 · 오른쪽 근거) · 표지와 04 절
+    다이어그램과 05 절 시연만 전폭 · 본문 17.5px.
+  · 시연 iframe 은 1600px 원본 크기로 두고 화면 폭에 맞춰 축소한다.
+    원본이 1600px 기준이라 좁히면 조작 막대가 겹친다 — 좁히지 않고 줄인다.
 
   자료에 나가는 수치는 **전부 docs/intro-figures.md 에서 가져왔다.**
   그 표에 없는 숫자는 쓰지 않았다.
@@ -35,21 +42,52 @@
   기능이 서기 전까지 그 방향을 말하지 않는다 — 우회 표현도 쓰지 않는다.
   엔지니어만 아는 말(양정 · 대향류 · NTU · 잔차 · 시간축 …)도 걷어냈다.
 
-  글꼴은 시스템 글꼴만 쓴다 · 이모지를 쓰지 않는다 · 색은 시연 화면의 여섯과
-  그 명도 단계뿐이다. 오프라인 파일 하나로 열리는 것이 전제라 바깥에서
-  받아오는 것이 없어야 한다.
+  글꼴은 시스템 글꼴만 쓴다 · 이모지를 쓰지 않는다. 오프라인 파일 하나로
+  열리는 것이 전제라 바깥에서 받아오는 것이 없어야 한다.
   ─────────────────────────────────────────────────────────────────────────
 -->
 
 <style>
-/* 색은 시연 화면과 같은 값이다 (demo/pfd.html :root).
-   --faced 는 새 색이 아니라 흰색의 밝기 88% 로, 시연 화면이 등축 옆면에 쓰는 것을
-   그대로 가져왔다. 그 밖의 계조는 --ink 의 투명도 단계로만 낸다. */
+/* ── 색 한 벌 ───────────────────────────────────────────────────────────
+   자료의 색이 전부 여기 있다. 본문뿐 아니라 SVG 도형도 이 변수를 쓴다
+   (fill="var(--ink)" 처럼). 그래서 **밝은 바탕으로 되돌리려면 아래 :root
+   블록의 값만 「밝은 한 벌」 주석의 값으로 바꾸면 된다** — 다른 곳은
+   손대지 않는다.
+   iframe 안의 시연 화면은 읽기 전용이라 여기 걸리지 않는다. 밝은 그대로
+   들어가고, .demo-edge 테두리가 「여기서부터 시연 화면」을 표시한다. */
 :root{
-  --ground:#EDF0F2; --face:#FFFFFF; --faced:#E0E0E0; --ink:#3E4C56;
-  --cold:#2E7FA8; --hot:#C2452D; --warn:#E8A33D;
-  --line:rgba(62,76,86,.16);   /* --ink 16% — 새 색이 아니다 */
-  --dim:rgba(62,76,86,.62);
+  /* 어두운 한 벌 (지금 · 세션 7.19) */
+  --ground:#161c21; --face:#212a31; --faced:#2e3941; --ink:#e7edf1;
+  --cold:#6fb6dc; --hot:#e4795f; --warn:#e8a33d;
+  --line:rgba(231,237,241,.20);   /* --ink 20% — 새 색이 아니다 */
+  --dim:rgba(231,237,241,.66);
+  /* 색칠한 막대 **위에 얹히는** 글자색. 막대 색은 한 벌이 바뀌어도 크게
+     밝아지거나 어두워지지 않으므로, 그 위의 글자는 --ink 를 따라가면 안 된다 */
+  --on-warn:#161c21; --on-cold:#161c21;
+
+  /* 밝은 한 벌 (세션 7.18 까지 · 시연 화면 demo/pfd.html :root 와 같은 값)
+     --ground:#edf0f2; --face:#ffffff; --faced:#e0e0e0; --ink:#3e4c56;
+     --cold:#2e7fa8; --hot:#c2452d; --warn:#e8a33d;
+     --line:rgba(62,76,86,.16); --dim:rgba(62,76,86,.62);
+     --on-warn:#3e4c56; --on-cold:#ffffff;                           */
+}
+
+/* 인쇄 — 경영층이 출력할 수 있다. 흰 바탕·검은 글자로 나간다.
+   같은 변수만 다시 정의하므로 본문·SVG 가 함께 따라온다. */
+@media print{
+  :root{
+    --ground:#ffffff; --face:#ffffff; --faced:#e0e0e0; --ink:#000000;
+    --cold:#1b5e80; --hot:#9c3320; --warn:#d99425;
+    --line:rgba(0,0,0,.28); --dim:rgba(0,0,0,.62);
+    --on-warn:#000000; --on-cold:#ffffff;
+  }
+  body{margin-bottom:0}
+  .screen{padding-top:44px;break-inside:avoid}
+  /* 종이에서는 배경색이 사라지므로 칸을 테두리로 세운다.
+     빈칸(.none)은 뺀다 — 테두리를 두르면 「비어 있다」가 덜 보인다 */
+  .card,.can td:not(.none){border:1px solid var(--line)}
+  .no{opacity:.45}
+  .reveal-on .screen{opacity:1;transform:none}   /* 등장 효과가 인쇄를 비우지 않게 */
 }
 *{box-sizing:border-box}
 
@@ -66,7 +104,7 @@ body{margin:0 0 140px;background:var(--ground);color:var(--ink);
 
 .screen > header{display:grid;grid-template-columns:96px minmax(0,1fr);
                  gap:0 28px;align-items:baseline;margin:0 0 48px}
-.no{font-size:46px;font-weight:bold;line-height:1;opacity:.2;
+.no{font-size:46px;font-weight:bold;line-height:1;opacity:.3;
     font-variant-numeric:tabular-nums;letter-spacing:-.03em}
 h2{margin:0;max-width:24em;font-size:clamp(28px,2.4vw,37px);
    line-height:1.36;letter-spacing:-.022em}
@@ -103,15 +141,18 @@ p:last-child{margin-bottom:0}
 .card + .card{margin-top:16px}
 .rule{border-left:3px solid var(--warn);padding:4px 0 4px 20px}
 
-.mark{margin:56px 0 0;font-size:11.5px;letter-spacing:.06em;opacity:.4}
+.mark{margin:56px 0 0;font-size:12px;letter-spacing:.06em;opacity:.55}
 
-/* ── 표지 ─────────────────────────────────────────────────────────── */
+/* ── 표지 ─────────────────────────────────────────────────────────────
+   글자 크기의 서열이 제목 > 부제 > 본문이다. 세션 7.18 까지는 부제가
+   제목보다 컸다 — 그것을 뒤집은 것이 세션 7.19 다. */
 #s01{background:var(--face);min-height:92vh;padding-top:0;padding-bottom:72px;
      display:flex;flex-direction:column;justify-content:center;align-items:center;
      text-align:center}
-.cover-kicker{margin:0 0 30px;font-size:16px;letter-spacing:.2em;opacity:.55}
-h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.035em}
-.cover-sub{margin:34px 0 0;max-width:30em;font-size:19px;line-height:1.75;opacity:.82}
+h1{margin:0;font-size:clamp(40px,5.8vw,74px);line-height:1.22;letter-spacing:-.035em}
+.cover-lead{margin:26px 0 0;font-size:clamp(20px,2.0vw,26px);line-height:1.5;
+            letter-spacing:-.015em;opacity:.9}
+.cover-sub{margin:30px 0 0;max-width:30em;font-size:18px;line-height:1.75;opacity:.78}
 #s01 .mark{margin-top:60px}
 
 /* ── 전폭 절 (5 절 다이어그램 · 6 절 시연) ────────────────────────── */
@@ -146,18 +187,29 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
           gap:24px;margin:0 0 10px;font-size:14.5px;color:var(--dim)}
 .demo-tag b{color:var(--ink)}
 
-/* ── 11 절 — 3 단계 ──────────────────────────────────────────────── */
-.steps{list-style:none;margin:0;padding-left:124px;display:grid;
-       grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
-.steps > li{background:var(--face);border-radius:5px;padding:26px 28px}
-.steps .st{display:block;font-size:14px;letter-spacing:.1em;opacity:.5;margin-bottom:10px}
-.steps .lead{display:block;margin-bottom:14px;font-size:19px;line-height:1.55}
-.steps p{font-size:16px;margin-bottom:12px}
+/* ── 09 절 — 표 하나가 절 전체를 진다 ─────────────────────────────────
+   왼쪽 칸이 비는 줄(시운전 · 운영)이 이 표의 요점이다. 빈칸을 말로 채우지
+   않고 배경 없는 칸 + 짧은 가로줄로 「여기에 아직 없다」를 보이게 한다. */
+.canwrap{padding-left:124px}
+.can{width:100%;border-collapse:separate;border-spacing:12px;
+     font-size:16.5px;line-height:1.62;text-align:left}
+.can thead th{padding:0 8px 2px;font-size:15px;font-weight:bold;color:var(--dim);
+              letter-spacing:.02em;vertical-align:bottom}
+.can tbody th{width:112px;padding:20px 4px 0 0;font-size:19px;font-weight:bold;
+              vertical-align:top;white-space:nowrap}
+.can td{background:var(--face);border-radius:5px;padding:20px 22px;
+        vertical-align:top;width:calc((100% - 112px) / 2)}
+.can td.none{background:none}
+.can td.none::before{content:"";display:block;width:36px;height:2px;
+                     background:var(--line);margin-top:8px}
 
 /* ── 좁은 화면 ───────────────────────────────────────────────────── */
 @media (max-width:1180px){
   .grid{grid-template-columns:minmax(0,1fr);gap:34px;padding-left:0}
-  .steps{grid-template-columns:minmax(0,1fr);padding-left:0}
+  .canwrap{padding-left:0}
+  .can{font-size:15.5px;border-spacing:8px}
+  .can td{padding:16px 16px}
+  .can tbody th{width:78px;font-size:17px}
   .screen > header{grid-template-columns:64px minmax(0,1fr);gap:0 18px}
   .no{font-size:34px}
   .key{font-size:23px}
@@ -180,12 +232,10 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
 
 <!-- ═══ 1 · 표지 ═══════════════════════════════════════════════════ -->
 <section class="screen" id="s01">
-  <p class="cover-kicker">AI 데이터센터 냉각 시스템</p>
-  <h1>짓기 전에,<br>계산으로 먼저 돌려봅니다</h1>
-  <p class="cover-sub">서버를 액체로 식히는 설비를 물리 계산으로 세웠습니다.
-     실제 설비로는 만들어 볼 수 없는 조건까지 화면에서 돌려 봅니다.</p>
-  <p class="cover-sub">지금 무엇이 되어 있고 무엇이 안 되어 있는지를
-     그대로 적은 자료입니다.</p>
+  <h1>AI 데이터센터<br>냉각 시스템 시뮬레이션</h1>
+  <p class="cover-lead">서버를 액체로 식히는 설비의 디지털 트윈화</p>
+  <p class="cover-sub">설비를 물리 계산으로 세웠습니다. 실제 설비로는 만들어
+     볼 수 없는 조건까지 화면에서 돌려 봅니다.</p>
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
@@ -202,7 +252,7 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
     </div>
     <ul class="list">
       <li><span class="lead">그 액체는 물이 아닙니다.</span>
-        <p class="t">얼지 않게, 배관을 삭히지 않게 만든 화학 냉각액입니다.
+        <p class="t">얼지 않게, 배관을 삭히지 않게 만든 화학 냉매입니다.
           온도가 바뀌면 성질도 함께 바뀝니다.</p>
         <span class="when">물에 프로필렌글리콜을 25 % 섞은 것 — PG25</span></li>
       <li><span class="lead">물과 공기에는 쌓인 경험이 있지만, 이쪽에는 없습니다.</span>
@@ -211,7 +261,6 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
       <li><span class="lead">그리고 그 배관이 고가 서버 바로 위를 지납니다.</span></li>
     </ul>
   </div>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
 
@@ -235,7 +284,6 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
         <p class="t">일이 벌어진 다음에 알게 되는 구조입니다.</p></li>
     </ul>
   </div>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
 
@@ -261,7 +309,7 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
       </div>
       <div class="card">
         <p class="lead">지금은</p>
-        <p class="t">그 값을 파이썬에서 바로 불러옵니다. 지금 쓰는 냉각액
+        <p class="t">그 값을 파이썬에서 바로 불러옵니다. 지금 쓰는 냉매
           PG25 도 온도만 넣으면 그 자리에서 나옵니다.</p>
       </div>
       <div class="card">
@@ -272,7 +320,6 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
       </div>
     </div>
   </div>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
 
@@ -288,31 +335,31 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
 
   <div class="figwrap">
     <svg viewBox="0 0 1360 940" role="img"
-         aria-label="세 층으로 쌓은 그림. 위층은 펌프·밸브·배관·열교환기·랙 다섯 장치,
-                     가운데 층은 각 장치에 대응하는 코드, 그 다섯이 모두 아래의
-                     냉각액 성질 조회 한 곳을 가리킨다. 아래층은 그것을 물려 놓은
-                     냉각 시스템 전체 모습이다">
+         aria-label="세 층으로 쌓은 그림. 위층은 펌프·밸브·배관·열교환기·랙 다섯 장치와
+                     각각의 대표 계산식, 가운데 층은 각 장치에 대응하는 코드,
+                     그 다섯이 모두 아래의 냉매 성질 조회 한 곳을 가리킨다.
+                     아래층은 그것을 물려 놓은 냉각 시스템 전체 모습이다">
       <defs>
         <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5"
                 markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" fill="#3E4C56"/>
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/>
         </marker>
         <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5"
                 markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" fill="#3E4C56"/>
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/>
         </marker>
         <!-- 랙 하나 — 등축 육면체. 아래층에서 여덟 번 놓는다 -->
         <g id="rk">
           <polygon points="0.0,-36.0 22.5,-23.0 9.5,-15.5 -13.0,-28.5"
-                   fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.2" stroke-linejoin="round"/>
+                   fill="var(--face)" stroke="var(--ink)" stroke-width="1.2" stroke-linejoin="round"/>
           <polygon points="22.5,13.0 9.5,20.5 9.5,-15.5 22.5,-23.0"
-                   fill="#E0E0E0" stroke="#3E4C56" stroke-width="1.2" stroke-linejoin="round"/>
+                   fill="var(--faced)" stroke="var(--ink)" stroke-width="1.2" stroke-linejoin="round"/>
           <polygon points="-13.0,7.5 9.5,20.5 9.5,-15.5 -13.0,-28.5"
-                   fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.2" stroke-linejoin="round"/>
+                   fill="var(--face)" stroke="var(--ink)" stroke-width="1.2" stroke-linejoin="round"/>
         </g>
       </defs>
 
-      <g font-family="Malgun Gothic, 맑은 고딕, system-ui, sans-serif" fill="#3E4C56">
+      <g font-family="Malgun Gothic, 맑은 고딕, system-ui, sans-serif" fill="var(--ink)">
 
       <!-- ─── 1 층 · 장치 ─────────────────────────────────────────── -->
       <text x="30" y="40" font-size="19" font-weight="bold">
@@ -320,46 +367,46 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
 
       <!-- 펌프 — 시연 화면의 펌프 심볼(흰 원 + 삼각 화살촉)을 그대로 -->
       <g transform="translate(190,145)">
-        <line x1="-62" y1="0" x2="62" y2="0" stroke="#3E4C56" stroke-width="9"
+        <line x1="-62" y1="0" x2="62" y2="0" stroke="var(--ink)" stroke-width="9"
               stroke-linecap="round" opacity=".45"/>
-        <circle cx="0" cy="0" r="34" fill="#FFFFFF" stroke="#3E4C56" stroke-width="2.5"/>
-        <polygon points="-10,-15 16,0 -10,15" fill="#3E4C56"/>
+        <circle cx="0" cy="0" r="34" fill="var(--face)" stroke="var(--ink)" stroke-width="2.5"/>
+        <polygon points="-10,-15 16,0 -10,15" fill="var(--ink)"/>
       </g>
       <!-- 밸브 — 시연 화면에는 밸브 도형이 없다. 표준 심볼로 대신 그렸다 -->
       <g transform="translate(425,145)">
-        <line x1="-62" y1="0" x2="62" y2="0" stroke="#3E4C56" stroke-width="9"
+        <line x1="-62" y1="0" x2="62" y2="0" stroke="var(--ink)" stroke-width="9"
               stroke-linecap="round" opacity=".45"/>
-        <polygon points="-32,-24 0,0 -32,24" fill="#FFFFFF" stroke="#3E4C56" stroke-width="2.5"
+        <polygon points="-32,-24 0,0 -32,24" fill="var(--face)" stroke="var(--ink)" stroke-width="2.5"
                  stroke-linejoin="round"/>
-        <polygon points="32,-24 0,0 32,24" fill="#FFFFFF" stroke="#3E4C56" stroke-width="2.5"
+        <polygon points="32,-24 0,0 32,24" fill="var(--face)" stroke="var(--ink)" stroke-width="2.5"
                  stroke-linejoin="round"/>
-        <line x1="0" y1="0" x2="0" y2="-40" stroke="#3E4C56" stroke-width="2.5"/>
-        <line x1="-17" y1="-40" x2="17" y2="-40" stroke="#3E4C56" stroke-width="4"
+        <line x1="0" y1="0" x2="0" y2="-40" stroke="var(--ink)" stroke-width="2.5"/>
+        <line x1="-17" y1="-40" x2="17" y2="-40" stroke="var(--ink)" stroke-width="4"
               stroke-linecap="round"/>
       </g>
       <!-- 배관 — 시연 화면의 스트림(굵은 선 · 둥근 끝 · 삼각 화살촉)과 같은 규칙 -->
       <g transform="translate(660,145)">
-        <polyline points="-56,32 6,32 6,-30 56,-30" fill="none" stroke="#3E4C56"
+        <polyline points="-56,32 6,32 6,-30 56,-30" fill="none" stroke="var(--ink)"
                   stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
-        <polygon points="46,-40 66,-30 46,-20" fill="#3E4C56"/>
+        <polygon points="46,-40 66,-30 46,-20" fill="var(--ink)"/>
       </g>
       <!-- 열교환기 — 시연 화면의 등축 육면체를 작게 다시 세웠다 -->
       <g transform="translate(895,150)">
         <polygon points="0.0,-72.0 52.0,-42.0 -5.2,-9.0 -57.2,-39.0"
-                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+                 fill="var(--face)" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/>
         <polygon points="52.0,30.0 -5.2,63.0 -5.2,-9.0 52.0,-42.0"
-                 fill="#E0E0E0" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+                 fill="var(--faced)" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/>
         <polygon points="-57.2,33.0 -5.2,63.0 -5.2,-9.0 -57.2,-39.0"
-                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+                 fill="var(--face)" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/>
       </g>
       <!-- 랙 — 시연 화면 서버실의 랙과 같은 육면체 -->
       <g transform="translate(1130,158)">
         <polygon points="0.0,-59.0 36.4,-38.0 14.7,-25.5 -21.7,-46.5"
-                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+                 fill="var(--face)" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/>
         <polygon points="36.4,21.0 14.7,33.5 14.7,-25.5 36.4,-38.0"
-                 fill="#E0E0E0" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+                 fill="var(--faced)" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/>
         <polygon points="-21.7,12.5 14.7,33.5 14.7,-25.5 -21.7,-46.5"
-                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+                 fill="var(--face)" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/>
       </g>
 
       <g font-size="20" text-anchor="middle">
@@ -371,7 +418,7 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
       </g>
 
       <!-- 1 층 → 2 층 -->
-      <g stroke="#3E4C56" stroke-width="2.5" marker-end="url(#ah)" opacity=".8">
+      <g stroke="var(--ink)" stroke-width="2.5" marker-end="url(#ah)" opacity=".8">
         <line x1="190" y1="312" x2="190" y2="344"/>
         <line x1="425" y1="312" x2="425" y2="344"/>
         <line x1="660" y1="312" x2="660" y2="344"/>
@@ -382,7 +429,7 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
       <!-- ─── 2 층 · 코드 ─────────────────────────────────────────── -->
       <text x="30" y="290" font-size="19" font-weight="bold">각각을 코드로 만든다</text>
 
-      <g fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.2">
+      <g fill="var(--face)" stroke="var(--ink)" stroke-width="1.2">
         <rect x="90" y="352" width="200" height="94" rx="4"/>
         <rect x="325" y="352" width="200" height="94" rx="4"/>
         <rect x="560" y="352" width="200" height="94" rx="4"/>
@@ -390,22 +437,38 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
         <rect x="1030" y="352" width="200" height="94" rx="4"/>
       </g>
       <g font-size="19" text-anchor="middle">
-        <text x="190" y="392">펌프가 내는 압력</text>
-        <text x="425" y="392">밸브가 죄는 정도</text>
-        <text x="660" y="392">배관이 막는 정도</text>
-        <text x="895" y="392">열 주고받기</text>
-        <text x="1130" y="392">랙이 내는 열</text>
+        <text x="190" y="381">펌프 압력</text>
+        <text x="425" y="381">밸브 개도율</text>
+        <text x="660" y="381">배관 차압</text>
+        <text x="895" y="381">열 교환</text>
+        <text x="1130" y="381">랙 발열</text>
       </g>
-      <g font-size="14" text-anchor="middle" opacity=".5">
-        <text x="190" y="420">hydraulics.py</text>
-        <text x="425" y="420">hydraulics.py</text>
-        <text x="660" y="420">hydraulics.py</text>
-        <text x="895" y="420">model.py</text>
-        <text x="1130" y="420">plant.py</text>
+      <!-- 대표 계산식 — 프로젝트정리 5 장 「주요 구성요소」와 5-1 에 있는 것만 쓴다.
+           펌프·열교환기는 5 장 표, 밸브·배관은 5-1, 랙은 5-1 「cp·ρ 평가 온도」가
+           전제하는 현열 상승식(src/cdu_simul/model.py). 아래 큰 식(펌프)과
+           겹치는 것은 그대로 둔다 — 중복 표기를 허용한 자리다. -->
+      <g font-size="14.5" text-anchor="middle">
+        <text x="190" y="407">H = H<tspan font-size="10" dy="3">0</tspan><tspan
+              dy="-3"> − aQ − bQ²</tspan></text>
+        <text x="425" y="407">K<tspan font-size="10" dy="3">v</tspan><tspan
+              dy="-3">(x) = K</tspan><tspan font-size="10" dy="3">v,max</tspan><tspan
+              dy="-3"> · x</tspan></text>
+        <text x="660" y="407">ΔP = K·ρv²/2</text>
+        <text x="895" y="407">Q = ε·C<tspan font-size="10" dy="3">min</tspan><tspan
+              dy="-3">·ΔT</tspan><tspan font-size="10" dy="3">max</tspan></text>
+        <text x="1130" y="407">Q = ṁ·c<tspan font-size="10" dy="3">p</tspan><tspan
+              dy="-3">·ΔT</tspan></text>
+      </g>
+      <g font-size="12.5" text-anchor="middle" opacity=".55">
+        <text x="190" y="430">hydraulics.py</text>
+        <text x="425" y="430">hydraulics.py</text>
+        <text x="660" y="430">hydraulics.py</text>
+        <text x="895" y="430">model.py</text>
+        <text x="1130" y="430">plant.py</text>
       </g>
 
       <!-- 2 층 → 밑층 : 다섯이 모두 아래 한 상자를 가리킨다 -->
-      <g stroke="#3E4C56" stroke-width="2" marker-end="url(#ahs)" opacity=".65">
+      <g stroke="var(--ink)" stroke-width="2" marker-end="url(#ahs)" opacity=".65">
         <line x1="190" y1="450" x2="190" y2="486"/>
         <line x1="425" y1="450" x2="425" y2="486"/>
         <line x1="660" y1="450" x2="660" y2="486"/>
@@ -415,14 +478,14 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
 
       <!-- ─── 밑층 · 물성 조회 ────────────────────────────────────── -->
       <rect x="90" y="494" width="1140" height="80" rx="4"
-            fill="none" stroke="#3E4C56" stroke-width="2" stroke-dasharray="10 7" opacity=".8"/>
+            fill="none" stroke="var(--ink)" stroke-width="2" stroke-dasharray="10 7" opacity=".8"/>
       <text x="660" y="529" font-size="21" font-weight="bold" text-anchor="middle">
-        냉각액 성질 조회 — 온도를 넣으면 그 온도에서의 값이 나온다</text>
+        냉매 성질 조회 — 온도를 넣으면 그 온도에서의 값이 나온다</text>
       <text x="660" y="556" font-size="15" text-anchor="middle" opacity=".6">
         다섯 계산이 모두 같은 곳을 봅니다 · PG25 · fluid.py</text>
 
       <!-- 밑층 → 3 층 -->
-      <line x1="660" y1="584" x2="660" y2="630" stroke="#3E4C56" stroke-width="3"
+      <line x1="660" y1="584" x2="660" y2="630" stroke="var(--ink)" stroke-width="3"
             marker-end="url(#ah)" opacity=".8"/>
 
       <!-- ─── 3 층 · 물려 놓으면 시스템 하나 ──────────────────────── -->
@@ -430,7 +493,7 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
         물려 놓으면 냉각 시스템 하나가 된다</text>
 
       <!-- 2차측 — 모델 밖이라 파선 육면체다 (시연 화면과 같은 규칙) -->
-      <g transform="translate(150,800)" fill="none" stroke="#3E4C56"
+      <g transform="translate(150,800)" fill="none" stroke="var(--ink)"
          stroke-width="3.5" stroke-dasharray="10 7" opacity=".75" stroke-linejoin="round">
         <polygon points="-38.1,22.0 0.0,44.0 38.1,22.0 38.1,-15.0 0.0,-37.0 -38.1,-15.0"/>
         <line x1="38.1" y1="-15.0" x2="0.0" y2="7.0"/>
@@ -440,40 +503,40 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
       <!-- 열교환기 -->
       <g transform="translate(320,800)">
         <polygon points="0.0,-48.0 34.6,-28.0 -3.5,-6.0 -38.1,-26.0"
-                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.4" stroke-linejoin="round"/>
+                 fill="var(--face)" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/>
         <polygon points="34.6,20.0 -3.5,42.0 -3.5,-6.0 34.6,-28.0"
-                 fill="#E0E0E0" stroke="#3E4C56" stroke-width="1.4" stroke-linejoin="round"/>
+                 fill="var(--faced)" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/>
         <polygon points="-38.1,22.0 -3.5,42.0 -3.5,-6.0 -38.1,-26.0"
-                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.4" stroke-linejoin="round"/>
+                 fill="var(--face)" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/>
       </g>
 
       <!-- 2차측 ↔ 열교환기 -->
-      <line x1="196" y1="778" x2="272" y2="778" stroke="#3E4C56" stroke-width="7"
+      <line x1="196" y1="778" x2="272" y2="778" stroke="var(--ink)" stroke-width="7"
             stroke-linecap="round" opacity=".55" marker-end="url(#ah)"/>
-      <line x1="272" y1="812" x2="196" y2="812" stroke="#3E4C56" stroke-width="5"
+      <line x1="272" y1="812" x2="196" y2="812" stroke="var(--ink)" stroke-width="5"
             stroke-linecap="round" stroke-dasharray="10 7" opacity=".55"/>
 
       <!-- 1차측 공급 : 열교환기 → 펌프 → 헤더 -->
       <polyline points="352,772 700,772 700,846 723,850"
-                fill="none" stroke="#3E4C56" stroke-width="8"
+                fill="none" stroke="var(--ink)" stroke-width="8"
                 stroke-linecap="round" stroke-linejoin="round" opacity=".65"/>
-      <circle cx="470" cy="772" r="22" fill="#FFFFFF" stroke="#3E4C56" stroke-width="2.5"/>
-      <polygon points="-9,-13 14,0 -9,13" transform="translate(470,772)" fill="#3E4C56"/>
+      <circle cx="470" cy="772" r="22" fill="var(--face)" stroke="var(--ink)" stroke-width="2.5"/>
+      <polygon points="-9,-13 14,0 -9,13" transform="translate(470,772)" fill="var(--ink)"/>
 
       <!-- 1차측 환수 : 헤더 → 열교환기 -->
       <polyline points="1075,709 777,881 777,906 317,906 317,844"
-                fill="none" stroke="#3E4C56" stroke-width="8"
+                fill="none" stroke="var(--ink)" stroke-width="8"
                 stroke-linecap="round" stroke-linejoin="round" opacity=".65"/>
-      <polygon points="9,-13 -14,0 9,13" transform="translate(560,906)" fill="#3E4C56"/>
+      <polygon points="9,-13 -14,0 9,13" transform="translate(560,906)" fill="var(--ink)"/>
 
       <!-- 헤더 두 줄 — 랙 열과 나란히 간다 -->
-      <line x1="723" y1="850" x2="1022" y2="678" stroke="#3E4C56" stroke-width="8"
+      <line x1="723" y1="850" x2="1022" y2="678" stroke="var(--ink)" stroke-width="8"
             stroke-linecap="round" opacity=".65"/>
-      <line x1="777" y1="881" x2="1075" y2="709" stroke="#3E4C56" stroke-width="8"
+      <line x1="777" y1="881" x2="1075" y2="709" stroke="var(--ink)" stroke-width="8"
             stroke-linecap="round" opacity=".65"/>
 
       <!-- 여덟 갈래 — 헤더에서 랙으로 -->
-      <g stroke="#3E4C56" stroke-width="3" stroke-linecap="round" opacity=".5">
+      <g stroke="var(--ink)" stroke-width="3" stroke-linecap="round" opacity=".5">
         <line x1="735.5" y1="843.1" x2="747.8" y2="850.2"/>
         <line x1="772.8" y1="821.6" x2="785.1" y2="828.8"/>
         <line x1="810.0" y1="800.1" x2="822.3" y2="807.2"/>
@@ -514,7 +577,7 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
       </g>
     </svg>
     <p class="cap">위층의 다섯이 가운데 층의 코드가 되고, 다섯 모두가 같은 곳에서
-      냉각액의 성질을 읽습니다. 그것을 물려 놓은 것이 아래층 — 다음 화면에서
+      냉매의 성질을 읽습니다. 그것을 물려 놓은 것이 아래층 — 다음 화면에서
       직접 움직여 보는 그 계통입니다.</p>
   </div>
 
@@ -534,12 +597,14 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
       <p class="key">식을 세우는 것보다 <b>물려 놓는 것</b>이 일이었습니다.</p>
       <p class="t">물이 여덟 갈래로 갈라지는데, 갈라진 뒤에도 여덟 갈래가 같은
         압력으로 만나야 합니다. 그 답이 랙마다 다른 온도를 만들고, 그 온도가
-        냉각액의 성질을 바꾸고, 바뀐 성질이 다시 압력으로 돌아옵니다.</p>
-      <p class="t">한 바퀴 도는 이 고리가 스스로 맞아떨어지는 자리를 매번 찾습니다.
-        장치 다섯을 각각 푸는 것보다, 다섯을 한 번에 맞추는 쪽이 일이었습니다.</p>
+        냉매의 성질을 바꾸고, 바뀐 성질이 다시 압력으로 돌아옵니다.</p>
+      <p class="t">한 바퀴 도는 이 고리는 한 번에 풀리지 않습니다. <b>값을 넣어
+        보고, 어긋난 만큼 고쳐 넣기를 되풀이합니다.</b> 넣은 값과 나온 값이
+        더 이상 달라지지 않으면 거기서 멈추고, 그 자리가 답입니다.</p>
+      <p class="t">장치 다섯을 각각 푸는 것보다, 다섯을 한 번에 맞추는 쪽이
+        일이었습니다.</p>
     </div>
   </div>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
 
@@ -549,7 +614,7 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
     <h2>직접 움직여 봅니다</h2></header>
 
   <ul class="demo-guide">
-    <li><b>막대 높이 = 그 랙이 내는 열</b>
+    <li><b>막대 높이 = 그 랙 발열</b>
       부하를 올리면 막대가 자랍니다.</li>
     <li><b>색 = 랙 사이의 온도 차이</b>
       찬 쪽이 파랑, 뜨거운 쪽이 빨강입니다.</li>
@@ -570,7 +635,6 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
   </div>
   <p class="cap">시연 화면은 읽기 전용입니다 — 이 자료가 그대로 품고 있고,
     바깥 인터넷 없이 이 파일 하나로 돕니다.</p>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
 
@@ -603,30 +667,30 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
            aria-label="같은 이상을 두 자리에서 잰 유량 변화. 막힌 랙에서는 −0.59,
                        CDU 전체에서는 −0.14 세제곱미터 매시. 두 막대는 같은 축척이고
                        랙 쪽이 약 네 배 크다">
-        <rect x="331.1" y="26" width="878.9" height="46" fill="#E8A33D"/>
-        <rect x="993.2" y="100" width="216.8" height="46" fill="#2E7FA8"/>
+        <rect x="331.1" y="26" width="878.9" height="46" fill="var(--warn)"/>
+        <rect x="993.2" y="100" width="216.8" height="46" fill="var(--cold)"/>
         <text x="1196" y="49" text-anchor="end" dominant-baseline="middle"
-              font-size="21" fill="#3E4C56">−0.59 m³/h</text>
+              font-size="21" fill="var(--on-warn)">−0.59 m³/h</text>
         <text x="1196" y="123" text-anchor="end" dominant-baseline="middle"
-              font-size="21" fill="#FFFFFF">−0.14 m³/h</text>
+              font-size="21" fill="var(--on-cold)">−0.14 m³/h</text>
         <text x="300" y="42" text-anchor="end" dominant-baseline="middle"
-              font-size="21" fill="#3E4C56">막힌 그 랙에서 재면</text>
+              font-size="21" fill="var(--ink)">막힌 그 랙에서 재면</text>
         <text x="300" y="70" text-anchor="end" dominant-baseline="middle"
-              font-size="15" fill="#3E4C56" opacity=".6">랙 08</text>
+              font-size="15" fill="var(--ink)" opacity=".6">랙 08</text>
         <text x="300" y="116" text-anchor="end" dominant-baseline="middle"
-              font-size="21" fill="#3E4C56">CDU 전체에서 재면</text>
+              font-size="21" fill="var(--ink)">CDU 전체에서 재면</text>
         <text x="300" y="144" text-anchor="end" dominant-baseline="middle"
-              font-size="15" fill="#3E4C56" opacity=".6">총유량</text>
-        <line x1="1210" y1="18" x2="1210" y2="182" stroke="#3E4C56" stroke-width="2"/>
-        <line x1="300" y1="174" x2="1220" y2="174" stroke="#3E4C56" stroke-width="1"/>
-        <line x1="910" y1="174" x2="910" y2="182" stroke="#3E4C56" stroke-width="1"/>
-        <line x1="610" y1="174" x2="610" y2="182" stroke="#3E4C56" stroke-width="1"/>
-        <line x1="310" y1="174" x2="310" y2="182" stroke="#3E4C56" stroke-width="1"/>
-        <text x="1210" y="200" text-anchor="middle" font-size="17" fill="#3E4C56">0</text>
-        <text x="910" y="200" text-anchor="middle" font-size="17" fill="#3E4C56">−0.2</text>
-        <text x="610" y="200" text-anchor="middle" font-size="17" fill="#3E4C56">−0.4</text>
-        <text x="310" y="200" text-anchor="middle" font-size="17" fill="#3E4C56">−0.6</text>
-        <text x="300" y="232" font-size="16" fill="#3E4C56" opacity=".7">유량이 줄어든 양
+              font-size="15" fill="var(--ink)" opacity=".6">총유량</text>
+        <line x1="1210" y1="18" x2="1210" y2="182" stroke="var(--ink)" stroke-width="2"/>
+        <line x1="300" y1="174" x2="1220" y2="174" stroke="var(--ink)" stroke-width="1"/>
+        <line x1="910" y1="174" x2="910" y2="182" stroke="var(--ink)" stroke-width="1"/>
+        <line x1="610" y1="174" x2="610" y2="182" stroke="var(--ink)" stroke-width="1"/>
+        <line x1="310" y1="174" x2="310" y2="182" stroke="var(--ink)" stroke-width="1"/>
+        <text x="1210" y="200" text-anchor="middle" font-size="17" fill="var(--ink)">0</text>
+        <text x="910" y="200" text-anchor="middle" font-size="17" fill="var(--ink)">−0.2</text>
+        <text x="610" y="200" text-anchor="middle" font-size="17" fill="var(--ink)">−0.4</text>
+        <text x="310" y="200" text-anchor="middle" font-size="17" fill="var(--ink)">−0.6</text>
+        <text x="300" y="232" font-size="16" fill="var(--ink)" opacity=".7">유량이 줄어든 양
             [m³/h] — 두 막대는 같은 축척입니다</text>
       </svg>
       <p class="cap">같은 이상을 두 자리에서 재면 이만큼 다르게 보입니다.
@@ -636,11 +700,10 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
     </div>
 
     <div class="span2">
-      <p class="key rule">그래서 계기를 어디에 달아야 하는지를 <b>짓기 전에</b>
-        알 수 있습니다. 계기를 어디에 몇 개 다는가가 곧 비용입니다.</p>
+      <p class="key rule">전체만 봐서는 보이지 않는 변화가 있습니다.
+        그 차이를 <b>미리 볼 수 있습니다.</b></p>
     </div>
   </div>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
 
@@ -674,17 +737,16 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
     </div>
     <div>
       <p class="lead">정상일 때와 이상일 때의 데이터가 표로 나옵니다</p>
-      <p class="t">한 행이 한 케이스입니다. 모든 행에 어느 가정치를 썼는지와
-        「가정값 기반 · 실측 아님」이 함께 붙습니다.</p>
+      <p class="t">여러 케이스를 한 번에 돌려, 정상일 때와 이상일 때를
+        한 표에서 봅니다.</p>
       <!-- figures #20 : 320 행 · figures #21 : 960 행 (정수) -->
       <span class="fig">정상 320 <small>행</small> · 이상 960 <small>행</small></span>
     </div>
     <div class="span2">
-      <p class="key rule">여기까지가 지금 선입니다. <b>운영을 판단하는 근거로는
-        쓰지 않습니다.</b> 설득 · 검토 · 설계를 돕는 데까지입니다.</p>
+      <p class="t rule">가정값 기반이라 운영을 판단하는 근거로는 아직
+        쓰지 못합니다.</p>
     </div>
   </div>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
 
@@ -694,92 +756,67 @@ h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.0
     <h2>믿을 만한가</h2></header>
   <div class="grid">
     <div>
-      <p class="key">들어온 열과 나간 열이 맞는지를 매번 확인합니다.
-        합격선은 0.1 % 이고, 지금은 그 스무 분의 일입니다.</p>
-      <!-- figures #7 : 0.0050641 % · figures #8 : 0.00506 % → 0.005 % -->
-      <span class="fig">0.005 <small>%</small> <span style="opacity:.45;font-weight:normal">/ 합격선 0.1 %</span></span>
+      <p class="key">랙에서 나온 열과, 냉매가 데워지며 실어 나른 열이 맞는지를
+        매번 확인합니다. <b>99.9 % 이상 맞아야 하는데, 지금은 99.995 %
+        맞습니다.</b></p>
+      <!-- figures #7 : 0.0050641 % · figures #8 : 0.00506 % → 어긋난 몫 0.005 %
+           = 맞는 몫 99.995 % · 합격선 어긋남 0.1 % = 맞는 몫 99.9 % -->
+      <span class="fig">99.995 <small>%</small> <span style="opacity:.5;font-weight:normal">/ 합격선 99.9 %</span></span>
       <span class="when">열식 4 케이스와 물의 흐름까지 묶은 32 조합 모두에서</span>
     </div>
     <ul class="list">
-      <li><span class="lead">검사가 형식으로 헛돌지 않습니다.</span>
-        <p class="t">냉각액의 성질을 어느 온도에서 읽느냐 하는 규칙 하나만 바꿔도
-          합격이 불합격으로 뒤집힙니다. 지금 통과하는 것은 규칙이 느슨해서가
-          아닙니다.</p></li>
-      <li><span class="lead">고칠 때마다 전부 다시 돕니다.</span>
-        <p class="t">전에 맞던 것이 틀어지면 그 자리에서 걸립니다.</p>
+      <li><span class="lead">고칠 때마다 자동으로 다시 확인하는 검증 장치를
+          두었습니다.</span>
+        <p class="t">전에 맞던 것이 틀어지면 그 자리에서 걸립니다.
+          지금 1,207 건이 전부 통과합니다.</p>
         <!-- figures #18 : 1,207 건 (정수) -->
-        <span class="fig">자동 시험 1,207 <small>건 전부 통과</small></span></li>
+        <span class="fig">검사 1,207 <small>건 전부 통과</small></span></li>
     </ul>
   </div>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
 
-<!-- ═══ 10 · 아직 못 하는 일 ═════════════════════════════════════════ -->
+<!-- ═══ 10 · 어디까지 할 수 있고, 다음은 무엇인가 ═══════════════════════
+     세션 7.19 가 옛 09(아직 못 하는 일)과 10(다음)을 여기 하나로 합쳤다.
+     한계를 늘어놓는 문단을 두지 않는다 — 칸에는 **「할 수 있는 일」만** 적고,
+     시운전·운영의 왼쪽 칸이 비는 것으로 못 하는 일을 보인다. -->
 <section class="screen" id="s10">
   <header><span class="no">09</span>
-    <h2>아직 못 하는 일</h2></header>
-  <div class="grid">
-    <div>
-      <p class="key">지금 말할 수 있는 것은 「무너지지 않는다」까지입니다.
-        그 앞은 아직입니다.</p>
-      <p class="t">아래 넷은 감추지 않고 그대로 적습니다. 무엇이 안 되는지를
-        아는 것이, 이 자료를 읽는 사람에게 필요한 것입니다.</p>
-    </div>
-    <ul class="list">
-      <li><span class="lead">이상 상태를 「배관이 막힌다」 쪽으로만 흉내 냈습니다.</span>
-        <p class="t">물이 밖으로 빠져나가는 쪽은 아직 넣지 않았습니다. 그래서
-          실제와 다르게 나올 수 있습니다 — 정의를 바꿔야 합니다.</p></li>
-      <li><span class="lead">가정치가 전부 업계 공개자료입니다.</span>
-        <p class="t">실측이 없어 얼마나 어긋나는지를 재본 적이 없습니다.</p></li>
-      <li><span class="lead">물을 얼마나 담고 있는지가 가정치 표에 없습니다.</span>
-        <p class="t">그래서 온도가 자리를 잡는 데 걸리는 시간이 실제보다 짧게
-          나옵니다 — 설계도서가 오면 채웁니다.</p></li>
-      <li><span class="lead">CDU 끼리 물의 양으로만 얽히고 열로는 얽히지 않습니다.</span>
-        <p class="t">CDU 밖으로 나가는 쪽의 온도를 고정값으로 두었기 때문입니다 —
-          냉각탑·드라이쿨러를 넣으면 닫힙니다.</p></li>
-    </ul>
-    <div class="span2">
-      <div class="card">
-        <p class="lead">상용 도구가 잘하는 것 — 그리고 남은 일</p>
-        <p class="t">Aspen Plus · HYSYS 계열은 오래 검증된 큰 물성 자료 ·
-          끓고 어는 변화와 여러 성분이 섞인 계 · 업계 표준이라는 신뢰를
-          가지고 있습니다. 이쪽은 그 셋을 아직 갖지 못했습니다.</p>
-        <p class="t">사내에 HYSYS 가 있으므로, 같은 조건을 나란히 돌려 견주면
-          <b>검증을 한 겹 더 두는 것</b>이 됩니다. 이것은 변명이 아니라
-          남은 일 목록입니다.</p>
-      </div>
-    </div>
+    <h2>어디까지 할 수 있고, 다음은 무엇인가</h2></header>
+
+  <div class="canwrap">
+    <table class="can">
+      <thead>
+        <tr><th></th><th>지금 할 수 있는 일</th><th>설계도서·실측이 들어오면</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th>설계</th>
+          <td>계기를 어디에 몇 개 달지 미리 본다 · 관 굵기를 바꿔 보고 결과를
+            본다 · 랙을 늘렸을 때 가장 먼 랙에 물이 가는지 본다</td>
+          <td>펌프 용량을 정한다 · 헤더 굵기를 확정한다 · 여유율을 검토한다</td>
+        </tr>
+        <tr>
+          <th>시운전</th>
+          <td class="none"></td>
+          <td>랙마다 물 맞추기를 현장 시행착오 대신 모델이 먼저 낸다 ·
+            돌려보지 못한 조건을 채운다</td>
+        </tr>
+        <tr>
+          <th>운영</th>
+          <td class="none"></td>
+          <td>계기를 못 다는 자리의 값을 계산으로 세운다 ·
+            모델과 실제가 벌어지는지 지켜본다</td>
+        </tr>
+        <tr>
+          <th>AI 데이터</th>
+          <td>여러 조건을 한 번에 돌려 표로 낸다</td>
+          <td>물리에 맞는 시나리오 데이터를 쌓아 학습에 쓴다 ·
+            언제부터 이상했는지를 시간으로 다룬다</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
-</section>
-
-
-<!-- ═══ 11 · 다음 ═══════════════════════════════════════════════════ -->
-<section class="screen" id="s11">
-  <header><span class="no">10</span>
-    <h2>다음</h2></header>
-  <ul class="steps">
-    <li><span class="st">1 단계</span>
-      <span class="lead">이상 상태의 정의를 바꾸고, 시간에 따라 변해 가는
-        과정을 다시 세웁니다</span>
-      <p><b>필요한 것</b> — 추가 개발. 설계데이터 없이도 됩니다.</p>
-      <p><b>얻는 것</b> — 물리에 맞는 시나리오 데이터 ·
-        「언제부터 이상했는가」를 다룰 수 있는 계산 ·
-        어떤 규칙을 세웠을 때 그 규칙이 공연히 울리지는 않는지를 미리 재보기.</p></li>
-    <li><span class="st">2 단계</span>
-      <span class="lead">실제 설계데이터를 넣습니다</span>
-      <p><b>필요한 것</b> — 실제 펌프 · 밸브 · 열교환기 사양, 랙별 발열량.</p>
-      <p><b>얻는 것</b> — 펌프 용량 선정 · 관 굵기 결정 · 여유율 검토 ·
-        랙을 늘렸을 때 가장 먼 랙에 물이 충분히 가는지를 시공 전에.</p></li>
-    <li><span class="st">3 단계</span>
-      <span class="lead">시운전하고 운영에 씁니다</span>
-      <p><b>필요한 것</b> — 실측 데이터, 시간에 따른 계산 보완.</p>
-      <p><b>얻는 것</b> — 랙마다 물을 고르게 맞추는 일을 현장 시행착오 대신
-        모델이 먼저 내기 · 못 돌려본 조건 채우기 · 계기를 못 다는 자리의
-        값을 계산으로 세우기 · 모델과 실제가 벌어지는지 지켜보기.</p></li>
-  </ul>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
 
