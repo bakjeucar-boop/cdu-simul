@@ -36,11 +36,8 @@ DEMO_END = "<!--DEMO-END-->"
 #: 모든 화면에 있어야 하는 표기 (절대 규칙 11)
 DISCLAIMER = "가정값 기반 — 실측 아님"
 
-#: 화면 하나를 여는 표식
+#: 절 하나를 여는 표식
 SCREEN_TAG = '<section class="screen"'
-
-#: 화면 수 범위 — 사람이 정한 분량(상세형 12~15 화면)
-SCREEN_MIN, SCREEN_MAX = 12, 15
 
 #: 자료에 나가면 안 되는 말 (사람이 정한 어휘 통제)
 BANNED = {
@@ -75,7 +72,13 @@ def shell_of(html_out: str) -> str:
 
 
 def verify(html_out: str, demo_html: str) -> tuple[int, int]:
-    """네 가지를 검사한다. 하나라도 어긋나면 예외를 던진다."""
+    """세 가지를 검사한다. 하나라도 어긋나면 예외를 던진다.
+
+    세션 7.18 이 옛 검사 ⑷(절 수 12~15)를 없앴다. scroll-snap 이 사라진 뒤로
+    그 수는 「자료가 몇 판인가」가 아니라 절 개수를 뜻하게 됐고(세션 7.17 보고),
+    뜻을 잃은 범위는 아무것도 지키지 않으면서 절을 더할 때만 막았다.
+    **분량은 사람이 읽고 판정한다.**
+    """
     # ⑴ 넣은 시연 화면이 원본과 완전히 같다 (한 글자도 고치지 않았다)
     embedded = html_out.partition(DEMO_BEGIN)[2].partition(DEMO_END)[0]
     start = embedded.index('srcdoc="') + len('srcdoc="')
@@ -91,24 +94,17 @@ def verify(html_out: str, demo_html: str) -> tuple[int, int]:
         if hits:
             raise RuntimeError(f"검사 ⑵ 실패: 「{word}」 {hits}회 — {why}")
 
-    # ⑶ 화면마다 「가정값 기반 — 실측 아님」이 하나씩 있다
+    # ⑶ 절마다 「가정값 기반 — 실측 아님」이 하나씩 있다
     screens = shell.count(SCREEN_TAG)
     marks = shell.count(DISCLAIMER)
     if screens != marks:
         raise RuntimeError(
-            f"검사 ⑶ 실패: 화면 {screens}개 · 표기 {marks}개 — 같아야 한다"
-        )
-
-    # ⑷ 화면 수가 정한 분량 안에 있다
-    if not SCREEN_MIN <= screens <= SCREEN_MAX:
-        raise RuntimeError(
-            f"검사 ⑷ 실패: 화면 {screens}개 — {SCREEN_MIN}~{SCREEN_MAX}개여야 한다"
+            f"검사 ⑶ 실패: 절 {screens}개 · 표기 {marks}개 — 같아야 한다"
         )
 
     print(f"  검사 ⑴ 시연 화면 원본과 동일 ({len(demo_html):,} 자)")
     print(f"  검사 ⑵ 금지어 0회 — {' · '.join(BANNED)} (iframe 안은 대상 아님)")
-    print(f"  검사 ⑶ 화면 {screens}개 · 「{DISCLAIMER}」 {marks}개")
-    print(f"  검사 ⑷ 화면 수 {screens} ∈ [{SCREEN_MIN}, {SCREEN_MAX}]")
+    print(f"  검사 ⑶ 절 {screens}개 · 「{DISCLAIMER}」 {marks}개")
     return screens, marks
 
 
