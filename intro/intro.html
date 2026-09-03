@@ -3,138 +3,173 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI 데이터센터 CDU 디지털 트윈 — 소개 (가정값 기반 · 실측 아님)</title>
+<title>AI 데이터센터 냉각 시스템 — 짓기 전에 계산으로 먼저 돌려본다 (가정값 기반 · 실측 아님)</title>
 
 <!--
   ─────────────────────────────────────────────────────────────────────────
-  읽는 사람 = 사내 경영층 · 공학 배경 없음 (세션 7.17 이 다시 썼다).
+  읽는 사람 = 사내 경영층 · 공학 배경 없음.
 
-  세션 7.17 이 바꾼 것 — 내용을 새로 만들지 않았다. 있는 것을 다시 쓰고
-  다시 배치했다.
-  ⓐ scroll-snap 을 걷어냈다. 자유 스크롤이고 절마다 길이가 다르다
-  ⓑ 골격 어휘(「읽는 법 ①」·「그래서 무엇을 했나」·「한 줄 결론」 따위)를
-     지웠다. 제목을 이름표가 아니라 문장으로 썼다
-  ⓒ 절마다 큰 문장 하나(.key)를 세우고 나머지를 작게 딸리게 했다.
-     흰 상자는 표지·각주·6장 3단계에만 남겼다
-  ⓓ 수치를 두 겹으로 적는다 — 본문에 크게 = **반올림값에 이름을 붙인 것**,
-     그 밑에 작게(.exact) = docs/intro-figures.md **전체 자릿수 그대로**.
-     반올림은 이 파일에서만 했고 **figures 표는 고치지 않았다.**
-     반올림 자릿수는 각 수치 옆 주석에 적었다
-  ⓔ 식과 코드 문자열은 지우지 않고 .cond 로 내렸다(작게).
-     케이스 조건 중 **말로 된 부분**(단일 CDU · 부하 100 % 등)은 .when 으로
-     본문 크기를 지켰다
+  세션 7.18 이 **구성부터 다시 짰다.** 앞 판(7.17)의 14 절을 고쳐 쓴 것이
+  아니라 11 절로 새로 세웠다. 사람이 실물을 보고 낸 판정이 「14 절 중 5 절만
+  읽힌다 · 원인은 문장이 아니라 구성과 조형」이었다.
 
-  ⚠ 표기 규칙 넷 — 세션 7.15 가 못박은 것을 그대로 지켰다
-  ⑴ 랙 번호는 「랙 08」로 쓴다. 코드의 rack index 7 = 화면의 랙 08 이다.
-     자료 어디에도 0-based 번호를 쓰지 않는다
-  ⑵ 편차 막대는 px 가 아니라 **m³/h** 로 쓴다 (figures #24 · #25)
-  ⑶ 양정 상대변화는 **두 수준을 함께** 쓴다 (figures #12 +5% · #13 +50%)
-  ⑷ 총유량 변화는 **데모값 figures #15** 를 본문에 쓰고, 세션 4 범위
-     figures #14 는 각주로만 둔다 — 케이스 집합이 다르다
+  ⓐ 뼈대를 「우리가 한 일」에서 「무엇이 새롭고 · 왜 막혀 있었고 ·
+     무엇이 열렸고 · 그래서 무엇을 할 수 있나」로 바꿨다.
+     「어떻게 계산하나」 다섯 절을 5 절 하나로 접었다.
+  ⓑ 절마다 2 단이다 — 왼쪽에 주장, 오른쪽에 근거·수치·그림.
+     표지 · 5 절 다이어그램 · 6 절 시연만 전폭이다.
+  ⓒ 묶음 이름(「왜 만들었나」·「무엇에 쓰나」)을 **없앴다.** 절 제목이
+     이미 문장이라 작은 회색 글씨가 목차 노릇을 못 했다. 순서는 절 번호가 진다.
+  ⓓ 글자를 키웠다 — 본문 17.5px · 절의 큰 문장 27px · 절 제목 28~37px.
+  ⓔ 시연 iframe 을 1600px 원본 크기로 두고 화면 폭에 맞춰 축소한다.
+     원본이 1600px 기준이라 좁히면 조작 막대가 겹친다 — 좁히지 않고 줄인다.
+  ⓕ **수치를 크게 줄였다.** 전체 자릿수 병기(.exact) · 코드 문자열(고정축
+     H22.4 / dPb2 / dPv3 따위) · 논증을 지지 않는 수치를 전부 뺐다.
+     남은 수치는 아홉이고, 각 자리에 figures 항목 번호를 주석으로 남겼다.
 
   자료에 나가는 수치는 **전부 docs/intro-figures.md 에서 가져왔다.**
-  그 표에 없는 숫자는 쓰지 않았다. 각 수치 옆 주석에 항목 번호를 남겼다.
-
-  화면 순서 — Aspen 비교(id `s13`)는 5장 뒤 · 6장 앞 본문이다(세션 7.16).
-  id 는 만들 때 번호를 그대로 두었으므로 문서 순서와 id 번호가 어긋난다
-  (… s11 · s13 · s12).
+  그 표에 없는 숫자는 쓰지 않았다.
 
   어휘 — 빌드가 검사한다(intro/make_intro_html.py):
   「랙 배관 저항 증가」로 부른다 · 「용도가 다르다」로 쓴다 · 한계는 그대로 적는다.
   기능이 서기 전까지 그 방향을 말하지 않는다 — 우회 표현도 쓰지 않는다.
+  엔지니어만 아는 말(양정 · 대향류 · NTU · 잔차 · 시간축 …)도 걷어냈다.
 
-  글꼴은 시스템 글꼴만 쓴다 · 이모지를 쓰지 않는다 · 색은 시연 화면의 여섯뿐이다.
-  오프라인 파일 하나로 열리는 것이 전제라 바깥에서 받아오는 것이 없어야 한다.
+  글꼴은 시스템 글꼴만 쓴다 · 이모지를 쓰지 않는다 · 색은 시연 화면의 여섯과
+  그 명도 단계뿐이다. 오프라인 파일 하나로 열리는 것이 전제라 바깥에서
+  받아오는 것이 없어야 한다.
   ─────────────────────────────────────────────────────────────────────────
 -->
 
 <style>
-/* 색 여섯은 시연 화면과 같은 값이다 (demo/pfd.html :root).
-   CSS 를 복사하지 않고 **색값만** 가져왔다 — 복사하면 시연 화면이 바뀔 때 갈린다. */
+/* 색은 시연 화면과 같은 값이다 (demo/pfd.html :root).
+   --faced 는 새 색이 아니라 흰색의 밝기 88% 로, 시연 화면이 등축 옆면에 쓰는 것을
+   그대로 가져왔다. 그 밖의 계조는 --ink 의 투명도 단계로만 낸다. */
 :root{
-  --ground:#EDF0F2; --face:#FFFFFF; --ink:#3E4C56;
+  --ground:#EDF0F2; --face:#FFFFFF; --faced:#E0E0E0; --ink:#3E4C56;
   --cold:#2E7FA8; --hot:#C2452D; --warn:#E8A33D;
+  --line:rgba(62,76,86,.16);   /* --ink 16% — 새 색이 아니다 */
+  --dim:rgba(62,76,86,.62);
 }
 *{box-sizing:border-box}
-/* 자유 스크롤이라 문서가 길다 — 「자료로 돌아가기」가 부드럽게 미끄러지면
-   한참을 기다려야 한다. 그 자리로 바로 뛴다(scroll-behavior 를 두지 않는다). */
-body{margin:0 0 130px;background:var(--ground);color:var(--ink);
+
+body{margin:0 0 140px;background:var(--ground);color:var(--ink);
      font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;
-     font-size:16px;line-height:1.78;
+     font-size:17.5px;line-height:1.78;
      /* 한글이 낱말 중간에서 끊기지 않게 한다 */
      word-break:keep-all;overflow-wrap:break-word}
 
-/* 절을 나누는 것은 여백이다 — 테두리를 두르지 않는다.
-   가로 여백을 padding 으로 주어, 배경은 전폭이고 글은 가운데 기둥에 선다. */
-.screen{padding:108px max(28px,calc(50% - 540px)) 0}
-.screen > header{margin:0 0 32px}
-.ch{display:block;font-size:12.5px;letter-spacing:.16em;opacity:.5;margin-bottom:11px}
-h2{margin:0;max-width:22em;font-size:30px;line-height:1.42;letter-spacing:-.015em}
+/* ── 기둥 ────────────────────────────────────────────────────────────
+   글 기둥 최대 1520px · 좌우 여백은 대칭이다. 화면이 넓어도 오른쪽이
+   비지 않도록, 절 안은 2 단이 기본이다. */
+.screen{padding:104px max(32px,calc(50% - 760px)) 0}
 
-.slots{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:28px}
-.slots > li{display:flex;flex-direction:column;gap:6px;max-width:38em}
+.screen > header{display:grid;grid-template-columns:96px minmax(0,1fr);
+                 gap:0 28px;align-items:baseline;margin:0 0 48px}
+.no{font-size:46px;font-weight:bold;line-height:1;opacity:.2;
+    font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+h2{margin:0;max-width:24em;font-size:clamp(28px,2.4vw,37px);
+   line-height:1.36;letter-spacing:-.022em}
+
+/* ── 2 단 ─────────────────────────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+      gap:52px 76px;align-items:start;padding-left:124px}
+.grid > .span2{grid-column:1 / -1}
 
 /* 계층 — 절마다 큰 문장 하나가 서고 나머지가 딸린다 */
-.key{font-size:21px;line-height:1.68;letter-spacing:-.01em;max-width:26em}
-.sub{font-size:17px;font-weight:bold;line-height:1.6}
-.t{opacity:.86}
-.fig{font-size:20px;color:var(--cold);font-weight:bold;line-height:1.45;
-     font-variant-numeric:tabular-nums;margin-top:3px}
-/* figures 전체 자릿수 — 본문의 반올림값 바로 밑에 작게 */
-.exact{font-size:12px;opacity:.5;line-height:1.5;font-variant-numeric:tabular-nums}
-/* 케이스 조건 중 말로 된 부분 — 본문 크기를 지킨다 */
-.when{font-size:15px;opacity:.72;line-height:1.6}
-/* 식 · 코드 문자열 — 지우지 않고 내렸다 */
-.cond{font-size:12.5px;opacity:.5;line-height:1.55}
+.key{margin:0;font-size:27px;line-height:1.6;letter-spacing:-.012em}
+.key + .key{margin-top:24px}
+p{margin:0 0 18px}
+p:last-child{margin-bottom:0}
+.t{margin:0 0 16px}
+.dim{color:var(--dim)}
 
-/* 흰 상자는 특별한 것에만 쓴다 — 각주 · 6장 3단계 · 표지 */
-.note{background:var(--face);border-left:3px solid var(--warn);border-radius:3px;
-      padding:13px 17px;font-size:13px;line-height:1.7;opacity:.9;margin-top:2px}
-.mark{margin:44px 0 0;font-size:11.5px;letter-spacing:.06em;opacity:.4}
+/* 근거 목록 — 상자 대신 가로줄이 나눈다 */
+.list{list-style:none;margin:0;padding:0}
+.list > li{padding:17px 0;border-top:1px solid var(--line)}
+.list > li:first-child{border-top:0;padding-top:0}
+.list > li:last-child{padding-bottom:0}
+.lead{font-weight:bold}
 
-/* 4장 막대 그림 — 이 자료의 중심이라 전폭으로 둔다.
-   `.slots > li` 의 글줄 폭 제한을 이기려면 선택자가 더 좁아야 한다. */
-.slots > li.wide{max-width:none}
-.wide svg{width:100%;height:auto;display:block}
-.cap{font-size:15px;line-height:1.6;max-width:34em;margin-top:10px}
+/* 수치 — 논증을 지는 것만 남겼다 */
+.fig{display:block;margin-top:6px;font-size:31px;line-height:1.3;
+     color:var(--cold);font-weight:bold;font-variant-numeric:tabular-nums;
+     letter-spacing:-.02em}
+.fig small{font-size:19px;font-weight:bold}
+/* 케이스 조건 — 말로 된 부분만 남긴다 */
+.when{display:block;margin-top:8px;font-size:14.5px;line-height:1.6;color:var(--dim)}
 
-/* 표지 — 첫 화면만 흰 면(--face)이고 나머지는 회색 바탕(--ground)이다.
-   색을 새로 들이지 않고 시선을 모으는 방법으로 이것을 골랐다. */
-#s00{background:var(--face);min-height:94vh;padding-top:0;padding-bottom:64px;
+.card{background:var(--face);border-radius:5px;padding:26px 30px}
+.card + .card{margin-top:16px}
+.rule{border-left:3px solid var(--warn);padding:4px 0 4px 20px}
+
+.mark{margin:56px 0 0;font-size:11.5px;letter-spacing:.06em;opacity:.4}
+
+/* ── 표지 ─────────────────────────────────────────────────────────── */
+#s01{background:var(--face);min-height:92vh;padding-top:0;padding-bottom:72px;
      display:flex;flex-direction:column;justify-content:center;align-items:center;
      text-align:center}
-.cover-kicker{margin:0 0 26px;font-size:14px;letter-spacing:.2em;opacity:.55}
-h1{margin:0;font-size:clamp(34px,5.6vw,60px);line-height:1.26;letter-spacing:-.03em}
-.cover-sub{margin:30px 0 0;max-width:31em;font-size:16.5px;opacity:.8}
-#s00 .mark{margin-top:52px}
+.cover-kicker{margin:0 0 30px;font-size:16px;letter-spacing:.2em;opacity:.55}
+h1{margin:0;font-size:clamp(38px,5.4vw,68px);line-height:1.24;letter-spacing:-.035em}
+.cover-sub{margin:34px 0 0;max-width:30em;font-size:19px;line-height:1.75;opacity:.82}
+#s01 .mark{margin-top:60px}
 
-/* 시연 화면 — iframe 안팎은 별개 문서다. 바깥 CSS·id 가 안으로 들어가지 않고
-   안의 것도 밖으로 나오지 않는다(브라우저가 보장한다). */
-.demo-bar{display:flex;align-items:center;gap:16px;margin-bottom:12px}
-.demo-bar a{color:var(--ink);font-size:14px;text-decoration:none;
-            border:1px solid var(--ink);border-radius:2px;padding:4px 12px;
-            background:var(--face)}
-.demo-note{font-size:13.5px;opacity:.6}
-/* 시연 화면만 글 기둥 밖으로 나간다 — 조작 막대가 좁으면 줄이 접힌다 */
-#s03{padding-inline:max(20px,calc(50% - 700px))}
-#demo{width:100%;height:min(86vh,880px);border:1px solid var(--ink);
-      border-radius:3px;background:var(--face)}
+/* ── 전폭 절 (5 절 다이어그램 · 6 절 시연) ────────────────────────── */
+#s05 .grid,#s06 .grid{padding-left:0}
+.figwrap{margin:0}
+.figwrap svg{display:block;width:100%;height:auto}
+.cap{margin:14px 0 0;font-size:15.5px;line-height:1.65;color:var(--dim)}
 
-/* 6장 3단계 — 나란히 견주는 자리라 상자를 쓴다 */
-.cols{flex-direction:row;gap:18px}
-.cols > li{flex:1;max-width:none;background:var(--face);border-radius:4px;
-           padding:22px 24px;gap:9px}
-.cols .ch{margin-bottom:0}
-@media (max-width:860px){
-  .cols{flex-direction:column}
-  h2{font-size:25px}
-  .key{font-size:19px}
+/* ── 5 절 — 식 하나 ──────────────────────────────────────────────── */
+.eq{font-size:44px;line-height:1.3;letter-spacing:.01em;margin:0 0 22px;
+    font-variant-numeric:tabular-nums}
+.eq sub{font-size:.55em;vertical-align:-.15em}
+.eq sup{font-size:.6em}
+.eqkey{list-style:none;margin:0;padding:0;display:grid;
+       grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 32px;font-size:16.5px}
+.eqkey b{color:var(--cold);margin-right:9px}
+
+/* ── 6 절 — 시연 ─────────────────────────────────────────────────────
+   시연 절만 화면 폭을 다 쓴다. 원본 시연은 1600px 기준 화면이라 폭을 줄이면
+   조작 막대가 겹친다 — **폭을 줄이지 않고 통째로 축소한다.**
+   스크립트가 축척을 잡고, 스크립트가 막히면 가로 스크롤로 물러난다. */
+#s06{padding-inline:max(20px,calc(50% - 860px))}
+.demo-guide{list-style:none;margin:0 0 20px;padding:0;display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));gap:0 32px;font-size:16.5px}
+.demo-guide li{padding-left:18px;border-left:3px solid var(--line)}
+.demo-guide b{display:block}
+.demo-edge{border:2px solid var(--ink);border-radius:5px;background:var(--face);
+           overflow-x:auto;overflow-y:hidden}
+.demo-scale{width:1600px;height:920px;transform-origin:0 0}
+#demo{display:block;width:1600px;height:920px;border:0}
+.demo-tag{display:flex;justify-content:space-between;align-items:baseline;
+          gap:24px;margin:0 0 10px;font-size:14.5px;color:var(--dim)}
+.demo-tag b{color:var(--ink)}
+
+/* ── 11 절 — 3 단계 ──────────────────────────────────────────────── */
+.steps{list-style:none;margin:0;padding-left:124px;display:grid;
+       grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.steps > li{background:var(--face);border-radius:5px;padding:26px 28px}
+.steps .st{display:block;font-size:14px;letter-spacing:.1em;opacity:.5;margin-bottom:10px}
+.steps .lead{display:block;margin-bottom:14px;font-size:19px;line-height:1.55}
+.steps p{font-size:16px;margin-bottom:12px}
+
+/* ── 좁은 화면 ───────────────────────────────────────────────────── */
+@media (max-width:1180px){
+  .grid{grid-template-columns:minmax(0,1fr);gap:34px;padding-left:0}
+  .steps{grid-template-columns:minmax(0,1fr);padding-left:0}
+  .screen > header{grid-template-columns:64px minmax(0,1fr);gap:0 18px}
+  .no{font-size:34px}
+  .key{font-size:23px}
+  .eqkey,.demo-guide{grid-template-columns:minmax(0,1fr)}
+  .demo-guide li{border-left:0;border-top:1px solid var(--line);
+                 padding:12px 0 0 0;margin-top:12px}
 }
 
-/* 절 단위 등장 효과 — 기본은 「보임」이다.
-   스크립트가 떠야 비로소 .reveal-on 이 붙어 감췄다가 띄운다. 스크립트가 막히면
-   아무것도 감춰지지 않는다(오프라인 파일 하나라 이 방향이어야 한다).
-   prefers-reduced-motion 은 스크립트가 직접 보고 아예 걸지 않는다. */
+/* ── 절 단위 등장 효과 ───────────────────────────────────────────────
+   기본 상태는 「보임」이다. 이 스크립트가 떠야 .reveal-on 이 붙고 그때부터
+   감췄다가 띄운다 — 스크립트가 막히면 전부 그대로 보인다.
+   움직임을 줄이라는 설정이면 아예 걸지 않는다. */
 .reveal-on .screen{opacity:0;transform:translateY(16px)}
 .reveal-on .screen.in{opacity:1;transform:none;
      transition:opacity .55s ease,transform .55s cubic-bezier(.22,.61,.36,1)}
@@ -142,368 +177,632 @@ h1{margin:0;font-size:clamp(34px,5.6vw,60px);line-height:1.26;letter-spacing:-.0
 </head>
 <body>
 
-<!-- ═══ 표지 ═══ -->
-<section class="screen" id="s00">
-  <p class="cover-kicker">AI 데이터센터 CDU 디지털 트윈</p>
-  <h1>짓기 전에 계산으로<br>먼저 돌려본다</h1>
-  <p class="cover-sub">서버를 물로 식히는 장치(CDU)를 물리 계산으로 그대로 재현했습니다.
-     설비를 세우기 전에, 설비로는 만들어 볼 수 없는 조건까지 돌려 봅니다.</p>
-  <p class="cover-sub">지금 무엇이 되어 있고 무엇이 안 되어 있는지를
-     그대로 적은, 알리는 자료입니다.</p>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
-</section>
 
-<!-- ═══ 1장 — 왜 만들었나 ═══ -->
+<!-- ═══ 1 · 표지 ═══════════════════════════════════════════════════ -->
 <section class="screen" id="s01">
-  <header><span class="ch">왜 만들었나</span>
-    <h2>배관 안에서 무슨 일이 나는지, 밖에서는 보이지 않습니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">GPU 가 뜨거워지면서 공기로는 열을 못 빼는 자리가 생겼습니다.
-            이제 냉각액이 서버 안까지 들어옵니다.</span></li>
-    <li><span class="t">서버로 들어가는 배관은 가늘고 완전히 막혀 있습니다 —
-            안을 들여다볼 방법이 없습니다.</span>
-        <span class="cond">D2C(Direct-to-Chip) 액체냉각 · 냉각액은 물에
-            프로필렌글리콜을 섞은 것(PG25)</span></li>
-    <li><span class="t">현장 계기는 이상이 충분히 커진 뒤에야 값이 움직입니다.
-            사고가 난 다음에 알게 되는 구조입니다.</span></li>
-    <li><span class="t">그렇다고 실제 설비를 일부러 이상하게 만들어 볼 수도 없습니다.
-            설비가 어떻게 움직이는지를 계산으로 재현하는 것이 남는 길이었습니다.</span></li>
-  </ul>
+  <p class="cover-kicker">AI 데이터센터 냉각 시스템</p>
+  <h1>짓기 전에,<br>계산으로 먼저 돌려봅니다</h1>
+  <p class="cover-sub">서버를 액체로 식히는 설비를 물리 계산으로 세웠습니다.
+     실제 설비로는 만들어 볼 수 없는 조건까지 화면에서 돌려 봅니다.</p>
+  <p class="cover-sub">지금 무엇이 되어 있고 무엇이 안 되어 있는지를
+     그대로 적은 자료입니다.</p>
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
-<!-- ═══ 2장 — 시연을 읽는 법 ═══ -->
+
+<!-- ═══ 2 · 새로운 설비다 ═══════════════════════════════════════════ -->
 <section class="screen" id="s02">
-  <header><span class="ch">무엇을 만들었나</span>
-    <h2>다음 화면에서 조건을 직접 바꿔 볼 수 있습니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">미리 풀어 둔 계산 결과 사이를 오갑니다.
-            축을 움직이면 화면이 바로 답합니다.</span>
-        <!-- figures #19: 데모 케이스 136 (정수 — 반올림 없음) -->
-        <span class="fig">136 케이스</span>
-        <span class="when">움직일 수 있는 축 셋 — 부하 20→100 % ·
-            CDU 단일→2대 · 랙 배관 저항 0→50 %</span>
-        <span class="cond">구성 2 × 부하 17단계(20~100 %, 5 % 간격)
-            × 랙 배관 저항 4단계(0/5/20/50 %)</span></li>
-    <li><span class="t">막대 높이는 그 랙이 내는 열입니다. 부하를 올리면 막대가 자랍니다.</span></li>
-    <li><span class="t">색은 랙 사이의 온도 차이입니다. 찬 쪽이 파랑, 뜨거운 쪽이 빨강입니다.</span></li>
-    <li><span class="t">왼쪽 그림은 CDU 안쪽입니다 — 펌프 · 열교환기 · 밸브 ·
-            물을 나눠 보내는 헤더가 서 있습니다.</span></li>
-  </ul>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
-</section>
-
-<!-- ═══ 2장 — 시연 (실물) ═══ -->
-<section class="screen" id="s03">
-  <div class="demo-bar">
-    <a href="#s02">← 자료로 돌아가기</a>
-    <span class="demo-note">이 자료 안에서 그대로 조작합니다</span>
+  <header><span class="no">01</span>
+    <h2>데이터센터가 다뤄본 적 없는 설비입니다</h2></header>
+  <div class="grid">
+    <div>
+      <p class="key">AI 서버가 늘면서, 공기로는 발열을 감당하지 못하는 자리가
+        생겼습니다. 그래서 액체로 식힙니다.</p>
+      <p class="key">배관이 서버실 바깥이 아니라 칩 바로 위까지 들어옵니다.</p>
+    </div>
+    <ul class="list">
+      <li><span class="lead">그 액체는 물이 아닙니다.</span>
+        <p class="t">얼지 않게, 배관을 삭히지 않게 만든 화학 냉각액입니다.
+          온도가 바뀌면 성질도 함께 바뀝니다.</p>
+        <span class="when">물에 프로필렌글리콜을 25 % 섞은 것 — PG25</span></li>
+      <li><span class="lead">물과 공기에는 쌓인 경험이 있지만, 이쪽에는 없습니다.</span>
+        <p class="t">데이터센터에서 이런 액체를 쓰는 일 자체가 이제 막
+          시작된 단계입니다. 따져보는 방법부터 새로 세워야 합니다.</p></li>
+      <li><span class="lead">그리고 그 배관이 고가 서버 바로 위를 지납니다.</span></li>
+    </ul>
   </div>
-  <!--DEMO-BEGIN--><iframe id="demo" title="CDU 시연 화면 (가정값 기반 · 실측 아님)"
-    srcdoc="{{DEMO_SRCDOC}}"></iframe><!--DEMO-END-->
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
-<!-- ═══ 3장 — 장치별 공학 내용 ═══ -->
+
+<!-- ═══ 3 · 미리 시험해 볼 방법이 없다 ═══════════════════════════════ -->
+<section class="screen" id="s03">
+  <header><span class="no">02</span>
+    <h2>모르는 조건을 미리 시험해 볼 방법이 없습니다</h2></header>
+  <div class="grid">
+    <div>
+      <p class="key">「이렇게 되면 어떻게 되나」를 물어볼 데가 없습니다.
+        설계할 때도, 다 짓고 나서도 마찬가지입니다.</p>
+    </div>
+    <ul class="list">
+      <li><span class="lead">설계할 때는 실물이 없어 못 해봅니다.</span>
+        <p class="t">도면 위의 숫자뿐이고, 그 숫자가 맞는지 확인할 설비가
+          아직 없습니다.</p></li>
+      <li><span class="lead">다 짓고 나면 설비를 상하게 할 수 없어 못 해봅니다.</span>
+        <p class="t">시운전 중에도, 운영 중에도, 일부러 이상한 조건을 만들어
+          볼 수는 없습니다.</p></li>
+      <li><span class="lead">현장 계기는 이상이 충분히 커진 뒤에야 값이 움직입니다.</span>
+        <p class="t">일이 벌어진 다음에 알게 되는 구조입니다.</p></li>
+    </ul>
+  </div>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+
+<!-- ═══ 4 · 이제 직접 만들 수 있게 됐다 ═════════════════════════════ -->
 <section class="screen" id="s04">
-  <header><span class="ch">어떻게 계산하나</span>
-    <h2>화면의 숫자는 장치마다 식을 풀어서 나옵니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">펌프 · 배관 · 열교환기 · 랙 네 군데를 각각 풀고,
-            네 답이 서로 맞아떨어지는 자리를 찾습니다.</span></li>
-    <li><span class="sub">펌프는 낼 수 있는 압력과 배관이 요구하는 압력이
-            같아지는 자리에서 돕니다</span>
-        <span class="cond">펌프 특성곡선 H = H₀ − aQ − bQ² 와 시스템곡선의 교점</span>
-        <!-- figures #1: 55.8329 → 본문은 55.8 로 반올림(소수 첫째자리) -->
-        <span class="fig">총유량 55.8 m³/h</span>
-        <span class="exact">55.8329 m³/h</span></li>
-    <li><span class="sub">여덟 갈래로 갈라진 물은 저항이 낮은 쪽으로 더 많이 갑니다</span>
-        <span class="cond">ΔP = K·ρv²/2 · 병렬 분배 Q ∝ 1/√K ·
-            헤더 압력이 여덟 다리에서 같아야 한다는 연립방정식의 해</span>
-        <!-- figures #2: 6.7087~7.2687 → 본문은 소수 둘째자리로 반올림 -->
-        <span class="fig">랙별 유량 6.71 ~ 7.27 m³/h</span>
-        <span class="exact">6.7087 ~ 7.2687 m³/h</span></li>
-    <li><span class="sub">열교환기는 2차측 냉각수로 1차측을 어디까지 식힐 수 있는지를
-            정합니다</span>
-        <span class="cond">ε-NTU 대향류 열교환기 Q = ε·C_min·ΔT_max</span>
-        <!-- figures #3: 32.1695 → 32.2 · figures #6: 640.00 → 640 -->
-        <span class="fig">1차측 공급 32.2 ℃ · 열교환량 640 kW</span>
-        <span class="exact">32.1695 ℃ · 640.00 kW</span></li>
-    <li><span class="sub">랙마다 받는 물의 양이 달라, 나가는 물의 온도가 벌어집니다</span>
-        <span class="cond">Q = ṁ·cp·ΔT — 부하는 같은데 유량이 다르다</span>
-        <!-- figures #4: 42.0575~42.8829 → 소수 둘째자리로 반올림 -->
-        <span class="fig">랙 출구온도 42.06 ~ 42.88 ℃</span>
-        <span class="exact">42.0575 ~ 42.8829 ℃</span></li>
-    <li><span class="when">위 네 값을 낸 조건 — 단일 CDU · 부하 100 % (640 kW) ·
-            랙 배관 저항 증가 0 %</span>
-        <span class="cond">고정축 H22.4 / dPb2 / dPv3 · NTU 2 · 2차측 27 ℃ ·
-            랙별 등가길이 배분 켬</span></li>
-  </ul>
+  <header><span class="no">03</span>
+    <h2>우리 목적에 맞게 고쳐 쓸 수 있는 시뮬레이터를<br>만들 수 있게 됐습니다</h2></header>
+  <div class="grid">
+    <div>
+      <p class="key">「상용 시뮬레이터를 쓰면 되지 않나」 — 오랫동안 그 길밖에
+        없었습니다. 지금은 아닙니다.</p>
+      <p class="t dim">상용 시뮬레이터 = Aspen Plus · HYSYS 계열의 공정 해석 도구.</p>
+      <p class="t">계산식을 짜는 것 자체는 전에도 됐습니다. 막힌 것은 다른
+        데였습니다.</p>
+    </div>
+    <div>
+      <div class="card">
+        <p class="lead">전에는</p>
+        <p class="t">다루는 액체가 물이나 공기가 아니면, 그 액체의 성질을
+          어디서도 가져올 수 없었습니다. 온도마다 밀도와 비열이 얼마인지를
+          모르면 식을 세워도 풀 수가 없습니다. 그래서 그 값을 안에 품고 있는
+          상용 도구 말고는 길이 없었습니다.</p>
+      </div>
+      <div class="card">
+        <p class="lead">지금은</p>
+        <p class="t">그 값을 파이썬에서 바로 불러옵니다. 지금 쓰는 냉각액
+          PG25 도 온도만 넣으면 그 자리에서 나옵니다.</p>
+      </div>
+      <div class="card">
+        <p class="lead">그래서</p>
+        <p class="t">우리 목적에 맞게 고쳐 쓸 수 있는 시뮬레이터를
+          직접 만듭니다. 랙을 늘리고, 이상 조건을 넣고, CDU 를 여러 대로 묶고,
+          수백 번 돌려 데이터를 뽑는 일을 <b>필요한 대로 바꿔 가며</b> 합니다.</p>
+      </div>
+    </div>
+  </div>
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
-<!-- ═══ 3장 — 단순 계산이 아니다 ═══ -->
+
+<!-- ═══ 5 · 그래서 이렇게 만들었다 ═══════════════════════════════════
+     이 절이 자료의 중심이다. 다이어그램 하나가 절 전체를 진다.
+     등축 도형은 demo/pfd.html 의 것을 읽어 같은 규칙으로 다시 그렸다
+     — 투영 sx=(x−y)·cos30 / sy=(x+y)·sin30−z · 윗면·앞면 흰색 ·
+     옆면 --faced · 테두리 --ink · 모델 밖은 파선.
+     demo/ 는 한 글자도 고치지 않았다. -->
 <section class="screen" id="s05">
-  <header><span class="ch">어떻게 계산하나</span>
-    <h2>표 계산으로 한 번 곱하고 마는 일이 아닙니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">압력은 거의 순식간에 자리를 잡고, 온도는 몇 분에 걸쳐
-            천천히 움직입니다. 그래서 둘을 같은 방식으로 풀지 않습니다.</span></li>
-    <li><span class="t">압력과 유량은 매 시점의 균형을 그 자리에서 바로 계산하고,
-            온도는 시간을 따라가며 쌓아 갑니다.</span>
-        <span class="cond">압력-유량 = 대수방정식(fsolve) · 온도 = 열용량 기반
-            시간적분(solve_ivp)</span></li>
-    <li><span class="t">둘 다 자리 잡은 값만 보면 변해 가는 과정이 통째로 사라지고,
-            둘 다 시간을 따라 풀면 계산이 감당하기 어려워집니다.</span></li>
-    <li><span class="t">냉각액은 물이 아니라 프로필렌글리콜을 25 % 섞은 것입니다.
-            온도에 따라 성질이 달라져서, 그때그때 물성 자료에서 다시 읽어 옵니다 —
-            물로 계산하면 답이 달라집니다.</span>
-        <span class="cond">PG25(25 wt% 프로필렌글리콜 수용액) · 비열·밀도를
-            CoolProp 에서 조회</span></li>
-  </ul>
+  <header><span class="no">04</span>
+    <h2>그래서 이렇게 만들었습니다</h2></header>
+
+  <div class="figwrap">
+    <svg viewBox="0 0 1360 940" role="img"
+         aria-label="세 층으로 쌓은 그림. 위층은 펌프·밸브·배관·열교환기·랙 다섯 장치,
+                     가운데 층은 각 장치에 대응하는 코드, 그 다섯이 모두 아래의
+                     냉각액 성질 조회 한 곳을 가리킨다. 아래층은 그것을 물려 놓은
+                     냉각 시스템 전체 모습이다">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#3E4C56"/>
+        </marker>
+        <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#3E4C56"/>
+        </marker>
+        <!-- 랙 하나 — 등축 육면체. 아래층에서 여덟 번 놓는다 -->
+        <g id="rk">
+          <polygon points="0.0,-36.0 22.5,-23.0 9.5,-15.5 -13.0,-28.5"
+                   fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.2" stroke-linejoin="round"/>
+          <polygon points="22.5,13.0 9.5,20.5 9.5,-15.5 22.5,-23.0"
+                   fill="#E0E0E0" stroke="#3E4C56" stroke-width="1.2" stroke-linejoin="round"/>
+          <polygon points="-13.0,7.5 9.5,20.5 9.5,-15.5 -13.0,-28.5"
+                   fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.2" stroke-linejoin="round"/>
+        </g>
+      </defs>
+
+      <g font-family="Malgun Gothic, 맑은 고딕, system-ui, sans-serif" fill="#3E4C56">
+
+      <!-- ─── 1 층 · 장치 ─────────────────────────────────────────── -->
+      <text x="30" y="40" font-size="19" font-weight="bold">
+        장치를 하나씩 계산식으로 세운다</text>
+
+      <!-- 펌프 — 시연 화면의 펌프 심볼(흰 원 + 삼각 화살촉)을 그대로 -->
+      <g transform="translate(190,145)">
+        <line x1="-62" y1="0" x2="62" y2="0" stroke="#3E4C56" stroke-width="9"
+              stroke-linecap="round" opacity=".45"/>
+        <circle cx="0" cy="0" r="34" fill="#FFFFFF" stroke="#3E4C56" stroke-width="2.5"/>
+        <polygon points="-10,-15 16,0 -10,15" fill="#3E4C56"/>
+      </g>
+      <!-- 밸브 — 시연 화면에는 밸브 도형이 없다. 표준 심볼로 대신 그렸다 -->
+      <g transform="translate(425,145)">
+        <line x1="-62" y1="0" x2="62" y2="0" stroke="#3E4C56" stroke-width="9"
+              stroke-linecap="round" opacity=".45"/>
+        <polygon points="-32,-24 0,0 -32,24" fill="#FFFFFF" stroke="#3E4C56" stroke-width="2.5"
+                 stroke-linejoin="round"/>
+        <polygon points="32,-24 0,0 32,24" fill="#FFFFFF" stroke="#3E4C56" stroke-width="2.5"
+                 stroke-linejoin="round"/>
+        <line x1="0" y1="0" x2="0" y2="-40" stroke="#3E4C56" stroke-width="2.5"/>
+        <line x1="-17" y1="-40" x2="17" y2="-40" stroke="#3E4C56" stroke-width="4"
+              stroke-linecap="round"/>
+      </g>
+      <!-- 배관 — 시연 화면의 스트림(굵은 선 · 둥근 끝 · 삼각 화살촉)과 같은 규칙 -->
+      <g transform="translate(660,145)">
+        <polyline points="-56,32 6,32 6,-30 56,-30" fill="none" stroke="#3E4C56"
+                  stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+        <polygon points="46,-40 66,-30 46,-20" fill="#3E4C56"/>
+      </g>
+      <!-- 열교환기 — 시연 화면의 등축 육면체를 작게 다시 세웠다 -->
+      <g transform="translate(895,150)">
+        <polygon points="0.0,-72.0 52.0,-42.0 -5.2,-9.0 -57.2,-39.0"
+                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="52.0,30.0 -5.2,63.0 -5.2,-9.0 52.0,-42.0"
+                 fill="#E0E0E0" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="-57.2,33.0 -5.2,63.0 -5.2,-9.0 -57.2,-39.0"
+                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+      </g>
+      <!-- 랙 — 시연 화면 서버실의 랙과 같은 육면체 -->
+      <g transform="translate(1130,158)">
+        <polygon points="0.0,-59.0 36.4,-38.0 14.7,-25.5 -21.7,-46.5"
+                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="36.4,21.0 14.7,33.5 14.7,-25.5 36.4,-38.0"
+                 fill="#E0E0E0" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="-21.7,12.5 14.7,33.5 14.7,-25.5 -21.7,-46.5"
+                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.6" stroke-linejoin="round"/>
+      </g>
+
+      <g font-size="20" text-anchor="middle">
+        <text x="190" y="245">펌프</text>
+        <text x="425" y="245">밸브</text>
+        <text x="660" y="245">배관</text>
+        <text x="895" y="245">열교환기</text>
+        <text x="1130" y="245">랙</text>
+      </g>
+
+      <!-- 1 층 → 2 층 -->
+      <g stroke="#3E4C56" stroke-width="2.5" marker-end="url(#ah)" opacity=".8">
+        <line x1="190" y1="312" x2="190" y2="344"/>
+        <line x1="425" y1="312" x2="425" y2="344"/>
+        <line x1="660" y1="312" x2="660" y2="344"/>
+        <line x1="895" y1="312" x2="895" y2="344"/>
+        <line x1="1130" y1="312" x2="1130" y2="344"/>
+      </g>
+
+      <!-- ─── 2 층 · 코드 ─────────────────────────────────────────── -->
+      <text x="30" y="290" font-size="19" font-weight="bold">각각을 코드로 만든다</text>
+
+      <g fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.2">
+        <rect x="90" y="352" width="200" height="94" rx="4"/>
+        <rect x="325" y="352" width="200" height="94" rx="4"/>
+        <rect x="560" y="352" width="200" height="94" rx="4"/>
+        <rect x="795" y="352" width="200" height="94" rx="4"/>
+        <rect x="1030" y="352" width="200" height="94" rx="4"/>
+      </g>
+      <g font-size="19" text-anchor="middle">
+        <text x="190" y="392">펌프가 내는 압력</text>
+        <text x="425" y="392">밸브가 죄는 정도</text>
+        <text x="660" y="392">배관이 막는 정도</text>
+        <text x="895" y="392">열 주고받기</text>
+        <text x="1130" y="392">랙이 내는 열</text>
+      </g>
+      <g font-size="14" text-anchor="middle" opacity=".5">
+        <text x="190" y="420">hydraulics.py</text>
+        <text x="425" y="420">hydraulics.py</text>
+        <text x="660" y="420">hydraulics.py</text>
+        <text x="895" y="420">model.py</text>
+        <text x="1130" y="420">plant.py</text>
+      </g>
+
+      <!-- 2 층 → 밑층 : 다섯이 모두 아래 한 상자를 가리킨다 -->
+      <g stroke="#3E4C56" stroke-width="2" marker-end="url(#ahs)" opacity=".65">
+        <line x1="190" y1="450" x2="190" y2="486"/>
+        <line x1="425" y1="450" x2="425" y2="486"/>
+        <line x1="660" y1="450" x2="660" y2="486"/>
+        <line x1="895" y1="450" x2="895" y2="486"/>
+        <line x1="1130" y1="450" x2="1130" y2="486"/>
+      </g>
+
+      <!-- ─── 밑층 · 물성 조회 ────────────────────────────────────── -->
+      <rect x="90" y="494" width="1140" height="80" rx="4"
+            fill="none" stroke="#3E4C56" stroke-width="2" stroke-dasharray="10 7" opacity=".8"/>
+      <text x="660" y="529" font-size="21" font-weight="bold" text-anchor="middle">
+        냉각액 성질 조회 — 온도를 넣으면 그 온도에서의 값이 나온다</text>
+      <text x="660" y="556" font-size="15" text-anchor="middle" opacity=".6">
+        다섯 계산이 모두 같은 곳을 봅니다 · PG25 · fluid.py</text>
+
+      <!-- 밑층 → 3 층 -->
+      <line x1="660" y1="584" x2="660" y2="630" stroke="#3E4C56" stroke-width="3"
+            marker-end="url(#ah)" opacity=".8"/>
+
+      <!-- ─── 3 층 · 물려 놓으면 시스템 하나 ──────────────────────── -->
+      <text x="30" y="626" font-size="19" font-weight="bold">
+        물려 놓으면 냉각 시스템 하나가 된다</text>
+
+      <!-- 2차측 — 모델 밖이라 파선 육면체다 (시연 화면과 같은 규칙) -->
+      <g transform="translate(150,800)" fill="none" stroke="#3E4C56"
+         stroke-width="3.5" stroke-dasharray="10 7" opacity=".75" stroke-linejoin="round">
+        <polygon points="-38.1,22.0 0.0,44.0 38.1,22.0 38.1,-15.0 0.0,-37.0 -38.1,-15.0"/>
+        <line x1="38.1" y1="-15.0" x2="0.0" y2="7.0"/>
+        <line x1="-38.1" y1="-15.0" x2="0.0" y2="7.0"/>
+        <line x1="0.0" y1="44.0" x2="0.0" y2="7.0"/>
+      </g>
+      <!-- 열교환기 -->
+      <g transform="translate(320,800)">
+        <polygon points="0.0,-48.0 34.6,-28.0 -3.5,-6.0 -38.1,-26.0"
+                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.4" stroke-linejoin="round"/>
+        <polygon points="34.6,20.0 -3.5,42.0 -3.5,-6.0 34.6,-28.0"
+                 fill="#E0E0E0" stroke="#3E4C56" stroke-width="1.4" stroke-linejoin="round"/>
+        <polygon points="-38.1,22.0 -3.5,42.0 -3.5,-6.0 -38.1,-26.0"
+                 fill="#FFFFFF" stroke="#3E4C56" stroke-width="1.4" stroke-linejoin="round"/>
+      </g>
+
+      <!-- 2차측 ↔ 열교환기 -->
+      <line x1="196" y1="778" x2="272" y2="778" stroke="#3E4C56" stroke-width="7"
+            stroke-linecap="round" opacity=".55" marker-end="url(#ah)"/>
+      <line x1="272" y1="812" x2="196" y2="812" stroke="#3E4C56" stroke-width="5"
+            stroke-linecap="round" stroke-dasharray="10 7" opacity=".55"/>
+
+      <!-- 1차측 공급 : 열교환기 → 펌프 → 헤더 -->
+      <polyline points="352,772 700,772 700,846 723,850"
+                fill="none" stroke="#3E4C56" stroke-width="8"
+                stroke-linecap="round" stroke-linejoin="round" opacity=".65"/>
+      <circle cx="470" cy="772" r="22" fill="#FFFFFF" stroke="#3E4C56" stroke-width="2.5"/>
+      <polygon points="-9,-13 14,0 -9,13" transform="translate(470,772)" fill="#3E4C56"/>
+
+      <!-- 1차측 환수 : 헤더 → 열교환기 -->
+      <polyline points="1075,709 777,881 777,906 317,906 317,844"
+                fill="none" stroke="#3E4C56" stroke-width="8"
+                stroke-linecap="round" stroke-linejoin="round" opacity=".65"/>
+      <polygon points="9,-13 -14,0 9,13" transform="translate(560,906)" fill="#3E4C56"/>
+
+      <!-- 헤더 두 줄 — 랙 열과 나란히 간다 -->
+      <line x1="723" y1="850" x2="1022" y2="678" stroke="#3E4C56" stroke-width="8"
+            stroke-linecap="round" opacity=".65"/>
+      <line x1="777" y1="881" x2="1075" y2="709" stroke="#3E4C56" stroke-width="8"
+            stroke-linecap="round" opacity=".65"/>
+
+      <!-- 여덟 갈래 — 헤더에서 랙으로 -->
+      <g stroke="#3E4C56" stroke-width="3" stroke-linecap="round" opacity=".5">
+        <line x1="735.5" y1="843.1" x2="747.8" y2="850.2"/>
+        <line x1="772.8" y1="821.6" x2="785.1" y2="828.8"/>
+        <line x1="810.0" y1="800.1" x2="822.3" y2="807.2"/>
+        <line x1="847.3" y1="778.6" x2="859.5" y2="785.8"/>
+        <line x1="884.5" y1="757.1" x2="896.8" y2="764.2"/>
+        <line x1="921.7" y1="735.6" x2="934.0" y2="742.8"/>
+        <line x1="959.0" y1="714.1" x2="971.3" y2="721.2"/>
+        <line x1="996.2" y1="692.6" x2="1008.5" y2="699.8"/>
+        <line x1="770.3" y1="863.2" x2="789.1" y2="874.1"/>
+        <line x1="807.6" y1="841.8" x2="826.4" y2="852.6"/>
+        <line x1="844.8" y1="820.2" x2="863.6" y2="831.1"/>
+        <line x1="882.1" y1="798.8" x2="900.9" y2="809.6"/>
+        <line x1="919.3" y1="777.2" x2="938.1" y2="788.1"/>
+        <line x1="956.5" y1="755.8" x2="975.3" y2="766.6"/>
+        <line x1="993.8" y1="734.2" x2="1012.6" y2="745.1"/>
+        <line x1="1031.0" y1="712.8" x2="1049.8" y2="723.6"/>
+      </g>
+
+      <!-- 랙 여덟 -->
+      <use href="#rk" x="754.3" y="850.5"/>
+      <use href="#rk" x="791.6" y="829.0"/>
+      <use href="#rk" x="828.8" y="807.5"/>
+      <use href="#rk" x="866.0" y="786.0"/>
+      <use href="#rk" x="903.3" y="764.5"/>
+      <use href="#rk" x="940.5" y="743.0"/>
+      <use href="#rk" x="977.8" y="721.5"/>
+      <use href="#rk" x="1015.0" y="700.0"/>
+
+      <g font-size="18" text-anchor="middle">
+        <text x="150" y="878">2차측</text>
+        <text x="320" y="878">열교환기</text>
+        <text x="470" y="730">펌프</text>
+        <text x="1085" y="666">랙 8 대</text>
+      </g>
+      <text x="150" y="900" font-size="14" text-anchor="middle" opacity=".55">
+        모델 밖 — 고정값</text>
+
+      </g>
+    </svg>
+    <p class="cap">위층의 다섯이 가운데 층의 코드가 되고, 다섯 모두가 같은 곳에서
+      냉각액의 성질을 읽습니다. 그것을 물려 놓은 것이 아래층 — 다음 화면에서
+      직접 움직여 보는 그 계통입니다.</p>
+  </div>
+
+  <div class="grid" style="margin-top:64px">
+    <div>
+      <p class="eq">H = H<sub>0</sub> − aQ − bQ<sup>2</sup></p>
+      <ul class="eqkey">
+        <li><b>H</b> 펌프가 만드는 압력</li>
+        <li><b>Q</b> 흐르는 물의 양</li>
+        <li><b>H<sub>0</sub></b> 물을 안 흘릴 때의 압력</li>
+        <li><b>a, b</b> 펌프마다 정해진 값</li>
+      </ul>
+      <p class="t" style="margin-top:22px">장치마다 이런 식이 하나씩 있고,
+        그것을 코드로 옮겼습니다.</p>
+    </div>
+    <div>
+      <p class="key">식을 세우는 것보다 <b>물려 놓는 것</b>이 일이었습니다.</p>
+      <p class="t">물이 여덟 갈래로 갈라지는데, 갈라진 뒤에도 여덟 갈래가 같은
+        압력으로 만나야 합니다. 그 답이 랙마다 다른 온도를 만들고, 그 온도가
+        냉각액의 성질을 바꾸고, 바뀐 성질이 다시 압력으로 돌아옵니다.</p>
+      <p class="t">한 바퀴 도는 이 고리가 스스로 맞아떨어지는 자리를 매번 찾습니다.
+        장치 다섯을 각각 푸는 것보다, 다섯을 한 번에 맞추는 쪽이 일이었습니다.</p>
+    </div>
+  </div>
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
-<!-- ═══ 3장 — 역방향 검증 ═══ -->
+
+<!-- ═══ 6 · 시연 ═══════════════════════════════════════════════════ -->
 <section class="screen" id="s06">
-  <header><span class="ch">어떻게 계산하나</span>
-    <h2>받은 표가 무엇을 전제한 값인지, 계산으로 되짚었습니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">가정치 표는 1차측 32 ℃ 로 보내고 42 ℃ 로 받는다는 것만
-            줍니다. 어떤 열교환기를 상정한 값인지는 적혀 있지 않았습니다.</span></li>
-    <li><span class="t">대향류 열교환기로 놓고 풀었더니 표와 같은 값이 나왔습니다.</span>
-        <!-- figures #3: 32.1695 → 32.2 · figures #5: 42.4679 → 42.5 -->
-        <span class="fig">공급 32.2 ℃ · 환수 42.5 ℃</span>
-        <span class="exact">32.1695 ℃ · 42.4679 ℃</span>
-        <span class="when">단일 CDU · 부하 100 % (640 kW) · 랙 배관 저항 증가 0 %</span>
-        <span class="cond">고정축 H22.4 / dPb2 / dPv3 · NTU 2 · 2차측 27 ℃</span></li>
-    <li><span class="t">표가 대향류를 전제해 만들어졌다는 것이 계산으로 확인됐습니다.
-            가정을 새로 만든 것이 아니라, 표에서 거꾸로 읽어낸 것입니다.</span></li>
+  <header><span class="no">05</span>
+    <h2>직접 움직여 봅니다</h2></header>
+
+  <ul class="demo-guide">
+    <li><b>막대 높이 = 그 랙이 내는 열</b>
+      부하를 올리면 막대가 자랍니다.</li>
+    <li><b>색 = 랙 사이의 온도 차이</b>
+      찬 쪽이 파랑, 뜨거운 쪽이 빨강입니다.</li>
+    <li><b>왼쪽 그림 = CDU 안쪽</b>
+      펌프 · 열교환기 · 물을 나눠 보내는 관이 서 있습니다.</li>
   </ul>
+
+  <p class="demo-tag"><span><b>여기서부터 시연 화면입니다</b> —
+      미리 풀어 둔 계산 결과 사이를 오갑니다. 축을 움직이면 화면이 바로 답합니다.</span>
+    <!-- figures #19 : 데모 케이스 136 (정수) -->
+    <span><b>136 케이스</b> · 구성 2 × 부하 17 단계 × 랙 배관 저항 4 단계</span></p>
+
+  <div class="demo-edge">
+    <div class="demo-scale" id="demo-scale">
+      <!--DEMO-BEGIN--><iframe id="demo" title="CDU 시연 화면 (가정값 기반 · 실측 아님)"
+        srcdoc="{{DEMO_SRCDOC}}"></iframe><!--DEMO-END-->
+    </div>
+  </div>
+  <p class="cap">시연 화면은 읽기 전용입니다 — 이 자료가 그대로 품고 있고,
+    바깥 인터넷 없이 이 파일 하나로 돕니다.</p>
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
-<!-- ═══ 3장 — 검증 ═══ -->
+
+<!-- ═══ 7 · 랙 하나가 막히면 ═════════════════════════════════════════ -->
 <section class="screen" id="s07">
-  <header><span class="ch">어떻게 계산하나</span>
-    <h2>검사 규칙 하나만 바꿔도 합격이 불합격이 됩니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">들어온 열과 나간 열이 맞는지를 매번 확인합니다.
-            합격선은 0.1 % 이고, 지금은 그 스무 분의 일입니다.</span>
-        <!-- figures #7: 0.0050641 → 0.005 · figures #8: 0.00506 → 0.005 -->
-        <span class="fig">계산이 안 맞는 정도 0.005 %</span>
-        <span class="exact">0.0050641 % (열식 4케이스) ·
-            0.00506 % (수력 결합 32조합)</span>
-        <span class="cond">4케이스 = 2차측 27/30 ℃ × NTU 2/3 · 32조합 = 그 넷 ×
-            수력 8조합 · 최대 |잔차|</span></li>
-    <li><span class="t">냉각액의 성질을 어느 온도에서 읽느냐 하는 규칙 하나만 바꿔도
-            판정이 뒤집힙니다. 검사가 형식으로 헛돌지 않는다는 뜻입니다.</span>
-        <!-- figures #9 0.0050641 → 0.005 · #10 0.3089074 → 0.309 ·
-             #11 0.3152212 → 0.315 -->
-        <span class="fig">벌크 평균 0.005 % 합격 · 공급온도 0.309 % 불합격 ·
-            환수온도 0.315 % 불합격</span>
-        <span class="exact">0.0050641 % · 0.3089074 % · 0.3152212 %</span>
-        <span class="cond">같은 4케이스의 최대 |잔차| · 최악은 2차측 27 ℃ / NTU 3</span></li>
-    <li><span class="t">고칠 때마다 자동 시험이 전부 다시 돌아, 전에 맞던 것이
-            틀어지면 그 자리에서 걸립니다.</span>
-        <!-- figures #18: 1,207 건 (정수 — 반올림 없음) -->
-        <span class="fig">자동 시험 1,207 건 전부 통과</span></li>
-  </ul>
+  <header><span class="no">06</span>
+    <h2>랙 하나가 막히면 무슨 일이 나는가</h2></header>
+  <div class="grid">
+    <div>
+      <p class="key">랙 하나에 이상이 생깁니다. 현장에서는 CDU 전체 유량계를
+        봅니다 — 계기가 거기 있기 때문입니다.</p>
+      <p class="t">랙 여덟 대가 한 CDU 를 나눠 쓰고, 유량계는 그 여덟이 합쳐진
+        자리에 하나 붙어 있습니다.</p>
+    </div>
+    <div>
+      <p class="key">그런데 전체 유량은 거의 움직이지 않습니다.</p>
+      <!-- figures #15 : 데모 −0.2590~−0.2586 % → −0.26 % -->
+      <span class="fig">−0.26 <small>%</small></span>
+      <span class="when">랙 배관 저항 증가 50 % · 같은 구성·부하의 저항 0 % 대비</span>
+      <p class="t" style="margin-top:18px">전체 유량만 재면, 랙 하나가 막힌 일은
+        0.3 % 도 나타나지 않습니다. <b>못 잡습니다.</b></p>
+    </div>
+
+    <div class="span2 figwrap">
+      <!-- 두 막대는 같은 축척이다 — viewBox 1500 단위 = 1 m³/h · 0 점은 x=1210.
+           figures #25 랙 08 −0.58593 → 878.9 단위 · 이름표 −0.59
+           figures #24 총유량 −0.14452 → 216.8 단위 · 이름표 −0.14
+           왼쪽 이름표가 잘리지 않게 0 점을 오른쪽으로 밀고 폭을 1260 으로 두었다 -->
+      <svg viewBox="0 0 1260 250" role="img"
+           aria-label="같은 이상을 두 자리에서 잰 유량 변화. 막힌 랙에서는 −0.59,
+                       CDU 전체에서는 −0.14 세제곱미터 매시. 두 막대는 같은 축척이고
+                       랙 쪽이 약 네 배 크다">
+        <rect x="331.1" y="26" width="878.9" height="46" fill="#E8A33D"/>
+        <rect x="993.2" y="100" width="216.8" height="46" fill="#2E7FA8"/>
+        <text x="1196" y="49" text-anchor="end" dominant-baseline="middle"
+              font-size="21" fill="#3E4C56">−0.59 m³/h</text>
+        <text x="1196" y="123" text-anchor="end" dominant-baseline="middle"
+              font-size="21" fill="#FFFFFF">−0.14 m³/h</text>
+        <text x="300" y="42" text-anchor="end" dominant-baseline="middle"
+              font-size="21" fill="#3E4C56">막힌 그 랙에서 재면</text>
+        <text x="300" y="70" text-anchor="end" dominant-baseline="middle"
+              font-size="15" fill="#3E4C56" opacity=".6">랙 08</text>
+        <text x="300" y="116" text-anchor="end" dominant-baseline="middle"
+              font-size="21" fill="#3E4C56">CDU 전체에서 재면</text>
+        <text x="300" y="144" text-anchor="end" dominant-baseline="middle"
+              font-size="15" fill="#3E4C56" opacity=".6">총유량</text>
+        <line x1="1210" y1="18" x2="1210" y2="182" stroke="#3E4C56" stroke-width="2"/>
+        <line x1="300" y1="174" x2="1220" y2="174" stroke="#3E4C56" stroke-width="1"/>
+        <line x1="910" y1="174" x2="910" y2="182" stroke="#3E4C56" stroke-width="1"/>
+        <line x1="610" y1="174" x2="610" y2="182" stroke="#3E4C56" stroke-width="1"/>
+        <line x1="310" y1="174" x2="310" y2="182" stroke="#3E4C56" stroke-width="1"/>
+        <text x="1210" y="200" text-anchor="middle" font-size="17" fill="#3E4C56">0</text>
+        <text x="910" y="200" text-anchor="middle" font-size="17" fill="#3E4C56">−0.2</text>
+        <text x="610" y="200" text-anchor="middle" font-size="17" fill="#3E4C56">−0.4</text>
+        <text x="310" y="200" text-anchor="middle" font-size="17" fill="#3E4C56">−0.6</text>
+        <text x="300" y="232" font-size="16" fill="#3E4C56" opacity=".7">유량이 줄어든 양
+            [m³/h] — 두 막대는 같은 축척입니다</text>
+      </svg>
+      <p class="cap">같은 이상을 두 자리에서 재면 이만큼 다르게 보입니다.
+        막힌 그 랙에서 재면 <b>약 4 배</b> 크게 나타납니다.</p>
+      <span class="when">랙 08 에 랙 배관 저항 증가 50 % · 단일 CDU · 부하 100 % ·
+        같은 구성·부하의 저항 0 % 대비</span>
+    </div>
+
+    <div class="span2">
+      <p class="key rule">그래서 계기를 어디에 달아야 하는지를 <b>짓기 전에</b>
+        알 수 있습니다. 계기를 어디에 몇 개 다는가가 곧 비용입니다.</p>
+    </div>
+  </div>
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
-<!-- ═══ 3장 — 규모 ═══ -->
+
+<!-- ═══ 8 · 설계를 어떻게 돕는가 ═════════════════════════════════════ -->
 <section class="screen" id="s08">
-  <header><span class="ch">어떻게 계산하나</span>
-    <h2>실제 설비로는 해볼 수 없는 조건을 돌려 봅니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">실제 CDU 의 배관 저항을 50 % 올려볼 수는 없습니다.
-            설비를 먼저 세우고, 그 설비를 상하게 해야 하기 때문입니다.</span></li>
-    <li><span class="t">계산에서는 구성 2가지 × 부하 17단계 × 랙 배관 저항 4단계를
-            한 번에 돌립니다.</span>
-        <!-- figures #19: 136 케이스 (정수 — 반올림 없음) -->
-        <span class="fig">136 케이스</span></li>
-    <li><span class="t">결과가 바로 데이터 표로 나옵니다 — 한 행이 한 케이스이고,
-            모든 행에 어느 가정치를 썼는지와
-            「가정값 기반 · 실측 아님」이 붙습니다.</span></li>
-  </ul>
+  <header><span class="no">07</span>
+    <h2>설계를 어떻게 돕는가</h2></header>
+  <div class="grid">
+    <div>
+      <p class="lead">물이 랙마다 얼마씩 갈라지는지를 무엇이 정하는가</p>
+      <p class="t">펌프가 만든 압력의 대부분은 랙에 닿기 전에 CDU 안쪽과
+        물을 나눠 보내는 관에서 이미 쓰입니다. 랙으로 가는 갈래가 정할 수 있는
+        몫은 그 나머지뿐입니다.</p>
+      <!-- figures #16 : 60.00~83.33 % → 60 ~ 83 % -->
+      <span class="fig">60 ~ 83 <small>%</small></span>
+      <span class="when">랙에 닿기 전에 쓰이는 몫 · 밸브 개도 80 % ·
+        8 랙 같은 조건</span>
+    </div>
+    <div>
+      <p class="lead">배관 굵기를 정하기 전에 물이 얼마나 빠르게 지나가는지</p>
+      <p class="t">굵기를 한 단계 바꾸면 저항과 열이 함께 움직입니다.
+        도면을 확정하기 전에 그 결과를 먼저 봅니다.</p>
+      <!-- figures #17 : 3.4805 → 3.5 -->
+      <span class="fig">3.5 <small>m/s</small></span>
+      <span class="when">25A 랙 분기 · 랙당 정격 유량 기준</span>
+    </div>
+    <div>
+      <p class="lead">랙을 늘렸을 때 가장 먼 랙이 어떻게 되는지</p>
+      <p class="t">랙 수와 배치를 바꿔 가며 돌려, 가장 불리한 자리의 랙에
+        물이 충분히 가는지를 시공 전에 봅니다.</p>
+    </div>
+    <div>
+      <p class="lead">정상일 때와 이상일 때의 데이터가 표로 나옵니다</p>
+      <p class="t">한 행이 한 케이스입니다. 모든 행에 어느 가정치를 썼는지와
+        「가정값 기반 · 실측 아님」이 함께 붙습니다.</p>
+      <!-- figures #20 : 320 행 · figures #21 : 960 행 (정수) -->
+      <span class="fig">정상 320 <small>행</small> · 이상 960 <small>행</small></span>
+    </div>
+    <div class="span2">
+      <p class="key rule">여기까지가 지금 선입니다. <b>운영을 판단하는 근거로는
+        쓰지 않습니다.</b> 설득 · 검토 · 설계를 돕는 데까지입니다.</p>
+    </div>
+  </div>
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
-<!-- ═══ 4장 — 계측 설계 사전 검토 ═══ -->
+
+<!-- ═══ 9 · 믿을 만한가 ═════════════════════════════════════════════ -->
 <section class="screen" id="s09">
-  <header><span class="ch">무엇에 쓰나</span>
-    <h2>계기를 어디에 달아야 하는지, 짓기 전에 알 수 있습니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">랙 하나가 막혀도 전체 유량은 거의 움직이지 않습니다.
-            그 랙에서는 크게 움직입니다.</span></li>
-    <li class="wide">
-        <!-- 표기 규칙 ⑵ — px 가 아니라 m³/h 로 그린다.
-             figures #25 랙 08 −0.58593 → 막대 이름표는 −0.59 로 반올림
-             figures #24 총유량 −0.14452 → 막대 이름표는 −0.14 로 반올림
-             전체 자릿수는 그림 밑 .exact 에 남겼다.
-             축척은 두 막대가 같다: 1500 px(viewBox) 당 1 m³/h. -->
-        <svg viewBox="0 0 1200 220" role="img"
-             aria-label="랙 배관 저항 증가 50 % 에서의 유량 편차 — 랙 08 이 −0.59 m³/h,
-                         전체 총유량은 −0.14 m³/h. 두 막대는 같은 축척이다">
-          <rect x="281.1" y="24" width="878.9" height="42" fill="#E8A33D"/>
-          <rect x="943.2" y="92" width="216.8" height="42" fill="#2E7FA8"/>
-          <text x="1148" y="45" text-anchor="end" dominant-baseline="middle"
-                font-size="20" fill="#3E4C56">−0.59 m³/h</text>
-          <text x="1148" y="113" text-anchor="end" dominant-baseline="middle"
-                font-size="20" fill="#FFFFFF">−0.14 m³/h</text>
-          <text x="170" y="45" text-anchor="end" dominant-baseline="middle"
-                font-size="20" fill="#3E4C56">막힌 랙 08</text>
-          <text x="170" y="113" text-anchor="end" dominant-baseline="middle"
-                font-size="20" fill="#3E4C56">전체 총유량</text>
-          <line x1="1160" y1="16" x2="1160" y2="166" stroke="#3E4C56" stroke-width="2"/>
-          <line x1="250" y1="158" x2="1170" y2="158" stroke="#3E4C56" stroke-width="1"/>
-          <line x1="860" y1="158" x2="860" y2="166" stroke="#3E4C56" stroke-width="1"/>
-          <line x1="560" y1="158" x2="560" y2="166" stroke="#3E4C56" stroke-width="1"/>
-          <line x1="260" y1="158" x2="260" y2="166" stroke="#3E4C56" stroke-width="1"/>
-          <text x="1160" y="184" text-anchor="middle" font-size="17" fill="#3E4C56">0</text>
-          <text x="860" y="184" text-anchor="middle" font-size="17" fill="#3E4C56">−0.2</text>
-          <text x="560" y="184" text-anchor="middle" font-size="17" fill="#3E4C56">−0.4</text>
-          <text x="260" y="184" text-anchor="middle" font-size="17" fill="#3E4C56">−0.6</text>
-          <text x="250" y="208" font-size="16" fill="#3E4C56" opacity="0.7">유량 편차
-              [m³/h] — 두 막대는 같은 축척</text>
-        </svg>
-        <span class="cap">같은 이상을 두 자리에서 재면 이만큼 다르게 보입니다.
-            위는 막힌 그 랙에서 잰 것, 아래는 CDU 전체에서 잰 것입니다.</span>
-        <span class="exact">랙 08 −0.58593 m³/h · 총유량 −0.14452 m³/h</span>
-        <span class="when">랙 08 에 랙 배관 저항 증가 50 % · 단일 CDU · 부하 100 %</span>
-        <span class="cond">같은 구성·부하의 저항 0 % 해 대비</span></li>
-    <li><span class="t">전체 유량만 재면 랙 하나의 이상은 0.3 % 도 나타나지 않습니다.</span>
-        <!-- figures #15: 데모 −0.2590~−0.2586 → 본문은 −0.26 (표기 규칙 ⑷) -->
-        <span class="fig">총유량 변화 −0.26 %</span>
-        <span class="exact">−0.2590 ~ −0.2586 %</span>
-        <span class="cond">저항을 넣은 CDU 34건(구성 2 × 부하 17단계) ·
-            같은 구성·부하의 저항 0 % 해 대비 · 랙별 등가길이 배분 켬</span>
-        <!-- figures #14: 세션 4 −0.3710~−0.1642 % ← 각주로만. 케이스 집합이 다르다 -->
-        <p class="note">각주 — 케이스 집합이 다른 경로(수력 32조합 · 부하 100 % 고정 ·
-            랙별 등가길이 배분 끔)에서는 −0.3710 ~ −0.1642 % 입니다.
-            두 값을 나란히 읽지 않습니다.</p></li>
-    <li><span class="t">펌프 압력에 남는 자국은 그보다도 훨씬 작습니다 —
-            저항을 열 배로 키워도 만분의 일 수준입니다.</span>
-        <!-- figures #12: 4.346e-05~9.814e-05 · figures #13: 3.887e-04~8.799e-04
-             (표기 규칙 ⑶ — 두 수준을 함께 쓴다)
-             본문은 유효숫자 한 자리로 반올림했다 -->
-        <span class="fig">저항 +5 % → 0.00004 ~ 0.0001 ·
-            저항 +50 % → 0.0004 ~ 0.0009</span>
-        <span class="exact">4.346e-05 ~ 9.814e-05 · 3.887e-04 ~ 8.799e-04
-            (양정 대비 상대 · 무차원)</span>
-        <span class="cond">수력 32조합 · 랙 01 에 주입 · 같은 조합의 정상 해 대비 ·
-            랙별 등가길이 배분 끔</span></li>
-    <li><span class="t">국소 이상은 전체 계기에 거의 남지 않습니다. 압력계로 미세
-            변화를 보겠다는 계획이 있다면, 그만한 정밀도를 낼 계기가 있는지부터
-            확인해야 합니다 — 계기를 어디에 몇 개 다는가가 곧 비용입니다.</span></li>
-  </ul>
+  <header><span class="no">08</span>
+    <h2>믿을 만한가</h2></header>
+  <div class="grid">
+    <div>
+      <p class="key">들어온 열과 나간 열이 맞는지를 매번 확인합니다.
+        합격선은 0.1 % 이고, 지금은 그 스무 분의 일입니다.</p>
+      <!-- figures #7 : 0.0050641 % · figures #8 : 0.00506 % → 0.005 % -->
+      <span class="fig">0.005 <small>%</small> <span style="opacity:.45;font-weight:normal">/ 합격선 0.1 %</span></span>
+      <span class="when">열식 4 케이스와 물의 흐름까지 묶은 32 조합 모두에서</span>
+    </div>
+    <ul class="list">
+      <li><span class="lead">검사가 형식으로 헛돌지 않습니다.</span>
+        <p class="t">냉각액의 성질을 어느 온도에서 읽느냐 하는 규칙 하나만 바꿔도
+          합격이 불합격으로 뒤집힙니다. 지금 통과하는 것은 규칙이 느슨해서가
+          아닙니다.</p></li>
+      <li><span class="lead">고칠 때마다 전부 다시 돕니다.</span>
+        <p class="t">전에 맞던 것이 틀어지면 그 자리에서 걸립니다.</p>
+        <!-- figures #18 : 1,207 건 (정수) -->
+        <span class="fig">자동 시험 1,207 <small>건 전부 통과</small></span></li>
+    </ul>
+  </div>
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
-<!-- ═══ 4장 — 설계 조건 감도 · 시나리오 생성 ═══ -->
+
+<!-- ═══ 10 · 아직 못 하는 일 ═════════════════════════════════════════ -->
 <section class="screen" id="s10">
-  <header><span class="ch">무엇에 쓰나</span>
-    <h2>지금은 설득 · 검토 · 설계를 돕는 도구까지입니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">운영을 판단하는 근거로 쓰지 않습니다. 학습 데이터로도
-            아직 쓰지 않습니다 — 그 이유를 다음 장에 적었습니다.</span></li>
-    <li><span class="sub">물이 랙마다 얼마씩 갈라지는지는 배관·밸브보다
-            CDU 안쪽과 헤더가 정합니다</span>
-        <!-- figures #16: 60.00~83.33 → 60 ~ 83 -->
-        <span class="fig">펌프가 만든 압력의 60 ~ 83 %</span>
-        <span class="exact">60.00 ~ 83.33 %</span>
-        <span class="cond">잔여저항(HX 1차측 + CDU 내부배관 + 헤더)이 총양정에서
-            차지하는 몫 · 정격점 · 밸브 개도 80 % · 8랙 동일 조건 · 수력 8조합</span></li>
-    <li><span class="sub">배관 굵기를 정하기 전에, 물이 얼마나 빠르게 지나가는지를
-            먼저 봅니다</span>
-        <!-- figures #17: 3.4805 → 3.5 -->
-        <span class="fig">유속 3.5 m/s</span>
-        <span class="exact">3.4805 m/s</span>
-        <span class="cond">25A(NPS 1) 내경 26.64 mm · 5장 랙당 정격 1.94 L/s ·
-            분기 구경이 바뀌면 저항과 열용량이 함께 움직인다</span></li>
-    <li><span class="sub">정상일 때와 이상일 때의 데이터가 표로 그대로 나옵니다</span>
-        <!-- figures #20: 320 행 · figures #21: 960 행 (정수 — 반올림 없음) -->
-        <span class="fig">정상 320 행 · 이상 960 행</span>
-        <span class="cond">정상상태 행 중 랙 배관 저항 증가 0 % 가 320 행 ·
-            5/20/50 % 가 각 320 행</span></li>
-  </ul>
+  <header><span class="no">09</span>
+    <h2>아직 못 하는 일</h2></header>
+  <div class="grid">
+    <div>
+      <p class="key">지금 말할 수 있는 것은 「무너지지 않는다」까지입니다.
+        그 앞은 아직입니다.</p>
+      <p class="t">아래 넷은 감추지 않고 그대로 적습니다. 무엇이 안 되는지를
+        아는 것이, 이 자료를 읽는 사람에게 필요한 것입니다.</p>
+    </div>
+    <ul class="list">
+      <li><span class="lead">이상 상태를 「배관이 막힌다」 쪽으로만 흉내 냈습니다.</span>
+        <p class="t">물이 밖으로 빠져나가는 쪽은 아직 넣지 않았습니다. 그래서
+          실제와 다르게 나올 수 있습니다 — 정의를 바꿔야 합니다.</p></li>
+      <li><span class="lead">가정치가 전부 업계 공개자료입니다.</span>
+        <p class="t">실측이 없어 얼마나 어긋나는지를 재본 적이 없습니다.</p></li>
+      <li><span class="lead">물을 얼마나 담고 있는지가 가정치 표에 없습니다.</span>
+        <p class="t">그래서 온도가 자리를 잡는 데 걸리는 시간이 실제보다 짧게
+          나옵니다 — 설계도서가 오면 채웁니다.</p></li>
+      <li><span class="lead">CDU 끼리 물의 양으로만 얽히고 열로는 얽히지 않습니다.</span>
+        <p class="t">CDU 밖으로 나가는 쪽의 온도를 고정값으로 두었기 때문입니다 —
+          냉각탑·드라이쿨러를 넣으면 닫힙니다.</p></li>
+    </ul>
+    <div class="span2">
+      <div class="card">
+        <p class="lead">상용 도구가 잘하는 것 — 그리고 남은 일</p>
+        <p class="t">Aspen Plus · HYSYS 계열은 오래 검증된 큰 물성 자료 ·
+          끓고 어는 변화와 여러 성분이 섞인 계 · 업계 표준이라는 신뢰를
+          가지고 있습니다. 이쪽은 그 셋을 아직 갖지 못했습니다.</p>
+        <p class="t">사내에 HYSYS 가 있으므로, 같은 조건을 나란히 돌려 견주면
+          <b>검증을 한 겹 더 두는 것</b>이 됩니다. 이것은 변명이 아니라
+          남은 일 목록입니다.</p>
+      </div>
+    </div>
+  </div>
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
-<!-- ═══ 5장 — 무엇이 더 필요한가 ═══ -->
+
+<!-- ═══ 11 · 다음 ═══════════════════════════════════════════════════ -->
 <section class="screen" id="s11">
-  <header><span class="ch">아직 못 하는 일</span>
-    <h2>지금 방식은 실제와 신호 방향이 다를 수 있습니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">이상 상태를 「배관이 막힌다」 쪽으로만 흉내 냈습니다.
-            물이 밖으로 빠져나가지 않는 방식이라, 실제와 반대 방향의 신호가 나올
-            수 있습니다 — 정의를 바꿔야 합니다.</span></li>
-    <li><span class="t">배관을 몇 토막으로 나눠 계산하느냐에 따라, 값이 변해 가는
-            모양이 달라집니다. 다만 자리 잡은 뒤의 값과 신호 방향은 흔들리지
-            않습니다.</span></li>
-    <li><span class="t">가정치가 전부 업계 공개자료에서 왔습니다. 실측이 없어
-            오차를 재본 적이 없습니다 — 「무너지지 않는다」까지가 지금 말할 수 있는
-            전부입니다.</span></li>
-    <li><span class="t">열교환기 · CDU 안쪽 · 랙 콜드플레이트가 물을 얼마나 담고
-            있는지가 가정치 표에 없어 빠졌습니다. 그래서 온도가 자리를 잡는 데
-            걸리는 시간이 실제보다 짧게 나옵니다 — 설계도서에서 채웁니다.</span></li>
-    <li><span class="t">2차측으로 들어오는 물의 온도를 고정값으로 두었습니다.
-            그래서 CDU 끼리 물의 양으로만 얽히고 열로는 얽히지 않습니다 —
-            냉각탑·드라이쿨러 모델을 넣으면 닫힙니다.</span></li>
+  <header><span class="no">10</span>
+    <h2>다음</h2></header>
+  <ul class="steps">
+    <li><span class="st">1 단계</span>
+      <span class="lead">이상 상태의 정의를 바꾸고, 시간에 따라 변해 가는
+        과정을 다시 세웁니다</span>
+      <p><b>필요한 것</b> — 추가 개발. 설계데이터 없이도 됩니다.</p>
+      <p><b>얻는 것</b> — 물리에 맞는 시나리오 데이터 ·
+        「언제부터 이상했는가」를 다룰 수 있는 계산 ·
+        어떤 규칙을 세웠을 때 그 규칙이 공연히 울리지는 않는지를 미리 재보기.</p></li>
+    <li><span class="st">2 단계</span>
+      <span class="lead">실제 설계데이터를 넣습니다</span>
+      <p><b>필요한 것</b> — 실제 펌프 · 밸브 · 열교환기 사양, 랙별 발열량.</p>
+      <p><b>얻는 것</b> — 펌프 용량 선정 · 관 굵기 결정 · 여유율 검토 ·
+        랙을 늘렸을 때 가장 먼 랙에 물이 충분히 가는지를 시공 전에.</p></li>
+    <li><span class="st">3 단계</span>
+      <span class="lead">시운전하고 운영에 씁니다</span>
+      <p><b>필요한 것</b> — 실측 데이터, 시간에 따른 계산 보완.</p>
+      <p><b>얻는 것</b> — 랙마다 물을 고르게 맞추는 일을 현장 시행착오 대신
+        모델이 먼저 내기 · 못 돌려본 조건 채우기 · 계기를 못 다는 자리의
+        값을 계산으로 세우기 · 모델과 실제가 벌어지는지 지켜보기.</p></li>
   </ul>
   <footer class="mark">가정값 기반 — 실측 아님</footer>
 </section>
 
-<!-- ═══ Aspen 계열과의 관계 (세션 7.16 에 본문으로 올렸다 — 5장 뒤 · 6장 앞) ═══ -->
-<section class="screen" id="s13">
-  <header><span class="ch">다른 도구와의 관계</span>
-    <h2>Aspen Plus · HYSYS 와 겨루는 도구가 아니라, 용도가 다릅니다</h2></header>
-  <ul class="slots">
-    <li><span class="key">같은 계통을 조건만 바꿔 수백 번 다시 돌려 데이터를 뽑는 일에
-            맞춰져 있습니다. 시나리오를 자유롭게 짤 수 있고, 라이선스 비용이
-            없습니다.</span>
-        <!-- figures #19 케이스 수 · figures #18 시험 건수 (정수 — 반올림 없음) -->
-        <span class="fig">136 케이스를 한 번에 · 자동 시험 1,207 건</span></li>
-    <li><span class="t">Aspen 계열이 잘하는 것 — 오래 검증된 큰 물성 데이터베이스 ·
-            끓고 어는 변화와 여러 성분이 섞인 계 · 업계 표준이라는 신뢰입니다.</span></li>
-    <li><span class="t">이 접근이 좁은 곳 — 물성은 CoolProp 하나에 기댑니다 ·
-            끓거나 얼지 않는 한 가지 상태의 액체만 다룹니다 ·
-            사내 검증이 아직 남아 있습니다.</span></li>
-    <li><span class="t">사내에 HYSYS 가 있으므로, 교차검증용으로 나란히 돌리는 것이
-            신뢰를 높이는 길입니다.</span></li>
-  </ul>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
-</section>
-
-<!-- ═══ 6장 — 그 다음에 할 수 있는 것 ═══ -->
-<section class="screen" id="s12">
-  <header><span class="ch">다음</span>
-    <h2>데이터가 들어오면 설계와 시운전까지 갑니다</h2></header>
-  <ul class="slots cols">
-    <li><span class="ch">1단계</span>
-        <span class="sub">이상 상태의 정의를 바꾸고, 시간축을 다시 세웁니다</span>
-        <span class="t">필요한 것 — 추가 개발. 설계데이터 없이도 됩니다.</span>
-        <span class="t">얻는 것 — 물리 방향이 맞는 시나리오 데이터 ·
-            「언제부터 이상했는가」를 다루는 시간축 ·
-            판별 규칙이 얼마나 헛울리는지를 계산으로 먼저 재보기.</span></li>
-    <li><span class="ch">2단계</span>
-        <span class="sub">실제 설계데이터를 넣습니다</span>
-        <span class="t">필요한 것 — 실제 펌프·밸브·열교환기 사양, 랙별 발열량.</span>
-        <span class="t">얻는 것 — 펌프 용량 선정 · 헤더 구경 결정 · 여유율 검토 ·
-            랙을 늘렸을 때 가장 먼 랙의 유량이 어떻게 되는지를 시공 전에.</span></li>
-    <li><span class="ch">3단계</span>
-        <span class="sub">시운전하고 운영에 씁니다</span>
-        <span class="t">필요한 것 — 실측 데이터, 동적 해석 보완.</span>
-        <span class="t">얻는 것 — 밸런싱을 현장 시행착오 대신 모델이 먼저 내기 ·
-            못 돌려본 조건 채우기 · 계기를 못 다는 자리의 가상 계측 ·
-            모델과 실제가 벌어지는지 감시.</span></li>
-  </ul>
-  <footer class="mark">가정값 기반 — 실측 아님</footer>
-</section>
 
 <script>
-/* 절 단위 등장 효과.
+/* ⑴ 시연 화면 축척 — 원본이 1600px 기준이라 폭을 좁히면 조작 막대가 겹친다.
+   폭은 1600px 그대로 두고 통째로 줄인다. 스크립트가 막히면 축척이 걸리지
+   않고 가로 스크롤로 물러난다(잘리지 않는다). */
+(function () {
+  var W = 1600, H = 920,
+      box = document.querySelector(".demo-edge"),
+      inner = document.getElementById("demo-scale");
+  if (!box || !inner) return;
+  function fit() {
+    var k = Math.min(1, box.clientWidth / W);
+    inner.style.transform = k < 1 ? "scale(" + k + ")" : "";
+    box.style.height = Math.round(H * k) + "px";
+  }
+  fit();
+  if ("ResizeObserver" in window) new ResizeObserver(fit).observe(box);
+  else window.addEventListener("resize", fit);
+})();
+
+/* ⑵ 절 단위 등장 효과.
    기본 상태는 「보임」이다 — 이 스크립트가 떠야 .reveal-on 이 붙고, 그때부터
    감췄다가 화면에 들어오면 띄운다. 스크립트가 막히면 전부 그대로 보인다.
    움직임을 줄이라는 설정이면 아무것도 걸지 않는다. */
