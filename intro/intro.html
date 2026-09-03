@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>AI 데이터센터 CDU 디지털 트윈 — 소개 (가정값 기반 · 실측 아님)</title>
+
+<!--
+  ─────────────────────────────────────────────────────────────────────────
+  이것은 **골격**이다 (세션 7.15). 본문은 비어 있고 자리표시만 서 있다.
+
+  ⚠ 수치를 채우는 다음 판이 지킬 표기 규칙 — 여기서 못박는다
+  ⑴ 랙 번호는 「랙 08」로 쓴다. 코드의 rack index 7 = 화면의 랙 08 이다.
+     자료 어디에도 0-based 번호를 쓰지 않는다
+  ⑵ 편차 막대는 px 가 아니라 **m³/h** 로 쓴다 (figures #24 · #25)
+  ⑶ 양정 상대변화는 **두 수준을 함께** 쓴다 (figures #12 +5% · #13 +50%).
+     한쪽만 쓰지 않는다
+  ⑷ 총유량 변화는 **데모값 figures #15** 를 쓰고, 세션 4 범위 figures #14 는
+     각주로만 둔다 — 케이스 집합이 다르다
+
+  자료에 나가는 수치는 **전부 docs/intro-figures.md 에서 가져온다.**
+  그 표에 없는 숫자는 쓰지 않는다. 각 자리표시에 항목 번호를 적어 두었다.
+
+  어휘 — 빌드가 검사한다(intro/make_intro_html.py):
+  「랙 배관 저항 증가」로 부른다 · 「용도가 다르다」로 쓴다 · 한계는 그대로 적는다
+  ─────────────────────────────────────────────────────────────────────────
+-->
+
+<style>
+/* 색 여섯은 시연 화면과 같은 값이다 (demo/pfd.html :root).
+   CSS 를 복사하지 않고 **색값만** 가져왔다 — 복사하면 시연 화면이 바뀔 때 갈린다. */
+:root{
+  --ground:#EDF0F2; --face:#FFFFFF; --ink:#3E4C56;
+  --cold:#2E7FA8; --hot:#C2452D; --warn:#E8A33D;
+}
+*{box-sizing:border-box}
+html{scroll-snap-type:y mandatory;scroll-behavior:smooth}
+body{margin:0;background:var(--ground);color:var(--ink);
+     font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;font-size:15px}
+
+.screen{height:100vh;scroll-snap-align:start;display:flex;flex-direction:column;
+        padding:44px 64px 0;overflow:hidden}
+.screen > header{flex:none;display:flex;align-items:baseline;gap:14px;
+                 border-bottom:2px solid var(--ink);padding-bottom:9px}
+.ch{font-size:13px;letter-spacing:.08em;opacity:.7}
+h1{font-size:38px;margin:0;line-height:1.25}
+h2{font-size:26px;margin:0;font-weight:bold}
+.lead{font-size:15px;opacity:.75;margin:0 0 0 auto}
+
+.slots{flex:1;min-height:0;list-style:none;margin:22px 0 0;padding:0;
+       display:flex;flex-direction:column;gap:14px}
+.slots > li{flex:1;min-height:0;background:var(--face);border:1px dashed var(--ink);
+            border-radius:3px;padding:13px 17px;display:flex;flex-direction:column;
+            justify-content:center;gap:5px;opacity:.92}
+.slot-k{font-size:12px;letter-spacing:.06em;opacity:.6}
+.slot-t{font-size:18px}
+.fig{font-size:13px;color:var(--cold);font-variant-numeric:tabular-nums}
+.note{font-size:13px;color:var(--warn)}
+.cols{flex-direction:row}
+.cols > li{flex:1}
+
+.mark{flex:none;text-align:center;font-size:12px;opacity:.7;padding:9px 0 10px}
+
+/* 시연 화면 — iframe 안팎은 별개 문서다. 바깥 CSS·id 가 안으로 들어가지 않고
+   안의 것도 밖으로 나오지 않는다(브라우저가 보장한다). */
+#s03{padding:14px 18px 0}
+.demo-bar{flex:none;display:flex;align-items:center;gap:16px;padding:0 4px 9px}
+.demo-bar a{color:var(--ink);font-size:14px;text-decoration:none;
+            border:1px solid var(--ink);border-radius:2px;padding:4px 12px;
+            background:var(--face)}
+#demo{flex:1;min-height:0;width:100%;border:1px solid var(--ink);
+      border-radius:3px;background:var(--face)}
+
+#s00{justify-content:center;text-align:center;padding-top:0}
+#s00 h1{font-size:52px}
+#s00 .slots{flex:none;max-width:760px;margin:34px auto 0}
+#s00 .slots > li{flex:none}
+</style>
+</head>
+<body>
+
+<!-- ═══ 표지 ═══ -->
+<section class="screen" id="s00">
+  <h1>AI 데이터센터 CDU 디지털 트윈</h1>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 부제</span>
+        <span class="slot-t">한 줄 — 이 자료가 무엇을 보이는가</span></li>
+    <li><span class="slot-k">자리표시 · 성격</span>
+        <span class="slot-t">알리는 자료 — 승인·기간·비용을 다루지 않는다</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 1장 — 왜 만들었나 ═══ -->
+<section class="screen" id="s01">
+  <header><span class="ch">1장</span><h2>왜 만들었나</h2>
+    <span class="lead">무슨 과제가 있나</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 배경</span>
+        <span class="slot-t">D2C 액체냉각이 AI·GPU 고집적화로 불가피해지고 있다</span></li>
+    <li><span class="slot-k">자리표시 · 문제의식</span>
+        <span class="slot-t">밀폐 소형 배관은 이상을 즉시 확인하기 어렵다</span></li>
+    <li><span class="slot-k">자리표시 · 업계 현황</span>
+        <span class="slot-t">기존 감지 방식은 사고가 난 뒤에 알린다</span>
+        <span class="note">여기서 「그래서 조기감지를 한다」로 잇지 않는다</span></li>
+    <li><span class="slot-k">자리표시 · 잇는 문장</span>
+        <span class="slot-t">실제 설비로는 이상 조건을 만들어 볼 수 없다
+              — 설비 거동을 계산으로 재현할 필요가 있다</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 2장 — 무엇을 만들었나 (읽는 법) ═══ -->
+<section class="screen" id="s02">
+  <header><span class="ch">2장</span><h2>무엇을 만들었나</h2>
+    <span class="lead">다음 화면이 실물이다</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 읽는 법 ①</span>
+        <span class="slot-t">슬래브 높이 = 랙 부하</span></li>
+    <li><span class="slot-k">자리표시 · 읽는 법 ②</span>
+        <span class="slot-t">색 = 랙 간 온도 편차</span></li>
+    <li><span class="slot-k">자리표시 · 읽는 법 ③</span>
+        <span class="slot-t">왼쪽 그림 = CDU 내부</span></li>
+    <li><span class="slot-k">자리표시 · 조작 시나리오 3줄</span>
+        <span class="slot-t">부하 20→100% · 구성 단일→2대 · 랙 배관 저항 0→50%</span>
+        <!-- figures #19: 데모 케이스 136 (구성 2 × 부하 17단계 × 저항 4단계) -->
+        <span class="fig">figures #19 — 케이스 수</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 2장 — 시연 (실물) ═══ -->
+<section class="screen" id="s03">
+  <div class="demo-bar">
+    <a href="#s02">← 자료로 돌아가기</a>
+    <span class="slot-k">시연 화면 — 이 자료 안에서 그대로 조작한다</span>
+  </div>
+  <!--DEMO-BEGIN--><iframe id="demo" title="CDU 시연 화면 (가정값 기반 · 실측 아님)"
+    srcdoc="{{DEMO_SRCDOC}}"></iframe><!--DEMO-END-->
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 3장 — 장치별 공학 내용 ═══ -->
+<section class="screen" id="s04">
+  <header><span class="ch">3장</span><h2>이 숫자는 어떻게 나왔나</h2>
+    <span class="lead">장치별 — 화면의 숫자와 그 식</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 펌프</span>
+        <span class="slot-t">특성곡선과 시스템곡선의 교점 — 총유량</span>
+        <!-- figures #1: 총유량 55.8329 m³/h · single/L100/R0 -->
+        <span class="fig">figures #1</span></li>
+    <li><span class="slot-k">자리표시 · 배관</span>
+        <span class="slot-t">헤더 압력평형 연립방정식 — 랙별 유량</span>
+        <!-- figures #2: 랙별 유량 6.7087~7.2687 m³/h -->
+        <span class="fig">figures #2</span></li>
+    <li><span class="slot-k">자리표시 · 열교환기</span>
+        <span class="slot-t">ε-NTU 대향류 — 1차측 공급온도와 duty</span>
+        <!-- figures #3: 공급 32.1695 ℃ · figures #6: duty 640.00 kW -->
+        <span class="fig">figures #3 · #6</span></li>
+    <li><span class="slot-k">자리표시 · 랙</span>
+        <span class="slot-t">Q = ṁ·cp·ΔT — 랙 출구온도가 벌어진다</span>
+        <!-- figures #4: 랙 출구온도 42.0575~42.8829 ℃ -->
+        <span class="fig">figures #4</span></li>
+    <li><span class="slot-k">자리표시 · 케이스 조건 한 줄</span>
+        <span class="slot-t">단일 CDU · 부하 100% · 랙 배관 저항 증가 0% · 고정축 1조합</span>
+        <span class="note">figures 표의 「케이스 조건」 열을 그대로 옮긴다</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 3장 — 단순 계산이 아니다 ═══ -->
+<section class="screen" id="s05">
+  <header><span class="ch">3장</span><h2>단순 계산이 아니다</h2>
+    <span class="lead">이 자료의 무게중심</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 물성</span>
+        <span class="slot-t">PG25 의 비열·밀도를 그때 온도로 CoolProp 에서 조회한다
+              — 상수가 아니다</span></li>
+    <li><span class="slot-k">자리표시 · 하이브리드</span>
+        <span class="slot-t">압력-유량은 매 시점 대수방정식 · 온도는 시간적분</span></li>
+    <li><span class="slot-k">자리표시 · 그 이유</span>
+        <span class="slot-t">관성 시간상수가 다르다 — 압력은 거의 즉시,
+              온도는 분 단위로 움직인다</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 3장 — 역방향 검증 ═══ -->
+<section class="screen" id="s06">
+  <header><span class="ch">3장</span><h2>표가 맞는지를 계산이 확인했다</h2>
+    <span class="lead">가정을 새로 만든 것이 아니다</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 주어진 것</span>
+        <span class="slot-t">가정치 표는 1차측 32 / 42 ℃ 를 준다</span></li>
+    <li><span class="slot-k">자리표시 · 계산한 것</span>
+        <span class="slot-t">대향류 · NTU 2 · 2차측 27 ℃ 로 풀어 나온 값</span>
+        <!-- figures #3: 공급 32.1695 ℃ · figures #5: 환수 42.4679 ℃ -->
+        <span class="fig">figures #3 · #5</span></li>
+    <li><span class="slot-k">자리표시 · 읽는 법</span>
+        <span class="slot-t">표가 대향류를 상정해 만들어졌음이 계산으로 확인됐다</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 3장 — 검증 ═══ -->
+<section class="screen" id="s07">
+  <header><span class="ch">3장</span><h2>이게 맞는지 어떻게 아는가</h2>
+    <span class="lead">검증이 형식적이지 않다는 증거</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 에너지 balance</span>
+        <span class="slot-t">보존법칙 잔차 — 기준 0.1 %</span>
+        <!-- figures #7: 0.0050641 % (열식 4케이스) · figures #8: 0.00506 % (32조합) -->
+        <span class="fig">figures #7 · #8</span></li>
+    <li><span class="slot-k">자리표시 · 자동 시험</span>
+        <span class="slot-t">회귀를 잡는 시험이 매 판 돌아간다</span>
+        <!-- figures #18: 1,207건 전부 통과 -->
+        <span class="fig">figures #18</span></li>
+    <li><span class="slot-k">자리표시 · 딸린 사실 (표)</span>
+        <span class="slot-t">물성 평가 온도를 어디로 잡느냐로 판정이 갈린다
+              — 벌크평균 통과 · 공급 실패 · 환수 실패</span>
+        <!-- figures #9 벌크평균 · #10 공급 · #11 환수 -->
+        <span class="fig">figures #9 · #10 · #11</span></li>
+    <li><span class="slot-k">자리표시 · 한 줄 결론</span>
+        <span class="slot-t">규칙 하나로 결과가 뒤집힌다 — 게이트가 헛돌지 않는다</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 3장 — 규모 ═══ -->
+<section class="screen" id="s08">
+  <header><span class="ch">3장</span><h2>설비로는 못 하는 일</h2>
+    <span class="lead">규모</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 배치 실행</span>
+        <span class="slot-t">구성 2 × 부하 17단계 × 랙 배관 저항 4단계를 한 번에</span>
+        <!-- figures #19: 136 케이스 -->
+        <span class="fig">figures #19</span></li>
+    <li><span class="slot-k">자리표시 · 왜 계산이어야 하나</span>
+        <span class="slot-t">실제 CDU 로 랙 배관 저항을 50 % 올려볼 수는 없다</span></li>
+    <li><span class="slot-k">자리표시 · 결과 형태</span>
+        <span class="slot-t">결과가 바로 데이터 표로 나온다</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 4장 — 계측 설계 사전 검토 ═══ -->
+<section class="screen" id="s09">
+  <header><span class="ch">4장</span><h2>어디에 계기를 달아야 하는지를 짓기 전에 안다</h2>
+    <span class="lead">가장 강한 활용처</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 편차 막대 그림 (2장 장면 재활용)</span>
+        <span class="slot-t">같은 축척의 두 막대 — 랙 08 대 총유량, 약 4배 차</span>
+        <!-- figures #25: 랙 08 유량 편차 −0.58593 m³/h -->
+        <!-- figures #24: 총유량 편차 −0.14452 m³/h -->
+        <!-- 표기 규칙 ⑵ — px 가 아니라 m³/h 로 쓴다 -->
+        <span class="fig">figures #25 · #24 — m³/h 로 쓴다</span></li>
+    <li><span class="slot-k">자리표시 · 총량 계측의 한계</span>
+        <span class="slot-t">랙 배관 저항 +50 % 에서도 총유량은 거의 움직이지 않는다</span>
+        <!-- figures #15: 데모 −0.2590~−0.2586 % ← 본문에 쓴다 -->
+        <!-- figures #14: 세션 4 −0.3710~−0.1642 % ← 각주로만. 케이스 집합이 다르다 -->
+        <span class="fig">figures #15 (본문) · #14 (각주)</span></li>
+    <li><span class="slot-k">자리표시 · 압력 계열 신호</span>
+        <span class="slot-t">양정 변화가 양정 대비 상대로 매우 작다
+              — 두 수준을 함께 적는다</span>
+        <!-- figures #12: 저항 +5% → 4.346e-05~9.814e-05 -->
+        <!-- figures #13: 저항 +50% → 3.887e-04~8.799e-04 -->
+        <span class="fig">figures #12 · #13 — 한쪽만 쓰지 않는다</span></li>
+    <li><span class="slot-k">자리표시 · 그래서 무엇을 하나</span>
+        <span class="slot-t">그 정밀도를 낼 계기가 있는지부터 확인해야 한다
+              — 국소 이상을 총량으로 잡기 어렵다</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 4장 — 설계 조건 감도 · 시나리오 생성 ═══ -->
+<section class="screen" id="s10">
+  <header><span class="ch">4장</span><h2>지금 할 수 있는 것</h2>
+    <span class="lead">설득·검토·설계의 도구까지다</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 무엇이 유량분배를 지배하나</span>
+        <span class="slot-t">잔여저항(HX 1차측 + CDU 내부배관 + 헤더)이 총양정의 큰 몫</span>
+        <!-- figures #16: 60.00~83.33 % -->
+        <span class="fig">figures #16</span></li>
+    <li><span class="slot-k">자리표시 · 구경 검토</span>
+        <span class="slot-t">25A 랙 분기의 유속이 냉각수 통상 설계유속 2~3 m/s 보다 높다</span>
+        <!-- figures #17: 3.4805 m/s @ 1.94 L/s · 내경 26.64 mm -->
+        <span class="fig">figures #17</span></li>
+    <li><span class="slot-k">자리표시 · 시나리오 반복 생성</span>
+        <span class="slot-t">정상상태 데이터셋 — 용도는 시연과 구조 검증이다</span>
+        <!-- figures #20: 정상 320행 · figures #21: 이상 960행 -->
+        <span class="fig">figures #20 · #21</span></li>
+    <li><span class="slot-k">자리표시 · 선 긋기</span>
+        <span class="slot-t">운영 판단의 근거가 아니다 — 학습 데이터로는 아직 쓰지 않는다
+              (그 이유는 5장)</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 5장 — 무엇이 더 필요한가 ═══ -->
+<section class="screen" id="s11">
+  <header><span class="ch">5장</span><h2>무엇이 더 필요한가</h2>
+    <span class="lead">한계를 그대로 적는다</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 한계 ①</span>
+        <span class="slot-t">이상 상태 정의를 다시 세워야 한다 — 지금은 배관 저항 변화로
+              근사했고 실제 물리와 방향이 다르다</span></li>
+    <li><span class="slot-k">자리표시 · 한계 ②</span>
+        <span class="slot-t">시간축을 다시 세워야 한다 — 배관 이산화 방식에 따라 과도
+              파형이 달라진다. 정상상태 값과 신호 방향은 강인하다</span></li>
+    <li><span class="slot-k">자리표시 · 한계 ③</span>
+        <span class="slot-t">설계데이터가 없다 — 가정치 전체가 업계 공개자료 기반이다</span></li>
+    <li><span class="slot-k">자리표시 · 열용량</span>
+        <span class="slot-t">HX·CDU 내부·콜드플레이트 보유량이 빠져 있어 수렴시간이
+              실제보다 짧게 나온다 — 설계도서에서 채운다</span></li>
+    <li><span class="slot-k">자리표시 · CDU 간 연동</span>
+        <span class="slot-t">2차측 공급온도가 고정 경계조건이라 연동이 유량 경로로만
+              생긴다 — 냉각탑·드라이쿨러 모델을 넣으면 닫힌다</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 6장 — 그 다음에 할 수 있는 것 ═══ -->
+<section class="screen" id="s12">
+  <header><span class="ch">6장</span><h2>그 다음에 할 수 있는 것</h2>
+    <span class="lead">단계별로 — 무엇이 필요하고 무엇을 얻는가</span></header>
+  <ul class="slots cols">
+    <li><span class="slot-k">자리표시 · 1단계</span>
+        <span class="slot-t">정의 교체 + 시간축 재수립</span>
+        <span class="slot-t">필요: 추가 개발 (설계데이터 없이도 된다)</span>
+        <span class="slot-t">얻는 것: 물리 방향이 맞는 시나리오 데이터 ·
+              「언제부터 이상했는가」를 다루는 시간축</span></li>
+    <li><span class="slot-k">자리표시 · 2단계</span>
+        <span class="slot-t">설계데이터 투입</span>
+        <span class="slot-t">필요: 실제 펌프·밸브·HX 사양, 랙별 발열량</span>
+        <span class="slot-t">얻는 것: 펌프 용량 선정 · 헤더 구경 결정 · 여유율 검토 ·
+              랙 증설 영향을 시공 전에</span></li>
+    <li><span class="slot-k">자리표시 · 3단계</span>
+        <span class="slot-t">시운전 · 운영</span>
+        <span class="slot-t">필요: 실측 데이터, 동적 해석 보완</span>
+        <span class="slot-t">얻는 것: 밸런싱 · 못 돌려본 조건 채우기 · 가상 계측 ·
+              모델 편차 감시</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+<!-- ═══ 부록 — Aspen 계열과의 관계 ═══ -->
+<section class="screen" id="s13">
+  <header><span class="ch">부록</span><h2>Aspen Plus · HYSYS 와의 관계</h2>
+    <span class="lead">용도가 다르다</span></header>
+  <ul class="slots">
+    <li><span class="slot-k">자리표시 · 이 접근이 잘하는 것</span>
+        <span class="slot-t">반복 시나리오 생성에 특화 · 시나리오 주입과 다중 CDU 연립을
+              자유롭게 구성 · 라이선스 없음 · Git 과 자동 시험이 회귀를 잡는다</span>
+        <!-- figures #19 케이스 수 · figures #18 시험 건수 -->
+        <span class="fig">figures #19 · #18</span></li>
+    <li><span class="slot-k">자리표시 · Aspen 계열이 잘하는 것</span>
+        <span class="slot-t">검증된 대규모 물성 DB · 상변화와 다성분계 · 업계 표준</span></li>
+    <li><span class="slot-k">자리표시 · 이 접근의 좁은 곳</span>
+        <span class="slot-t">CoolProp 하나에 의존 · 단상 비압축성만 · 사내 검증이 필요하다</span></li>
+    <li><span class="slot-k">자리표시 · 결론 한 줄</span>
+        <span class="slot-t">사내에 HYSYS 가 있으므로 교차검증용으로 병행하는 것이
+              신뢰를 높이는 길이다</span></li>
+  </ul>
+  <footer class="mark">가정값 기반 — 실측 아님</footer>
+</section>
+
+</body>
+</html>
