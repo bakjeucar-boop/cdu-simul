@@ -78,6 +78,13 @@ def verify(html_out: str, demo_html: str) -> tuple[int, int]:
     그 수는 「자료가 몇 판인가」가 아니라 절 개수를 뜻하게 됐고(세션 7.17 보고),
     뜻을 잃은 범위는 아무것도 지키지 않으면서 절을 더할 때만 막았다.
     **분량은 사람이 읽고 판정한다.**
+
+    세션 7.19 가 검사 ⑶ 을 「절 수 = 표기 수」에서 **「최소 한 번」**으로 바꿨다.
+    사람이 「가정값 기반 — 실측 아님」을 표지에만 두기로 정했기 때문이다(C2) —
+    절마다 반복하면 읽는 사람이 그 줄을 건너뛰게 된다. 지켜야 할 것은
+    절대 규칙 11 이 요구하는 「산출물에 표시가 있다」이고, 그것은 자료에
+    한 번 있으면 성립한다. 자리를 표지로 정하는 것은 사람의 판단이라
+    검사가 개수를 세지 않는다.
     """
     # ⑴ 넣은 시연 화면이 원본과 완전히 같다 (한 글자도 고치지 않았다)
     embedded = html_out.partition(DEMO_BEGIN)[2].partition(DEMO_END)[0]
@@ -94,17 +101,17 @@ def verify(html_out: str, demo_html: str) -> tuple[int, int]:
         if hits:
             raise RuntimeError(f"검사 ⑵ 실패: 「{word}」 {hits}회 — {why}")
 
-    # ⑶ 절마다 「가정값 기반 — 실측 아님」이 하나씩 있다
+    # ⑶ 「가정값 기반 — 실측 아님」이 자료에 최소 한 번 있다 (절대 규칙 11)
     screens = shell.count(SCREEN_TAG)
     marks = shell.count(DISCLAIMER)
-    if screens != marks:
+    if marks < 1:
         raise RuntimeError(
-            f"검사 ⑶ 실패: 절 {screens}개 · 표기 {marks}개 — 같아야 한다"
+            f"검사 ⑶ 실패: 「{DISCLAIMER}」 0회 — 최소 한 번은 있어야 한다"
         )
 
     print(f"  검사 ⑴ 시연 화면 원본과 동일 ({len(demo_html):,} 자)")
     print(f"  검사 ⑵ 금지어 0회 — {' · '.join(BANNED)} (iframe 안은 대상 아님)")
-    print(f"  검사 ⑶ 절 {screens}개 · 「{DISCLAIMER}」 {marks}개")
+    print(f"  검사 ⑶ 「{DISCLAIMER}」 {marks}회 (최소 1) · 절 {screens}개")
     return screens, marks
 
 
