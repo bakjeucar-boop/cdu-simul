@@ -102,7 +102,7 @@
   body{margin-bottom:0}
   .screen{padding-top:44px;break-inside:avoid}
   /* 종이에서는 배경색이 사라지므로 칸을 테두리로 세운다 */
-  .card,.can td{border:1px solid var(--line)}
+  .card,.done,.steps > li{border:1px solid var(--line)}
   .no{opacity:.45}
   .reveal-on .screen{opacity:1;transform:none}   /* 등장 효과가 인쇄를 비우지 않게 */
 }
@@ -204,34 +204,34 @@ h1{margin:0;font-size:clamp(40px,5.8vw,74px);line-height:1.22;letter-spacing:-.0
           gap:24px;margin:0 0 10px;font-size:14.5px;color:var(--dim)}
 .demo-tag b{color:var(--ink)}
 
-/* ── 09 절 — 표 하나가 절 전체를 진다 ─────────────────────────────────
-   가운데 「필요한 것」 칸이 이 표의 요점이다 — 오른쪽 칸이 왜 아직 안 되는지가
-   거기서 보여야 한다. 단계 이름이 길어(「설계데이터가 오면」) 줄바꿈을 막지
-   않는다. 칸 너비는 table-layout:fixed + <colgroup> 으로 고정한다 — 안 그러면
-   가운데 칸이 내용이 짧다는 이유로 눌린다. **너비는 반드시 col 에 준다.**
-   fixed 는 첫 줄(thead)의 너비만 보므로 tbody 쪽에 준 너비는 무시된다
-   (세션 7.20 이 렌더로 잡았다 — 단계 칸이 15 % 대신 3 분의 1 을 먹었다). */
+/* ── 09 절 — 전폭 한 줄 + 가로 박스 셋 ───────────────────────────────
+   단계가 줄(행)이 아니라 **칸(가로 박스)**이다. 박스 안에서 세로로
+   [단계 이름] / [필요한 것 —] / [그러면 —] 이 쌓인다. 표를 쓰지 않는다.
+   형식의 본은 세션 7.17 판 s12(`ul.slots.cols`)다 — 단계 셋이 가로로 서고
+   박스마다 세 층이 쌓이던 그 모양을 가져왔다(글은 세션 7.20 것 그대로).
+   「필요한 것」이 이 절의 요점이다 — 왜 아직 안 되는지가 그 층에서 보여야
+   하므로 흐리게 묻지 않고 강조 색으로 세운다.
+   맨 위 「지금까지 한 것」만 전폭 한 줄이다: 이미 한 것이라 「필요한 것」이
+   없어서, 박스 셋과 나란히 세우면 그 자리가 빈다. */
 .canwrap{padding-left:124px}
-.can{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:12px;
-     font-size:16.5px;line-height:1.62;text-align:left}
-.can col.c-step{width:15%}
-.can col.c-need{width:27%}
-.can thead th{padding:0 8px 2px;font-size:15px;font-weight:bold;color:var(--dim);
-              letter-spacing:.02em;vertical-align:bottom}
-.can tbody th{padding:20px 14px 0 0;font-size:18px;font-weight:bold;
-              line-height:1.45;vertical-align:top}
-.can td{background:var(--face);border-radius:5px;padding:20px 22px;
-        vertical-align:top}
+.done,.steps > li{background:var(--face);border-radius:5px;padding:22px 26px;
+                  display:flex;flex-direction:column;gap:9px;
+                  font-size:16.5px;line-height:1.62}
+.steps{list-style:none;margin:16px 0 0;padding:0;display:flex;gap:16px;
+       align-items:stretch}
+.steps > li{flex:1;min-width:0}
+.step-name{font-size:18px;font-weight:bold;line-height:1.45;letter-spacing:-.01em}
+.need{color:var(--warn)}
 
 /* ── 좁은 화면 ───────────────────────────────────────────────────── */
 @media (max-width:1180px){
   .grid{grid-template-columns:minmax(0,1fr);gap:34px;padding-left:0}
   .canwrap{padding-left:0}
-  .can{font-size:15.5px;border-spacing:8px}
-  .can td{padding:16px 16px}
-  .can tbody th{font-size:16.5px}
-  .can col.c-step{width:19%}
-  .can col.c-need{width:28%}
+  /* 박스 셋이 좁아 뭉개지느니 세로로 쌓는다. 다만 그러면 맨 위 전폭 한 줄이
+     박스 셋과 같은 줄로 보이므로, 위 여백을 벌려 층을 남긴다 */
+  .steps{flex-direction:column;gap:12px;margin-top:26px}
+  .done,.steps > li{font-size:15.5px;padding:18px 20px}
+  .step-name{font-size:16.5px}
   .screen > header{grid-template-columns:64px minmax(0,1fr);gap:0 18px}
   .no{font-size:34px}
   .key{font-size:23px}
@@ -796,53 +796,45 @@ h1{margin:0;font-size:clamp(40px,5.8vw,74px);line-height:1.22;letter-spacing:-.0
 
 <!-- ═══ 10 · 어디까지 했고, 다음은 무엇인가 ═════════════════════════════
      세션 7.19 가 옛 09(아직 못 하는 일)과 10(다음)을 여기 하나로 합쳤고,
-     세션 7.20 이 표의 짜임을 다시 잡았다.
-     줄은 단계 넷 — 한 것 · 다음 · 설계데이터가 오면 · 실측이 오면.
-     가운데 「필요한 것」 칸이 요점이다: 오른쪽이 왜 아직 안 되는지가 거기서
-     보인다. 첫 줄의 이름은 「할 수 있는 일」이 아니라 **「한 것」**이다. -->
+     세션 7.20 이 글을 다시 썼다. 세션 7.21 은 **그 글을 그대로 두고 배치만**
+     바꿨다 — 표가 아니라 「전폭 한 줄 + 가로 박스 셋」이다(사람이 원한 형식은
+     단계가 행이 아니라 열이고, 형식의 본은 세션 7.17 판 s12 다).
+     단계는 넷 — 한 것(전폭 한 줄) · 다음 · 설계데이터가 오면 · 실측이 오면.
+     박스의 「필요한 것」 층이 요점이다: 그 아래 「그러면」이 왜 아직 안 되는지가
+     거기서 보인다. 첫 줄의 이름은 「할 수 있는 일」이 아니라 **「한 것」**이고,
+     이미 한 것이라 「필요한 것」 층을 두지 않는다(빈칸 「—」도 없앴다). -->
 <section class="screen" id="s10">
   <header><span class="no">09</span>
     <h2>어디까지 했고, 다음은 무엇인가</h2></header>
 
   <div class="canwrap">
     <p class="t" style="max-width:44em">여기까지가 가정치로 돌아가는 계산
-      코드와 앞 화면의 시연입니다. 아래 표는 <b>무엇이 있어야 무엇을 할 수
+      코드와 앞 화면의 시연입니다. 아래는 <b>무엇이 있어야 무엇을 할 수
       있게 되는지</b>를 단계별로 적은 것입니다.</p>
 
-    <table class="can">
-      <colgroup><col class="c-step"><col class="c-need"><col></colgroup>
-      <thead>
-        <tr><th>단계</th><th>필요한 것</th><th>그러면 할 수 있는 일</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <th>지금까지<br>한 것</th>
-          <td class="dim">—</td>
-          <td>장치별 계산식을 코드로 세우고, 물려서 계통이 돌아가는 것을 확인 ·
-            여러 조건을 한 번에 돌려 정상·이상을 한 표로 냄 ·
-            전체 계기만으로는 안 보이는 차이가 있음을 확인</td>
-        </tr>
-        <tr>
-          <th>다음</th>
-          <td>추가 개발 (설계데이터 없이도 됩니다)</td>
-          <td>이상 상태를 넓히고, 언제부터 이상했는지를 알 수 있다 ·
-            관 굵기·랙 수를 조건으로 바꿔 가며 돌릴 수 있게 만든다</td>
-        </tr>
-        <tr>
-          <th>설계데이터가<br>오면</th>
-          <td>펌프·밸브·열교환기 사양, 랙별 발열량</td>
-          <td>계기를 어디에 몇 개 설치할지 · 관 굵기 · 펌프 용량 · 여유율을
-            실제 값으로 검토 · 랙마다 냉매가 고르게 가는지 시공 전에 본다</td>
-        </tr>
-        <tr>
-          <th>실측이<br>오면</th>
-          <td>시운전·운영 실측</td>
-          <td>계기를 설치하지 못하는 자리의 값을 계산으로 세운다 ·
-            모델과 실제가 벌어지는지 지켜본다 ·
-            데이터를 쌓아 학습에 쓴다</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="done">
+      <span class="step-name">지금까지 한 것</span>
+      <span>장치별 계산식을 코드로 세우고, 물려서 계통이 돌아가는 것을 확인 ·
+        여러 조건을 한 번에 돌려 정상·이상을 한 표로 냄 ·
+        전체 계기만으로는 안 보이는 차이가 있음을 확인</span>
+    </div>
+
+    <ul class="steps">
+      <li><span class="step-name">다음</span>
+        <span class="need">필요한 것 — 추가 개발 (설계데이터 없이도 됩니다)</span>
+        <span>그러면 — 이상 상태를 넓히고, 언제부터 이상했는지를 알 수 있다 ·
+          관 굵기·랙 수를 조건으로 바꿔 가며 돌릴 수 있게 만든다</span></li>
+      <li><span class="step-name">설계데이터가 오면</span>
+        <span class="need">필요한 것 — 펌프·밸브·열교환기 사양, 랙별 발열량</span>
+        <span>그러면 — 계기를 어디에 몇 개 설치할지 · 관 굵기 · 펌프 용량 ·
+          여유율을 실제 값으로 검토 ·
+          랙마다 냉매가 고르게 가는지 시공 전에 본다</span></li>
+      <li><span class="step-name">실측이 오면</span>
+        <span class="need">필요한 것 — 시운전·운영 실측</span>
+        <span>그러면 — 계기를 설치하지 못하는 자리의 값을 계산으로 세운다 ·
+          모델과 실제가 벌어지는지 지켜본다 ·
+          데이터를 쌓아 학습에 쓴다</span></li>
+    </ul>
 
     <p class="t" style="margin-top:28px;max-width:44em">무엇을 더 해야 하는지에
       대한 의견을 기다립니다.</p>
