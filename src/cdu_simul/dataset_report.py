@@ -15,6 +15,7 @@ from cdu_simul.assumptions import ASSUMPTION_TAG, PLANT
 from cdu_simul.dataset import (
     DATASET_VERSION,
     LEAK_MODEL_K_APPROX,
+    MECHANISM_MASSLOSS,
     column_names,
     enumerate_specs,
 )
@@ -174,7 +175,8 @@ def _gate_results() -> list[tuple[str, str, str]]:
         (
             "세션 5.5 상태 이월 없음",
             "통과 (A 순서 무관 · B 단독 재현 · C 정상 복귀 · D 전 행 표기)",
-            "표본 검사다(전량 1,792 중 stride 61). 표본이 축을 다 덮는지도 테스트가 본다",
+            "표본 검사다(전량 9,472 중 stride 61 — 세션 7.39 에서 「샘」 7,680 이 "
+            "늘었다). 표본이 축을 다 덮는지도 테스트가 본다",
         ),
         (
             "세션 5.5-D 「막힘」 주입 지점 정정",
@@ -297,7 +299,8 @@ OPEN_LIMITS: tuple[tuple[str, str], ...] = (
         "#36 K값 근사 누출과 질량손실 누출이 같은 방향을 가리키지 않는다 "
         "(세션 5.6 · 5.6-B)",
         "`total_flow_Lps` · `pump_head_mAq` · `rack{i}_flow_Lps` — 아래 ③ 절에 "
-        "전문이 있다. `leak_model` 열이 이 데이터셋이 어느 쪽인지(`K_approx`) 싣는다",
+        "전문이 있다. `leak_model` 열이 **행마다** 어느 쪽인지 싣는다 — "
+        "`K_approx`(「막힘」)와 `massloss`(「샘」)가 세션 7.39 부터 한 표에 있다",
     ),
     (
         "#32 밸브 선형 개도 특성 미검증 (개도 80% 고정으로만 돌렸다)",
@@ -342,17 +345,22 @@ OPEN_LIMITS: tuple[tuple[str, str], ...] = (
 
 
 def _steady_rows_by_leak_level() -> list[tuple[float, int]]:
-    """정상상태 행수를 누출 수준별로 센다 (순수 함수) — 미해결 #37.
+    """정상상태 행수를 「막힘」 수준별로 센다 (순수 함수) — 미해결 #37.
 
     행 수는 시나리오 수가 아니다 — 다중 CDU 시나리오는 CDU 마다 한 행을 낸다
     (5-1 「데이터셋 스키마 규약」). 세는 대상은 **행**이다.
+
+    **「샘」 행은 세지 않는다** [세션 7.39] — K값 증가율이라는 축이 없어
+    `leak_level_percent` 가 빈 값이다 — 이 표에서 빠지는 것이 맞고, 「샘」 행은
+    `leak_model` 로 고른다.
     """
     counts: dict[float, int] = {}
     for spec in enumerate_specs():
-        if spec.regime != "steady":
+        if spec.regime != "steady" or spec.mechanism == MECHANISM_MASSLOSS:
             continue
         n_rows = 1 if spec.cdu_config == "single" else PLANT.cdu_count
-        level = round(spec.leak_level_percent)
+        # 위 분기에서 「샘」 spec 을 걸렀으므로 여기서는 항상 수치다.
+        level = round(float(spec.leak_level_percent))
         counts[level] = counts.get(level, 0) + n_rows
     return sorted(counts.items())
 
@@ -389,8 +397,13 @@ def format_report() -> str:
             for level, rows in _steady_rows_by_leak_level()
         ),
         "",
+        "  **위 표는 「막힘」 행만 센다** [세션 7.39] — 「샘」 행은",
+        "  `leak_level_percent` 가 **빈 값**이라(K 배수 축이 없다) 이 표에 없다.",
+        "  「샘」 행은 `leak_model == massloss` 로 고른다.",
+        "",
         "  → **정상상태에서 「정상」 표본을 고르려면 `leak_level_percent == 0` 으로",
         f"     거른다.** 그 결과가 {_steady_rows_by_leak_level()[0][1]:,} 행이다.",
+        "     「샘」 행은 빈 값이라 이 거름에 섞이지 않는다.",
         "     `stimulus_kind=none` 으로 거르면 정상상태 전체가 들어와",
         "     **누출 행이 75% 섞인다** — 정상 대비 누출 대조가 성립하지 않는다.",
         "",
@@ -468,11 +481,15 @@ def format_report() -> str:
         "  ── 무엇 **안에서** 구분되는가 (미해결 #36 · 세션 5.6 · 5.6-B) ──",
         "  · 세션 4 게이트(96건 전수)는 **뒤집히지 않았다.** 이 데이터셋의 신호는",
         "    부호가 일관되고 수준 간 단조다 — 그 판정은 그대로 유효하다.",
-        "  · **다만 그 구분은 「막힘」 안에서의 구분이다.** 이 데이터셋의 이상",
-        f"    상태는 전부 `leak_model={LEAK_MODEL_K_APPROX}` — 배관 K값 증가, 곧",
+        "  · **다만 그 구분은 「막힘」 안에서의 구분이다.** 세션 4 게이트가 판정한",
+        f"    행은 전부 `leak_model={LEAK_MODEL_K_APPROX}` — 배관 K값 증가, 곧",
         "    **「막힘」**이다. 「막힘」은 「샘」의 대용(proxy)이 아니라 **독립된",
         "    이상 상태**이므로(절대 규칙 8), 이 판정을 「샘」 행으로 옮겨 읽지",
         "    않는다.",
+        "  · **세션 7.39 부터 이 데이터셋에 「샘」 행이 함께 있다**",
+        "    (`leak_model=massloss`). 「샘」에는 게이트가 없다 — CLAUDE.md 게이트",
+        "    표의 세션 4 는 「막힘」만 판정했다. 행마다 `leak_model` 을 보고",
+        "    어느 기구인지 갈라 읽는다.",
         "  · 질량손실(계통 밖 유출)로 모사하면 **총유량과 누출랙 통과유량의 부호가",
         "    정반대**로 나온다 — K 근사는 둘 다 감소, 질량손실은 둘 다 증가다",
         "    (세션 5.6 · 8조합 × 크기 4수준 × 배치 6 전수 · fsolve 272회 ier=1).",
@@ -546,9 +563,14 @@ def format_report() -> str:
         "  **이동 방향이 조합에 따라 갈린다**. 열 단위 영향은 아래 「열린 한계」 #40.",
         "",
         "  ── 판본 주의 ──",
-        "  데이터셋은 세 판본이 있었다: **48열(세션 5.5-B) · 49열(5.5-D) ·",
-        f"  52열(`{DATASET_VERSION}` · 세션 5.7)**. `dataset_version` 열의 **부재 자체가",
-        "  5.7 이전 판본이라는 표지**다.",
+        "  데이터셋은 네 판본이 있었다: **48열(세션 5.5-B) · 49열(5.5-D) ·",
+        f"  52열(세션 5.7) · 58열(`{DATASET_VERSION}` · 세션 7.39)**.",
+        "  `dataset_version` 열의 **부재 자체가 5.7 이전 판본이라는 표지**다.",
+        "  · 세션 7.39 에서 **「샘」(질량손실) 행이 처음 들어왔다** — 이전 판본은",
+        "    전부 「막힘」(K값 증가)뿐이었다. 두 기구는 부호가 정반대이므로",
+        "    (미해결 #36) **`leak_model` 을 읽지 않고 두 판본을 나란히 읽지 않는다.**",
+        "    이 판본은 **정상상태만** 담는다(규모 B) — 전이 행은 미해결 #40 이",
+        "    열린 채라 붙이지 않았다. 이전 판본의 전이 행과 섞어 읽지 않는다.",
         "  · 세션 5.7 에서 M 을 8랙 계통 전체로 고쳐 **τ·t63·t95 가 8배 이동**했다 —",
         "    이전 판본의 시간 수치를 이 데이터셋과 나란히 읽지 않는다.",
         "  · 세션 5-B 에서 Cr 을 선언값에서 유도값으로 바꿨다 — 그 이전 로그의 온도",
