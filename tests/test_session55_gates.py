@@ -32,9 +32,10 @@ solver 플래그 4종의 자리. **육안 확인이 아니라 프로그램으로
 **새 허용오차를 만들지 않는다** — A·B·C 는 전부 `==` 로 본다. 부동소수점 비교에
 허용오차를 두면 "작은 이월"이 통과해 버린다.
 
-**표본 방식**: 전량(1,792 시나리오)을 돌리면 36분이 걸려 테스트로 부적당하다.
-`SAMPLE_STRIDE` 간격으로 고르게 뽑아 정상상태·전이·세 CDU 구성·네 누출 수준이
-모두 포함되도록 한다 — 아래 `_sample_specs` 가 그 포함을 **테스트로 확인**한다.
+**표본 방식**: 전량(9,472 시나리오 — 세션 7.39 에서 「샘」 7,680 이 늘었다)을
+돌리면 테스트로 부적당하다. `SAMPLE_STRIDE` 간격으로 고르게 뽑아 정상상태·전이·
+세 CDU 구성·네 「막힘」 수준·기구 셋이 모두 포함되도록 한다 — 아래
+`_sample_specs` 가 그 포함을 **테스트로 확인**한다.
 
 **이 게이트가 판정하지 않는 것**
 · 데이터셋의 물리가 맞는가 — 6장 기준은 각자의 자리에서 이미 판정했다
@@ -45,7 +46,6 @@ solver 플래그 4종의 자리. **육안 확인이 아니라 프로그램으로
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import replace
 
 import pytest
 
@@ -53,6 +53,9 @@ from cdu_simul.dataset import (
     CONFIG_DUAL_ASYMMETRIC,
     CONFIG_DUAL_SYMMETRIC,
     CONFIG_SINGLE,
+    LEAK_CDU_INDEX,
+    LEAK_MODEL_MASSLOSS,
+    MECHANISM_BLOCKAGE,
     MECHANISM_MASSLOSS,
     MECHANISM_NONE,
     PROVENANCE_ROW,
@@ -63,7 +66,7 @@ from cdu_simul.dataset import (
 )
 from cdu_simul.dataset_plan import MASSLOSS_PROVENANCE
 
-#: 표본 간격 — 1,792 시나리오에서 고르게 뽑는다.
+#: 표본 간격 — 9,472 시나리오에서 고르게 뽑는다.
 #: 61 은 시나리오 수의 약수가 아니라 목록을 고르게 훑는다(약수면 특정 축에 몰린다).
 SAMPLE_STRIDE: int = 61
 
@@ -101,6 +104,13 @@ def test_sample_covers_every_axis() -> None:
     }
     assert {s.leak_multiplier for s in SAMPLE} == {1.0, 1.05, 1.2, 1.5}
     assert len({s.load_percent for s in SAMPLE}) == 2
+    # 기구 축 [세션 7.39] — 「샘」 행이 표본에서 빠지면 이 게이트가 「막힘」만
+    # 보고 통과한다.
+    assert {s.mechanism for s in SAMPLE} == {
+        MECHANISM_NONE,
+        MECHANISM_BLOCKAGE,
+        MECHANISM_MASSLOSS,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -229,26 +239,37 @@ def test_criterion_d_holds_for_massloss_branch() -> None:
     키가 빠지면 그 행만 표기 없이 나간다 — 기준 D 가 「막힘」 행만 보고 통과할
     수 있다. 한 행으로 그 갈래를 고정한다.
 
-    **이 행의 수치는 「샘」 물리가 아니다.** K 배수 1.0 의 정상 해에 라벨과
-    표기만 「샘」으로 붙인 것이다 — 「샘」 행을 실제로 얹는 것은 다음 판이다.
-    여기서 확인하는 것은 라벨 축이 K 배수와 독립인지, 그리고 갈린 문언이
-    전 열에 실리는지 둘뿐이다.
+    **세션 7.39 부터 실제 「샘」 행을 본다.** 7.35 는 「샘」 행이 아직 없어
+    K=1.0 정상 해에 라벨만 붙여 봤으나, 이제 `enumerate_specs()` 가 「샘」
+    시나리오를 낸다.
     """
-    blockage = next(
+    normal = next(
         s
         for s in enumerate_specs()
         if s.regime == "steady"
         and s.cdu_config == CONFIG_SINGLE
         and s.mechanism == MECHANISM_NONE
     )
-    massloss = replace(blockage, mechanism=MECHANISM_MASSLOSS)
+    massloss = next(
+        s
+        for s in enumerate_specs()
+        if s.cdu_config == CONFIG_SINGLE and s.mechanism == MECHANISM_MASSLOSS
+    )
 
     # 라벨 축이 K 배수에서 떨어졌다 — 같은 K=1.0 인데 라벨이 갈린다.
-    assert blockage.scenario_kind == "정상"
+    assert normal.scenario_kind == "정상"
     assert massloss.scenario_kind == "이상", "「샘」 행이 「정상」으로 라벨된다"
     assert massloss.leak_multiplier == 1.0
 
     row = rows_for(massloss)[0]
+
+    # 값 열 넷의 규약 [사람 결정 · 세션 7.39]. 「막힘」 축은 빈 값이고, 「샘」에
+    # 대응물이 있는 둘만 값을 싣는다.
+    assert row["leak_level_percent"] == "", "「샘」 행에 K 증가율이 실렸다"
+    assert row["leak_rack_index"] == "", "「샘」 행에 랙 번호가 실렸다"
+    assert row["leak_cdu_index"] == LEAK_CDU_INDEX
+    assert row["leak_model"] == LEAK_MODEL_MASSLOSS
+
     for name in REQUIRED_PROVENANCE:
         value = row.get(name)
         assert isinstance(value, str) and value.strip(), f"{name} 이 비어 있다"

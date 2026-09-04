@@ -51,6 +51,8 @@ from cdu_simul.dataset import (
     CONFIG_DUAL_ASYMMETRIC,
     CONFIG_SINGLE,
     LEAK_CDU_INDEX,
+    MECHANISM_MASSLOSS,
+    MECHANISM_NONE,
     ScenarioSpec,
     column_names,
     enumerate_specs,
@@ -302,26 +304,47 @@ def test_leak_cdu_index_column_exists() -> None:
     assert "leak_cdu_index" in column_names()
 
 
-def _first(regime: str, config: str, multiplier: float) -> ScenarioSpec:
+def _first(
+    regime: str,
+    config: str,
+    multiplier: float,
+    mechanism: str | None = None,
+) -> ScenarioSpec:
+    """조건에 맞는 첫 spec.
+
+    **기구를 함께 건다** [세션 7.39] — K 배수 1.0 은 이제 「이상이 없다」를
+    뜻하지 않는다(「샘」 행이 K=1.0 이다). 기구를 주지 않으면 「막힘」 축만 본다.
+    """
     return next(
         s
         for s in enumerate_specs()
         if s.regime == regime
         and s.cdu_config == config
         and s.leak_multiplier == multiplier
+        and (mechanism is None or s.mechanism == mechanism)
     )
 
 
 @pytest.mark.parametrize("config", [CONFIG_SINGLE, CONFIG_DUAL_ASYMMETRIC])
 def test_leak_cdu_index_is_blank_without_leak(config: str) -> None:
-    """누출이 없으면 **빈 값**이다 — 이 스키마의 「해당 없음」 표기 규약이다."""
-    for row in rows_for(_first("steady", config, 1.0)):
+    """**이상 기구가 없으면** 빈 값이다 — 이 스키마의 「해당 없음」 표기 규약이다.
+
+    판정이 K 배수에서 기구로 옮겨졌다 [세션 7.39] — 「샘」 행은 K=1.0 이지만
+    이상이 있으므로 CDU 번호를 싣는다(아래 시험).
+    """
+    for row in rows_for(_first("steady", config, 1.0, MECHANISM_NONE)):
         assert row["leak_cdu_index"] == ""
 
 
 @pytest.mark.parametrize("config", [CONFIG_SINGLE, CONFIG_DUAL_ASYMMETRIC])
 def test_leak_cdu_index_names_the_leaking_cdu(config: str) -> None:
-    """누출이 있으면 누출이 걸린 CDU 번호를 싣는다 — 행마다 같은 값이다."""
+    """이상이 있으면 그것이 걸린 CDU 번호를 싣는다 — 행마다 같은 값이다.
+
+    「샘」 행도 같은 규약을 따른다 — `solve_plant_massloss` 가 「샘」을 CDU
+    `LEAK_CDU_INDEX` 하나에만 건다(5-1 「「샘」 주입 지점」 · 세션 7.39).
+    """
+    for row in rows_for(_first("steady", config, 1.0, MECHANISM_MASSLOSS)):
+        assert row["leak_cdu_index"] == LEAK_CDU_INDEX
     for row in rows_for(_first("steady", config, 1.5)):
         assert row["leak_cdu_index"] == LEAK_CDU_INDEX
 
