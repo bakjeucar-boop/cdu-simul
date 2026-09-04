@@ -18,3 +18,6 @@ results/
 data/
 *.csv
 *.parquet
+
+# 사람이 쓰는 명령어 메모 (커밋도 백업도 하지 않는다 · 세션 7.25)
+start-cdu.txt
