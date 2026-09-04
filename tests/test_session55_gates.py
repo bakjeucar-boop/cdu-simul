@@ -44,18 +44,23 @@ solver 플래그 4종의 자리. **육안 확인이 아니라 프로그램으로
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from cdu_simul.dataset import (
     CONFIG_DUAL_ASYMMETRIC,
     CONFIG_DUAL_SYMMETRIC,
     CONFIG_SINGLE,
+    MECHANISM_MASSLOSS,
+    MECHANISM_NONE,
     PROVENANCE_ROW,
     ScenarioSpec,
     column_names,
     enumerate_specs,
     rows_for,
 )
+from cdu_simul.dataset_plan import MASSLOSS_PROVENANCE
 
 #: 표본 간격 — 1,792 시나리오에서 고르게 뽑는다.
 #: 61 은 시나리오 수의 약수가 아니라 목록을 고르게 훑는다(약수면 특정 축에 몰린다).
@@ -193,6 +198,45 @@ def test_criterion_d_every_row_carries_provenance(spec: ScenarioSpec) -> None:
             assert name in row, (
                 f"{spec.scenario_id} 행 {row_index}: solver 플래그 {name} 자리가 없다"
             )
+
+
+def test_criterion_d_holds_for_massloss_branch() -> None:
+    """기준 D 가 **기구별로 갈린 문언에도** 성립한다 [세션 7.35].
+
+    「샘」 문언은 「막힘」 문언과 다른 문자열이므로, 갈라 둔 쪽이 비어 있거나
+    키가 빠지면 그 행만 표기 없이 나간다 — 기준 D 가 「막힘」 행만 보고 통과할
+    수 있다. 한 행으로 그 갈래를 고정한다.
+
+    **이 행의 수치는 「샘」 물리가 아니다.** K 배수 1.0 의 정상 해에 라벨과
+    표기만 「샘」으로 붙인 것이다 — 「샘」 행을 실제로 얹는 것은 다음 판이다.
+    여기서 확인하는 것은 라벨 축이 K 배수와 독립인지, 그리고 갈린 문언이
+    전 열에 실리는지 둘뿐이다.
+    """
+    blockage = next(
+        s
+        for s in enumerate_specs()
+        if s.regime == "steady"
+        and s.cdu_config == CONFIG_SINGLE
+        and s.mechanism == MECHANISM_NONE
+    )
+    massloss = replace(blockage, mechanism=MECHANISM_MASSLOSS)
+
+    # 라벨 축이 K 배수에서 떨어졌다 — 같은 K=1.0 인데 라벨이 갈린다.
+    assert blockage.scenario_kind == "정상"
+    assert massloss.scenario_kind == "이상", "「샘」 행이 「정상」으로 라벨된다"
+    assert massloss.leak_multiplier == 1.0
+
+    row = rows_for(massloss)[0]
+    for name in REQUIRED_PROVENANCE:
+        value = row.get(name)
+        assert isinstance(value, str) and value.strip(), f"{name} 이 비어 있다"
+    assert "실측 아님" in str(row["assumption_tag"])
+
+    # 갈아 끼운 셋만 갈리고 나머지 둘은 「막힘」 문언 그대로다.
+    for name, text in MASSLOSS_PROVENANCE.items():
+        assert row[name] == text, f"{name} 에 「막힘」 문언이 실렸다"
+    for name in set(REQUIRED_PROVENANCE) - set(MASSLOSS_PROVENANCE):
+        assert row[name] == PROVENANCE_ROW[name]
 
 
 def test_failed_solver_rows_are_not_dropped() -> None:
