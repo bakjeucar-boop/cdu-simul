@@ -1,12 +1,13 @@
-"""누출 **질량손실**의 열·전이 관측 — 세션 5.7-D.
+"""「샘」(질량손실)의 열·전이 관측 — 세션 5.7-D.
 
-세션 5.6 (`leak_massloss.py`) 은 **수력 정상상태 한정**이었다. 이 파일은 그 위에
+세션 5.6 (`massloss.py`) 은 **수력 정상상태 한정**이었다. 이 파일은 그 위에
 **2노드 온도 모델**을 얹어 온도와 시간축까지 본다. 판정 기준은 `PROCEED.md`
 「세션 5.7-D … 판정 기준 선기재」에 **코드보다 먼저** 적었다.
 
-**절대 규칙 8 예외다 — 사람이 승인했고 이 판까지 이어진다.** 조건은 세션 5.6 과
-같다: **별도 코드 · 데이터셋 미변경 · 5-1 의 누출 정의는 K 근사 그대로 · 규칙 8
-문언 무수정.** 이 모듈은 데이터셋 생성 경로에 **들어가지 않는다** — 저장소의 어느
+**절대 규칙 8 의 예외가 아니다** [세션 7.32]. 세션 5.7-D 당시에는 세션 5.6 과 같은
+조건의 승인된 예외였으나, **세션 7.26 이 규칙 8 을 「막힘」·「샘」 둘로 고쳐 그
+조건이 무효가 됐다** — 「샘」은 규칙 8 이 정한 두 이상 상태 중 하나다. 남은 범위는
+하나다: 이 모듈은 데이터셋 생성 경로에 **들어가지 않는다** — 데이터셋 쪽 어느
 모듈도 이 파일을 import 하지 않는다.
 
 **5-1 「보충수 처리」(세션 5.7-C 확정)가 전제다.** 보충수를 모델링하지 않는다 —
@@ -18,12 +19,12 @@
     환수(hot) 노드 :  M_hot·cp·dT_ret/dt = ṁ_sup·cp·(T_sup − T_ret) + Q_rack
     공급(cold) 노드:  M_cold·cp·dT_sup/dt = ṁ_ret·cp·(T_ret − T_sup) − Q_hx
 
-- **환수 노드는 밀폐루프와 같다.** 유입 ṁ_sup, 유출 ṁ_ret + ṁ_leak = ṁ_sup 이라
+- **환수 노드는 밀폐루프와 같다.** 유입 ṁ_sup, 유출 ṁ_ret + ṁ_massloss = ṁ_sup 이라
   이 노드의 **질량은 정확히 보존된다.** 누출 유체가 T_ret 로 나가므로 유출
   엔탈피가 ṁ_sup·cp·T_ret 로 합쳐진다.
 - **공급 노드만 ṁ_ret 로 바뀐다.** 열교환기를 지나는 것은 환수유량이므로
   `Q_hx = ε·C_min·(T_ret − T_2차)` 의 C_1차 도 ṁ_ret·cp 다.
-- 재고가 줄어드는 것은 **공급 노드**다 (dM_cold/dt = −ṁ_leak).
+- 재고가 줄어드는 것은 **공급 노드**다 (dM_cold/dt = −ṁ_massloss).
 
 **절대온도가 식에 남지 않는다.** 변질량 형태 d(M·T)/dt 에서 출발해 M 을 얼리면
 T·dM/dt 항이 유출항의 절대온도 항과 **정확히 상쇄**되어 위 식이 된다. 온도 영점에
@@ -33,8 +34,9 @@ T·dM/dt 항이 유출항의 절대온도 항과 **정확히 상쇄**되어 위 
 보유량이라는 새 처리가 붙는다. 대신 `inventory_loss_percent` 가 그 근사의 크기를
 케이스마다 낸다.
 
-**누출 위치는 5-1 「누출 주입 지점」 그대로 랙 출구**이고, 5-1 이 헤더를 저항 0 의
-공통 노드로 두므로 그 지점의 온도는 환수 헤더 온도 T_ret 다 — **새 숫자가 아니다.**
+**「샘」의 위치는 5-1 「「샘」 주입 지점」 그대로 랙 출구**이고, 5-1 이 헤더를 저항 0
+의 공통 노드로 두므로 그 지점의 온도는 환수 헤더 온도 T_ret 다 — **새 숫자가
+아니다.** 같은 항목이 「랙 1개에 걸지만 계통은 그것을 국소로 보지 않는다」고 적는다.
 
 **게이트가 아니다.** 6장 기준 넷을 판정하지 않는다. `energy_balance` 잔차는 **이
 별도 코드의 자기정합성 확인**이지 6장 ① 판정이 아니다.
@@ -78,12 +80,12 @@ from cdu_simul.hydraulics import (
     bulk_mean_temperature_C,
     rated_property_temperature_C,
 )
-from cdu_simul.leak_massloss import (
+from cdu_simul.massloss import (
     SWEEP_FRACTIONS,
-    LeakTopology,
+    MassLossTopology,
     k_approx_results,
-    leak_flow_bound_Lps,
-    leak_topologies,
+    massloss_flow_bound_Lps,
+    massloss_topologies,
     solve_massloss,
 )
 from cdu_simul.model import (
@@ -106,8 +108,8 @@ class MassLossThermal:
     """질량손실 열 정상상태 1건. solver 플래그를 함께 싣는다(절대 규칙 5)."""
 
     case: CduCase
-    topology: LeakTopology
-    leak_flow_Lps: float
+    topology: MassLossTopology
+    massloss_flow_Lps: float
     T_supply_C: float
     T_return_C: float
     rack_outlet_temps_C: tuple[float, ...]
@@ -117,7 +119,7 @@ class MassLossThermal:
     property_eval_T_C: float
     hx_duty_kW: float
     rack_load_kW: float
-    leak_enthalpy_kW: float
+    massloss_enthalpy_kW: float
     outer_solver_ier: int
     outer_solver_message: str
     hydraulic_solver_converged: bool
@@ -127,24 +129,30 @@ class MassLossThermal:
         return self.outer_solver_ier == 1 and self.hydraulic_solver_converged
 
     @property
-    def leak_rack_outlet_temp_C(self) -> float:
-        """누출랙 콜드플레이트 출구온도 [℃] — 판정 기준 A."""
+    def injection_rack_outlet_temp_C(self) -> float:
+        """누출랙 콜드플레이트 출구온도 [℃] — 판정 기준 A.
+
+        `LEAK.injection_rack_index` 는 **「막힘」의 이름을 빌려 쓴 것**이다
+        [세션 7.32 · 대응표 `docs/leak-naming-map.md`]. 문서 쪽 주입 지점은
+        세션 7.27 에 기구별로 갈렸고(5-1 「「막힘」 주입 지점」·「「샘」 주입 지점」),
+        랙 번호가 같을 뿐 성립 이유가 다르다 — 「샘」은 랙에 국소화되지 않는다.
+        """
         return self.rack_outlet_temps_C[LEAK.injection_rack_index]
 
     @property
-    def balance_residual_without_leak_percent(self) -> float:
-        """leak 항을 **빼고** 본 잔차 [%] — 닫히지 않아야 정상이다."""
+    def balance_residual_without_massloss_percent(self) -> float:
+        """「샘」 항을 **빼고** 본 잔차 [%] — 닫히지 않아야 정상이다."""
         return (self.hx_duty_kW - self.rack_load_kW) / self.rack_load_kW * 100.0
 
     @property
-    def balance_residual_with_leak_percent(self) -> float:
-        """leak 항을 **넣고** 본 잔차 [%] — 판정 기준 D.
+    def balance_residual_with_massloss_percent(self) -> float:
+        """「샘」 항을 **넣고** 본 잔차 [%] — 판정 기준 D.
 
         `Q_hx` 는 ε-NTU 경로, `Q_rack` 은 5장 입력, 누출 엔탈피는 **CoolProp 직접
         조회**다. 세 경로가 다르므로 항등식이 아니다.
         """
         return (
-            (self.hx_duty_kW + self.leak_enthalpy_kW - self.rack_load_kW)
+            (self.hx_duty_kW + self.massloss_enthalpy_kW - self.rack_load_kW)
             / self.rack_load_kW
             * 100.0
         )
@@ -153,8 +161,8 @@ class MassLossThermal:
 def _steady_at_property_temperature(
     T_property_C: float,
     case: CduCase,
-    leak_flow_Lps: float,
-    topology: LeakTopology,
+    massloss_flow_Lps: float,
+    topology: MassLossTopology,
     secondary_flow_Lps: float,
 ) -> tuple[float, float, tuple[float, ...], float, float, float, float]:
     """물성 온도가 주어졌을 때의 온도들 (순수 함수).
@@ -167,12 +175,12 @@ def _steady_at_property_temperature(
         T_ret = T_2차 + ṁ_ret·cp·ΔT / (ε·C_min)
         T_sup = T_ret − ΔT
     """
-    flow = solve_massloss(case.hydraulic, leak_flow_Lps, topology, T_property_C)
+    flow = solve_massloss(case.hydraulic, massloss_flow_Lps, topology, T_property_C)
     rho_kgm3 = coolant_density_kgm3(T_property_C)
     cp_Jkg_K = coolant_cp_Jkg_K(T_property_C)
 
     Q_supply_Lps = flow.supply_flow_Lps
-    Q_return_Lps = Q_supply_Lps - leak_flow_Lps
+    Q_return_Lps = Q_supply_Lps - massloss_flow_Lps
     C_supply_W_K = Q_supply_Lps * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K
     C_return_W_K = Q_return_Lps * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K
 
@@ -209,14 +217,14 @@ def _steady_at_property_temperature(
 
 def solve_massloss_steady(
     case: CduCase,
-    leak_flow_Lps: float,
-    topology: LeakTopology,
+    massloss_flow_Lps: float,
+    topology: MassLossTopology,
     secondary_flow_Lps: float = HEAT_EXCHANGER.secondary_flow_Lps,
 ) -> MassLossThermal:
     """질량손실 정상상태를 푼다 — 물성 온도 고정점 + quasi-steady 수력.
 
     구조는 `model.solve_cdu_steady_state` 와 같다(절대 규칙 4 하이브리드).
-    `leak_flow_Lps = 0` 이면 수력이 K 근사 정상 케이스와 항등이고 공급=환수라
+    `massloss_flow_Lps = 0` 이면 수력이 K 근사 정상 케이스와 항등이고 공급=환수라
     열식도 밀폐루프와 항등이다 — 격리 확인이 이것을 쓴다.
 
     절대 규칙 5: 바깥 `fsolve` 의 `ier` 를 결과에 싣는다. 안쪽 수력이 실패하면
@@ -226,7 +234,7 @@ def solve_massloss_steady(
     def residual(x: np.ndarray) -> np.ndarray:
         T_prop_C = float(x[0])
         T_sup_C, T_ret_C, *_ = _steady_at_property_temperature(
-            T_prop_C, case, leak_flow_Lps, topology, secondary_flow_Lps
+            T_prop_C, case, massloss_flow_Lps, topology, secondary_flow_Lps
         )
         rule_T_C = property_temperature_from_state(T_sup_C, T_ret_C, case.cp_rule)
         return np.array([rule_T_C - T_prop_C])
@@ -248,25 +256,25 @@ def solve_massloss_steady(
         Q_hx_W,
         rho_kgm3,
     ) = _steady_at_property_temperature(
-        T_prop_C, case, leak_flow_Lps, topology, secondary_flow_Lps
+        T_prop_C, case, massloss_flow_Lps, topology, secondary_flow_Lps
     )
 
-    m_leak_kgs = leak_flow_Lps * _M3_PER_LITRE * rho_kgm3
+    m_massloss_kgs = massloss_flow_Lps * _M3_PER_LITRE * rho_kgm3
     dh_Jkg = coolant_enthalpy_Jkg(T_return_C) - coolant_enthalpy_Jkg(T_supply_C)
     return MassLossThermal(
         case=case,
         topology=topology,
-        leak_flow_Lps=leak_flow_Lps,
+        massloss_flow_Lps=massloss_flow_Lps,
         T_supply_C=T_supply_C,
         T_return_C=T_return_C,
         rack_outlet_temps_C=rack_outlet_temps_C,
         supply_flow_Lps=Q_supply_Lps,
-        return_flow_Lps=Q_supply_Lps - leak_flow_Lps,
+        return_flow_Lps=Q_supply_Lps - massloss_flow_Lps,
         pump_head_mAq=pump_head,
         property_eval_T_C=T_prop_C,
         hx_duty_kW=Q_hx_W / _W_PER_KW,
         rack_load_kW=case.rack_load_kW * case.hydraulic.n_racks,
-        leak_enthalpy_kW=m_leak_kgs * dh_Jkg / _W_PER_KW,
+        massloss_enthalpy_kW=m_massloss_kgs * dh_Jkg / _W_PER_KW,
         outer_solver_ier=int(ier),
         outer_solver_message=str(message).strip(),
         hydraulic_solver_converged=True,
@@ -281,9 +289,9 @@ class MassLossTransient:
     """질량손실 전이 1건. solver 플래그를 함께 싣는다(절대 규칙 5)."""
 
     case: CduCase
-    topology: LeakTopology
+    topology: MassLossTopology
     holdup: HoldupBound
-    leak_flow_Lps: float
+    massloss_flow_Lps: float
     t_s: np.ndarray
     T_supply_C: np.ndarray
     T_return_C: np.ndarray
@@ -330,21 +338,21 @@ class MassLossTransient:
                 self.T_return_initial_C, self.T_return_final_C, "bulk_mean"
             )
         )
-        lost_kg = self.leak_flow_Lps * _M3_PER_LITRE * rho_kgm3 * duration_s
+        lost_kg = self.massloss_flow_Lps * _M3_PER_LITRE * rho_kgm3 * duration_s
         return lost_kg / self.holdup.mass_kg * 100.0
 
 
 def integrate_massloss_step(
     case: CduCase,
-    leak_flow_Lps: float,
-    topology: LeakTopology,
+    massloss_flow_Lps: float,
+    topology: MassLossTopology,
     holdup: HoldupBound,
     secondary_flow_Lps: float = HEAT_EXCHANGER.secondary_flow_Lps,
     horizon_in_tau: float = INTEGRATION_HORIZON_IN_TAU,
 ) -> MassLossTransient:
     """정격 운전 중 t=0 에 질량손실 누출을 계단으로 넣고 적분한다.
 
-    초기조건은 **누출 전(Q_leak=0) 정상상태**다 — `dynamics.integrate_leak_step`
+    초기조건은 **누출 전(Q_massloss=0) 정상상태**다 — `dynamics.integrate_leak_step`
     과 같은 자극 형태다. 케이스마다 이 함수를 새로 호출해 초기조건을 명시적으로
     리셋한다(collaboration.md 결함유형 ④).
 
@@ -376,11 +384,11 @@ def integrate_massloss_step(
         rho_kgm3 = coolant_density_kgm3(T_prop_C)
         cp_Jkg_K = coolant_cp_Jkg_K(T_prop_C)
 
-        flow = solve_massloss(case.hydraulic, leak_flow_Lps, topology, T_prop_C)
+        flow = solve_massloss(case.hydraulic, massloss_flow_Lps, topology, T_prop_C)
         Q_supply_Lps = flow.supply_flow_Lps
         C_supply_W_K = Q_supply_Lps * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K
         C_return_W_K = (
-            (Q_supply_Lps - leak_flow_Lps) * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K
+            (Q_supply_Lps - massloss_flow_Lps) * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K
         )
         effectiveness, C_min_W_K = hx_capacity_terms(
             C_return_W_K, case.ntu, case.T_secondary_supply_C, secondary_flow_Lps
@@ -405,7 +413,7 @@ def integrate_massloss_step(
         case=case,
         topology=topology,
         holdup=holdup,
-        leak_flow_Lps=leak_flow_Lps,
+        massloss_flow_Lps=massloss_flow_Lps,
         t_s=solution.t,
         T_supply_C=solution.y[0],
         T_return_C=solution.y[1],
@@ -421,7 +429,7 @@ def integrate_massloss_step(
 # ─────────────────────────────────────────────────────────────────────────────
 @dataclass(frozen=True)
 class PlantMassLoss:
-    """2대 결합 해 1건. 누출은 CDU 0 에만 걸린다(5-1 「누출 주입 지점」·#34)."""
+    """2대 결합 해 1건. 「샘」은 CDU 0 에만 걸린다(5-1 「「샘」 주입 지점」·#34)."""
 
     cdu_results: tuple[MassLossThermal, ...]
     secondary_shares_Lps: tuple[float, ...]
@@ -438,8 +446,8 @@ class PlantMassLoss:
 
 def solve_plant_massloss(
     templates: tuple[CduCase, ...],
-    leak_flow_Lps: float,
-    topology: LeakTopology,
+    massloss_flow_Lps: float,
+    topology: MassLossTopology,
     share_uses_return_flow: bool,
 ) -> PlantMassLoss:
     """상위 레벨 연립으로 CDU 간 연동을 푼다 — 누출은 CDU 0 에만.
@@ -454,15 +462,15 @@ def solve_plant_massloss(
     **값을 고르지 않고 양 끝을 둘 다 돌린다** — 분기의 양 끝이라 새 가정치가
     아니다(g 와 같은 취급).
     """
-    leaks = (leak_flow_Lps,) + (0.0,) * (len(templates) - 1)
+    massloss_flows = (massloss_flow_Lps,) + (0.0,) * (len(templates) - 1)
 
     def primary_flows(temps: tuple[float, ...]) -> tuple[float, ...]:
         flows = []
-        for cdu, T_C, leak in zip(templates, temps, leaks, strict=True):
-            flow = solve_massloss(cdu.hydraulic, leak, topology, T_C)
+        for cdu, T_C, loss in zip(templates, temps, massloss_flows, strict=True):
+            flow = solve_massloss(cdu.hydraulic, loss, topology, T_C)
             Q_supply_Lps = flow.supply_flow_Lps
             flows.append(
-                Q_supply_Lps - leak if share_uses_return_flow else Q_supply_Lps
+                Q_supply_Lps - loss if share_uses_return_flow else Q_supply_Lps
             )
         return tuple(flows)
 
@@ -470,9 +478,11 @@ def solve_plant_massloss(
         temps = tuple(float(v) for v in x)
         shares = PLANT.secondary_shares_Lps(primary_flows(temps))
         out = []
-        for cdu, T_C, leak, share in zip(templates, temps, leaks, shares, strict=True):
+        for cdu, T_C, loss, share in zip(
+            templates, temps, massloss_flows, shares, strict=True
+        ):
             T_sup_C, T_ret_C, *_ = _steady_at_property_temperature(
-                T_C, cdu, leak, topology, share
+                T_C, cdu, loss, topology, share
             )
             out.append(
                 property_temperature_from_state(T_sup_C, T_ret_C, cdu.cp_rule) - T_C
@@ -489,8 +499,10 @@ def solve_plant_massloss(
     shares = PLANT.secondary_shares_Lps(primary_flows(temps))
     return PlantMassLoss(
         cdu_results=tuple(
-            solve_massloss_steady(cdu, leak, topology, share)
-            for cdu, leak, share in zip(templates, leaks, shares, strict=True)
+            solve_massloss_steady(cdu, loss, topology, share)
+            for cdu, loss, share in zip(
+                templates, massloss_flows, shares, strict=True
+            )
         ),
         secondary_shares_Lps=shares,
         share_uses_return_flow=share_uses_return_flow,
@@ -521,9 +533,9 @@ def thermal_cases() -> list[CduCase]:
     ]
 
 
-def leak_sizes_Lps(hydraulic: HydraulicCase, T_property_C: float) -> list[float]:
+def massloss_sizes_Lps(hydraulic: HydraulicCase, T_property_C: float) -> list[float]:
     """누출 크기 스윕 [L/s] — 세션 5.6 과 같다. 새 값을 만들지 않는다."""
-    bound = leak_flow_bound_Lps(k_approx_results(hydraulic, T_property_C))
+    bound = massloss_flow_bound_Lps(k_approx_results(hydraulic, T_property_C))
     return [fraction * bound for fraction in SWEEP_FRACTIONS]
 
 
@@ -531,21 +543,21 @@ def leak_sizes_Lps(hydraulic: HydraulicCase, T_property_C: float) -> list[float]
 class ThermalDeltas:
     """정상(누출 0) 대비 세 온도의 변화 — 판정 기준 A·B·C."""
 
-    leak_rack_outlet_C: float
+    injection_rack_outlet_C: float
     T_return_C: float
     T_supply_C: float
 
 
 def massloss_thermal_deltas(
-    normal: MassLossThermal, leaked: MassLossThermal
+    normal: MassLossThermal, perturbed: MassLossThermal
 ) -> ThermalDeltas:
-    """질량손실의 정상 대비 변화. 기준은 **같은 배치의 Q_leak=0 해**다."""
+    """질량손실의 정상 대비 변화. 기준은 **같은 배치의 Q_massloss=0 해**다."""
     return ThermalDeltas(
-        leak_rack_outlet_C=(
-            leaked.leak_rack_outlet_temp_C - normal.leak_rack_outlet_temp_C
+        injection_rack_outlet_C=(
+            perturbed.injection_rack_outlet_temp_C - normal.injection_rack_outlet_temp_C
         ),
-        T_return_C=leaked.T_return_C - normal.T_return_C,
-        T_supply_C=leaked.T_supply_C - normal.T_supply_C,
+        T_return_C=perturbed.T_return_C - normal.T_return_C,
+        T_supply_C=perturbed.T_supply_C - normal.T_supply_C,
     )
 
 
@@ -557,21 +569,21 @@ def k_approx_thermal_deltas(case: CduCase, k_multiplier: float) -> ThermalDeltas
     from cdu_simul.hydraulics import apply_leak_to_rack
 
     normal = solve_cdu_steady_state(case)
-    leaked_case = CduCase(
+    perturbed_case = CduCase(
         hydraulic=apply_leak_to_rack(case.hydraulic, k_multiplier),
         T_secondary_supply_C=case.T_secondary_supply_C,
         ntu=case.ntu,
         load_percent=case.load_percent,
     )
-    leaked = solve_cdu_steady_state(leaked_case)
+    perturbed = solve_cdu_steady_state(perturbed_case)
     i = LEAK.injection_rack_index
     return ThermalDeltas(
-        leak_rack_outlet_C=(
-            leaked.thermal.rack_return_temps_C[i]
+        injection_rack_outlet_C=(
+            perturbed.thermal.rack_return_temps_C[i]
             - normal.thermal.rack_return_temps_C[i]
         ),
-        T_return_C=leaked.thermal.T_return_C - normal.thermal.T_return_C,
-        T_supply_C=leaked.thermal.T_supply_C - normal.thermal.T_supply_C,
+        T_return_C=perturbed.thermal.T_return_C - normal.thermal.T_return_C,
+        T_supply_C=perturbed.thermal.T_supply_C - normal.thermal.T_supply_C,
     )
 
 
@@ -601,7 +613,8 @@ def _note() -> str:
     return (
         f"{ASSUMPTION_TAG}\n"
         "세션 5.7-D · 관측 판 — 게이트 아님 · 6장 기준 판정 아님.\n"
-        "절대 규칙 8 예외(사람 승인) · 데이터셋·5-1 미변경 · M 은 상수.\n"
+        "절대 규칙 8 의 「샘」(질량손실) — 예외가 아니다(세션 7.32).\n"
+        "데이터셋 생성 경로는 「막힘」뿐 · M 은 상수.\n"
         "어느 모사가 실제에 가까운지 재지 않았다(실측 없음).\n"
     )
 
@@ -617,8 +630,8 @@ class SteadySweep:
     k_approx: list[ThermalDeltas]
     #: 배치별 질량손실 부호 — G(배치 불변성)가 읽는다.
     massloss_by_topology: dict[str, list[ThermalDeltas]]
-    balance_without_leak_percent: list[float]
-    balance_with_leak_percent: list[float]
+    balance_without_massloss_percent: list[float]
+    balance_with_massloss_percent: list[float]
     isolation_max_abs_K: float
     solver_failures: list[str]
     n_solves: int
@@ -628,16 +641,16 @@ def run_steady_sweep() -> SteadySweep:
     """64 케이스 × 배치 6 × 누출 5수준. K 근사는 5장 3수준으로 같이 낸다."""
     massloss: list[ThermalDeltas] = []
     by_topology: dict[str, list[ThermalDeltas]] = {}
-    without_leak: list[float] = []
-    with_leak: list[float] = []
+    without_massloss: list[float] = []
+    with_massloss: list[float] = []
     failures: list[str] = []
     isolation_max = 0.0
     n_solves = 0
 
     for case in thermal_cases():
-        sizes = leak_sizes_Lps(case.hydraulic, rated_property_temperature_C())
+        sizes = massloss_sizes_Lps(case.hydraulic, rated_property_temperature_C())
         closed_loop = solve_cdu_steady_state(case)
-        for topology in leak_topologies():
+        for topology in massloss_topologies():
             solutions = [
                 solve_massloss_steady(case, size, topology) for size in sizes
             ]
@@ -646,7 +659,7 @@ def run_steady_sweep() -> SteadySweep:
                 if not solution.solver_converged:
                     failures.append(
                         f"{case.label} / {topology.label} / "
-                        f"Q_leak={solution.leak_flow_Lps:g}: "
+                        f"Q_massloss={solution.massloss_flow_Lps:g}: "
                         f"ier={solution.outer_solver_ier}"
                     )
             # 격리 확인 — 누출 0 에서 밀폐루프 해와 같아야 한다
@@ -659,8 +672,8 @@ def run_steady_sweep() -> SteadySweep:
                 deltas = massloss_thermal_deltas(solutions[0], solution)
                 massloss.append(deltas)
                 by_topology.setdefault(topology.label, []).append(deltas)
-                without_leak.append(solution.balance_residual_without_leak_percent)
-                with_leak.append(solution.balance_residual_with_leak_percent)
+                without_massloss.append(solution.balance_residual_without_massloss_percent)
+                with_massloss.append(solution.balance_residual_with_massloss_percent)
 
     k_approx = [
         k_approx_thermal_deltas(case, multiplier)
@@ -671,8 +684,8 @@ def run_steady_sweep() -> SteadySweep:
         massloss=massloss,
         k_approx=k_approx,
         massloss_by_topology=by_topology,
-        balance_without_leak_percent=without_leak,
-        balance_with_leak_percent=with_leak,
+        balance_without_massloss_percent=without_massloss,
+        balance_with_massloss_percent=with_massloss,
         isolation_max_abs_K=isolation_max,
         solver_failures=failures,
         n_solves=n_solves,
@@ -704,8 +717,8 @@ def run_transient_sweep() -> TransientSweep:
     n = 0
 
     for case in thermal_cases():
-        size = leak_sizes_Lps(case.hydraulic, rated_property_temperature_C())[-1]
-        for topology in leak_topologies():
+        size = massloss_sizes_Lps(case.hydraulic, rated_property_temperature_C())[-1]
+        for topology in massloss_topologies():
             runs = [
                 integrate_massloss_step(case, size, topology, holdup)
                 for holdup in (low, high)
@@ -758,8 +771,8 @@ def run_plant_sweep() -> PlantSweep:
     n = 0
 
     for case in thermal_cases():
-        sizes = leak_sizes_Lps(case.hydraulic, rated_property_temperature_C())
-        for topology in leak_topologies():
+        sizes = massloss_sizes_Lps(case.hydraulic, rated_property_temperature_C())
+        for topology in massloss_topologies():
             for uses_return in (True, False):
                 runs = [
                     solve_plant_massloss((case, case), size, topology, uses_return)
@@ -770,7 +783,7 @@ def run_plant_sweep() -> PlantSweep:
                     if not run.solver_converged:
                         failures.append(
                             f"{case.label} / {topology.label} / "
-                            f"share_ret={uses_return} / Q_leak={size:g}: "
+                            f"share_ret={uses_return} / Q_massloss={size:g}: "
                             f"ier={run.top_level_solver_ier}"
                         )
                 shares = [run.secondary_shares_Lps[1] for run in runs]
@@ -806,7 +819,7 @@ def _delta_field(deltas: list[ThermalDeltas], field: str) -> list[float]:
 
 
 _THERMAL_QUANTITIES: tuple[tuple[str, str], ...] = (
-    ("A 누출랙 출구온도", "leak_rack_outlet_C"),
+    ("A 누출랙 출구온도", "injection_rack_outlet_C"),
     ("B CDU 환수온도", "T_return_C"),
     ("C CDU 공급온도", "T_supply_C"),
 )
@@ -864,9 +877,9 @@ def format_topology_table(sweep: SteadySweep) -> str:
 
 
 def format_balance_table(sweep: SteadySweep) -> str:
-    """D 에너지 balance — leak 항 없이/포함 (순수 함수)."""
-    without = sweep.balance_without_leak_percent
-    with_leak = sweep.balance_with_leak_percent
+    """D 에너지 balance — 「샘」 항 없이/포함 (순수 함수)."""
+    without = sweep.balance_without_massloss_percent
+    with_massloss = sweep.balance_with_massloss_percent
     return "\n".join(
         [
             "표 3. 에너지 balance 잔차 — 판정 기준 D",
@@ -874,12 +887,13 @@ def format_balance_table(sweep: SteadySweep) -> str:
             "",
             f"{'':<28}{'최소 [%]':>14}{'최대 [%]':>14}{'최대 |잔차| [%]':>18}",
             "-" * 78,
-            f"{'leak 항 없이':<28}{min(without):>14.6f}{max(without):>14.6f}"
+            f"{'「샘」 항 없이':<28}{min(without):>14.6f}{max(without):>14.6f}"
             f"{max(abs(v) for v in without):>18.6f}",
-            f"{'leak 항 포함':<28}{min(with_leak):>14.6f}{max(with_leak):>14.6f}"
-            f"{max(abs(v) for v in with_leak):>18.6f}",
+            f"{'「샘」 항 포함':<28}{min(with_massloss):>14.6f}"
+            f"{max(with_massloss):>14.6f}"
+            f"{max(abs(v) for v in with_massloss):>18.6f}",
             "-" * 78,
-            "잔차 = (Q_hx + ṁ_leak·[h(T_ret) − h(T_sup)] − Q_rack) / Q_rack × 100.",
+            "잔차 = (Q_hx + ṁ_massloss·[h(T_ret) − h(T_sup)] − Q_rack) / Q_rack × 100.",
             "Q_hx 는 ε-NTU 경로 · Q_rack 은 5장 입력 · 엔탈피는 CoolProp 직접 조회 —",
             "세 경로가 다르므로 항등식이 아니다.",
             f"격리 확인(누출 0 = 밀폐루프 해): 최대 편차 "
@@ -909,7 +923,8 @@ def format_transient_table(sweep: TransientSweep) -> str:
             f"{'소실률 · t63 까지 [%]':<34}{min(at_t63):>14.4f}{max(at_t63):>14.4f}",
             "-" * 78,
             f"적분 {sweep.n_integrations}건.",
-            "소실률 = Q_leak × 시간 × ρ / M × 100 — **M 을 상수로 둔 근사의 크기**다.",
+            "소실률 = Q_massloss × 시간 × ρ / M × 100 —"
+            " **M 을 상수로 둔 근사의 크기**다.",
             "이 값이 크면 그만큼의 유보가 결과 해석에 붙는다(판정 기준 §「계통이 …」).",
         ]
     )
