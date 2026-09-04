@@ -146,16 +146,24 @@ python -m venv .venv
 #   · **파일 단위**로 가른다 — 나눌 수 있는 최소 단위가 파일 하나다(세션 7.37 실측).
 #     한 파일이 상한을 넘으면 분할로는 못 푼다 — 그 파일 안을 고쳐야 한다.
 #   · 도구 전경 상한은 **실측 580 s** 다(「10분」이 아니다 — 세션 7.37 관측).
-#     여유를 남겨 **한 조각 400 s 이하**로 가른다.
+#     **조각 시간은 실측 최대에 25 %(#62)를 얹어 읽고, 그 값이 580 s 를 넘으면
+#     다시 가른다** — 같은 PC·같은 판 안에서도 시험 시간이 그만큼 흔들린다.
 #   · 무거운 파일은 단독 조각으로 뺀다.
 #   · **백그라운드로 넘기지 않는다**(#57) — 상한을 넘으면 도구가 자동으로 넘긴다.
 #
-#   세션 7.38 실측 (1,208건 전부 통과):
-.venv/Scripts/python.exe -m pytest tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 7파일
-.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py   # 뒤 6파일
-.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 314~386 s (두 번 실측) — 단독 조각
+#   세션 7.39 실측 (「샘」 행이 얹힌 뒤 · 1,333건 전부 통과):
+.venv/Scripts/python.exe -m pytest tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 7파일 · 392건 · 89 s (×1.25 = 111 s)
+.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py   # 뒤 6파일 · 771건 · 151 s (×1.25 = 189 s)
+.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 · 324 s (×1.25 = 405 s) — 단독 조각
 #
-#   **이 가름이 「샘」 행이 얹힌 뒤에도 성립하는지는 모른다** — 그 판에서 다시 잰다.
+#   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다**(세션 7.39 재측) — 조각별 최대가
+#   324 s 이고 25 % 를 얹어도 405 s 로 상한 580 s 에 여유 30 % 다. 「샘」이 늘린 것은
+#   `test_session55_gates.py` 의 **건수**(45 → 170)이지 시간이 아니다 — 표본이
+#   시나리오 수(1,792 → 9,472)를 따라가 기준 B·D 의 파라미터가 는 것이고,
+#   「샘」 정상상태 해가 전이 해보다 훨씬 싸서 시간은 324 s 로 거의 그대로다.
+#
+#   **모르는 것**: 「샘」 **전이** 행(#40 이 열린 채라 이 판이 붙이지 않았다)이
+#   얹히면 다시 걸릴 수 있다 — 전이는 케이스당 비용이 정상상태의 수십 배다.
 #
 # tests/test_environment.py  환경 스모크(세션 1-A) — feasibility 판정이 아니다
 # tests/test_energy_balance.py  세션 1-B 게이트(energy balance <0.1%) + HX duty 항등성
