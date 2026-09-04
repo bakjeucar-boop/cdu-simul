@@ -133,6 +133,19 @@ STIMULUS_NONE: str = "none"
 STIMULUS_LEAK_STEP: str = "leak_step"
 STIMULUS_LOAD_STEP: str = "load_step"
 
+#: 이상 기구 — 절대 규칙 8 의 둘. `ScenarioSpec.mechanism` 이 이 셋 중 하나다.
+#:
+#: **라벨 축을 K 배수에서 떼어내려고 둔다** [사람 결정 · 세션 7.35]. 이전에는
+#: `scenario_kind` 가 `leak_multiplier != 1.0` 에서 파생돼, K 배수를 쓰지 않는
+#: 「샘」(질량손실) 행이 K=1.0 이라는 이유로 「정상」으로 실렸다(세션 7.34 C1).
+#: 기구는 이제 spec 이 직접 들고, 라벨은 여기서만 읽는다.
+#:
+#: **CSV 열이 아니다.** 이 판은 열을 늘리지 않는다 — 「샘」 행을 실제로 얹는
+#: 것과 그때 필요한 열 신설은 다음 판이다.
+MECHANISM_NONE: str = "none"
+MECHANISM_BLOCKAGE: str = "blockage"  # 「막힘」 — 배관 K값 증가
+MECHANISM_MASSLOSS: str = "massloss"  # 「샘」 — 질량손실(계통 밖 유출)
+
 
 @dataclass(frozen=True)
 class ScenarioSpec:
@@ -149,6 +162,8 @@ class ScenarioSpec:
     load_percent: float
     leak_multiplier: float
     holdup_index: int | None = None  # transient 에만
+    #: 이상 기구 [세션 7.35]. **K 배수와 독립된 축이다** — 「샘」은 K=1.0 이다.
+    mechanism: str = MECHANISM_NONE
 
     @property
     def leak_level_percent(self) -> float:
@@ -194,12 +209,24 @@ class ScenarioSpec:
 
     @property
     def scenario_kind(self) -> str:
-        """5장 시나리오 구분. 이 파일럿에서 「이상」은 부하 극단으로 본다."""
-        if self.leak_multiplier != 1.0:
-            return "누출"
-        if self.load_percent == LOAD_PROFILE.idle_load_percent:
-            return "이상"  # 유휴 — 정격에서 벗어난 운전
-        return "정상"
+        """정상 / 이상 — **기구 유무 하나로만 갈린다** [사람 결정 · 세션 7.35].
+
+        절대 규칙 8 이 「이상 상태는 「막힘」과 「샘」 둘이고 이 둘이 이상
+        시나리오의 전부」라고 못박았으므로, 이상 여부는 `mechanism` 이 결정한다.
+        **어느 기구인지는 이 열이 갖지 않는다** — 기구 열(`leak_model`)이 이미
+        싣고 있고, 한 값을 두 열에 두면 언젠가 갈린다.
+
+        **바뀐 것 둘** (이전 값 셋은 「정상 / 이상 / 누출」이었다):
+
+        · 「누출」 값을 뺐다. 「누출」은 상위 개념 전용이고 모델 안의 기구는
+          「막힘」·「샘」으로 적는다(절대 규칙 8 낱말 규약 · 세션 7.27).
+        · **유휴 부하를 「이상」에서 뺐다.** 이전 판까지 「이 파일럿에서
+          「이상」은 부하 극단으로 본다」로 유휴 20% 를 「이상」으로 실었으나,
+          5장 표는 「유휴 20% ~ 정격 100%」를 **부하 프로파일** 행으로 주고
+          이상 시나리오는 K값 행에서 따로 준다 — 정본에 근거가 없었다(세션
+          7.35 확인). 운전점은 `load_percent` 열이 그대로 싣는다.
+        """
+        return "정상" if self.mechanism == MECHANISM_NONE else "이상"
 
 
 def _range_axis_values(template: CduCase) -> dict[str, float]:
@@ -229,6 +256,12 @@ def enumerate_specs() -> list[ScenarioSpec]:
     for template in templates:
         for load in loads:
             for multiplier in multipliers:
+                # 이 데이터셋의 이상 기구는 전부 「막힘」이다(`LEAK_MODEL_K_APPROX`).
+                # 막힘은 K값 증가로 정의되므로 여기서는 배수로 갈리는 것이 맞다 —
+                # 「샘」은 K=1.0 이라 이 자리가 아니라 자기 축으로 들어온다.
+                mechanism = (
+                    MECHANISM_NONE if multiplier == 1.0 else MECHANISM_BLOCKAGE
+                )
                 for config in (
                     CONFIG_SINGLE,
                     CONFIG_DUAL_SYMMETRIC,
@@ -247,6 +280,7 @@ def enumerate_specs() -> list[ScenarioSpec]:
                             template=template,
                             load_percent=load,
                             leak_multiplier=multiplier,
+                            mechanism=mechanism,
                         )
                     )
                     if config not in TRANSIENT_CONFIGS:
@@ -261,6 +295,7 @@ def enumerate_specs() -> list[ScenarioSpec]:
                                 load_percent=load,
                                 leak_multiplier=multiplier,
                                 holdup_index=holdup_index,
+                                mechanism=mechanism,
                             )
                         )
     return specs

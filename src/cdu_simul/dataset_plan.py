@@ -461,7 +461,12 @@ def estimate_run(
 SCHEMA_DRAFT: tuple[tuple[str, str, str], ...] = (
     # (열 이름, 단위·형, 설명)
     ("scenario_id", "str", "시나리오 고유 키 — 재실행 시 같은 키가 같은 결과여야 한다"),
-    ("scenario_kind", "str", "정상 / 이상 / 누출 — 5장 시나리오 구분"),
+    (
+        "scenario_kind",
+        "str",
+        "정상 / 이상 — 이상 기구 유무. 어느 기구인지는 leak_model 이 싣는다. "
+        "유휴 부하는 5장 부하 프로파일이라 「정상」이다(세션 7.35)",
+    ),
     ("regime", "str", "**steady / transient** — 사람이 정한 것 2. 섞어 읽지 않는다"),
     ("cdu_config", "str", "single / dual_symmetric / dual_asymmetric"),
     ("cdu_index", "int", "CDU 식별 (0-based)"),
