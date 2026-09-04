@@ -53,7 +53,7 @@ from cdu_simul.assumptions import (
     PLANT,
     SCENARIO,
 )
-from cdu_simul.dataset_plan import PROVENANCE_COLUMNS
+from cdu_simul.dataset_plan import MASSLOSS_PROVENANCE, PROVENANCE_COLUMNS
 from cdu_simul.dynamics import (
     LeakStepCase,
     holdup_bounds,
@@ -335,6 +335,12 @@ def _blank_rack_columns() -> dict[str, float | str]:
 
 PROVENANCE_ROW: dict[str, str] = {name: text for name, text in PROVENANCE_COLUMNS}
 
+#: 기구별 표기 [세션 7.35]. **열은 늘지 않는다** — 같은 다섯 열에 다른 문언이
+#: 실릴 뿐이다. 「샘」 문언은 셋만 갈리고 나머지 둘은 위 것을 그대로 쓴다.
+_PROVENANCE_BY_MECHANISM: dict[str, dict[str, str]] = {
+    MECHANISM_MASSLOSS: {**PROVENANCE_ROW, **MASSLOSS_PROVENANCE},
+}
+
 
 def _base_row(spec: ScenarioSpec, cdu_index: int) -> dict[str, object]:
     holdup_mass_kg = (
@@ -359,7 +365,7 @@ def _base_row(spec: ScenarioSpec, cdu_index: int) -> dict[str, object]:
         "t_s": "",
         **_range_axis_values(spec.template),
         **_blank_rack_columns(),
-        **PROVENANCE_ROW,
+        **_PROVENANCE_BY_MECHANISM.get(spec.mechanism, PROVENANCE_ROW),
     }
 
 
