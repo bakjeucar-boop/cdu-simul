@@ -99,7 +99,7 @@ def scenario_axes(load_levels: int) -> tuple[Axis, ...]:
         Axis(
             name="누출 랙 번호",
             size=SCENARIO.racks_per_cdu,
-            source="5-1 「누출 주입 지점」 — 랙 1개",
+            source="5-1 「「막힘」 주입 지점」 — 랙 1개",
             applies_to="둘 다",
             note=(
                 "**축으로 둘 필요가 없다는 의견이다.** 8랙이 전부 동일하므로 "
