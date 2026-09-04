@@ -44,6 +44,7 @@ solver 플래그 4종의 자리. **육안 확인이 아니라 프로그램으로
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import replace
 
 import pytest
@@ -123,17 +124,38 @@ def test_criterion_a_order_independence() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # 기준 B — 단독 재현
 # ─────────────────────────────────────────────────────────────────────────────
+def _build_sample_batch() -> dict[str, list[dict[str, object]]]:
+    """SAMPLE 전량을 한 번 돌린 배치 — 기준 B 파라미터 10건이 이것 하나를 나눠 쓴다.
+
+    파라미터마다 다시 만들면 같은 배치를 10번 만든다(세션 7.37 실측 747 s · #58).
+    """
+    return {spec.scenario_id: rows_for(spec) for spec in SAMPLE}
+
+
+@pytest.fixture(scope="module")
+def sample_batch() -> dict[str, list[dict[str, object]]]:
+    """공유 배치 — 시험은 **복제본**을 받는다.
+
+    이 파일이 재는 것이 상태 이월이므로, 공유 자체가 이월을 만들면 게이트가
+    스스로 무너진다. 시험마다 `deepcopy` 로 끊는다 — 실측 복제 0.16 s 대
+    재생성 60.00 s (세션 7.38).
+    """
+    return _build_sample_batch()
+
+
 @pytest.mark.parametrize(
     "index", range(0, len(SAMPLE), max(1, len(SAMPLE) // 8)), ids=str
 )
-def test_criterion_b_standalone_reproduction(index: int) -> None:
+def test_criterion_b_standalone_reproduction(
+    index: int, sample_batch: dict[str, list[dict[str, object]]]
+) -> None:
     """기준 B — 시나리오 하나를 혼자 돌린 결과가 배치 행과 같다.
 
     배치라는 문맥이 결과에 남지 않음을 직접 본다. 배치를 한 번 돌린 뒤 같은
     시나리오를 **새 프로세스가 아니라 같은 프로세스에서 단독으로** 돌린다 —
     모듈 수준 상태가 남아 있다면 그것이 여기서 드러난다.
     """
-    batch = {spec.scenario_id: rows_for(spec) for spec in SAMPLE}
+    batch = deepcopy(sample_batch)
     target = SAMPLE[index]
     standalone = rows_for(target)
     assert standalone == batch[target.scenario_id], (
