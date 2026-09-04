@@ -59,7 +59,18 @@ from cdu_simul.dynamics import (
     holdup_bounds,
     integrate_leak_step,
 )
+from cdu_simul.hydraulics import rated_property_temperature_C
 from cdu_simul.leak import leak_case, leak_levels
+from cdu_simul.massloss import (
+    SWEEP_FRACTIONS,
+    MassLossTopology,
+    massloss_topologies,
+)
+from cdu_simul.massloss_thermal import (
+    massloss_sizes_Lps,
+    solve_massloss_steady,
+    solve_plant_massloss,
+)
 from cdu_simul.model import (
     CduCase,
     default_cdu_cases,
@@ -108,11 +119,13 @@ LEAK_CDU_INDEX: int = 0
 #: 값은 **그 판본을 만든 세션 번호**다. 이 저장소의 판본 축이 세션이기 때문이고,
 #: 다음 판본은 자기 세션 번호를 붙여 그대로 이어붙이면 된다. 앞선 두 판본은 이
 #: 열 자체가 없다 — **열의 부재가 곧 5.7 이전**이라는 표지이며, 열 수로도 갈린다
-#: (48열본 = 세션 5.5-B · 49열본 = 세션 5.5-D · **52열본 = 세션 5.7**).
+#: (48열본 = 세션 5.5-B · 49열본 = 세션 5.5-D · 52열본 = 세션 5.7 ·
+#: **58열본 = 세션 7.39** — 「샘」 행이 처음 들어온 판본이다).
 #: 파일명은 바꾸지 않는다(`cdu_dataset.csv`) — 판본은 파일 안에서 읽는다.
-DATASET_VERSION: str = "session-5.7"
+DATASET_VERSION: str = "session-7.39"
 
-#: 누출을 무엇으로 모사했는가 [사람 결정 · 세션 5.7]. **전 행 상수**다.
+#: 누출을 무엇으로 모사했는가 [사람 결정 · 세션 5.7]. **전 행 상수가 아니다**
+#: — 세션 7.39 가 「샘」 행을 얹으면서 값이 둘이 됐다(아래 `LEAK_MODEL_MASSLOSS`).
 #:
 #: 이 데이터셋의 이상 상태는 전부 **「막힘」(배관 K값 증가)** 이다(절대 규칙 8 ·
 #: 5장 「누출 시나리오(「막힘」)」). 「샘」(질량손실)은 `massloss.py`·
@@ -123,15 +136,36 @@ DATASET_VERSION: str = "session-5.7"
 #: 대응표 `docs/leak-naming-map.md`).
 LEAK_MODEL_K_APPROX: str = "K_approx"
 
+#: 「샘」(질량손실) 행의 `leak_model` 값 [세션 7.39]. **라벨 문자열 하나이고 물리
+#: 가정이 아니다** — 값을 `massloss` 로 적는 것은 대응표 규칙 1(「샘」 전용 이름에서
+#: `leak` 를 빼고 정의어 `massloss` 만 남긴다 · `docs/leak-naming-map.md`)이다.
+#: **「막힘」 쪽 값 `K_approx` 는 이미 나간 것이라 바꾸지 않는다**(세션 7.32).
+LEAK_MODEL_MASSLOSS: str = "massloss"
+
+#: 「샘」 크기 스윕 지점 — **비영 4수준** [세션 7.25 C4 가 규모 B 를 센 축].
+#: `massloss.SWEEP_FRACTIONS` 에서 0 을 뺀 것이다. 0 은 누출이 없는 해라
+#: 「정상」 행과 같은 것을 「이상」 라벨로 한 번 더 싣게 된다.
+#: **새 값이 아니다** — 크기는 5-1 「「샘」(질량손실) 크기 수준」의 역산 규칙으로
+#: 케이스마다 다시 나온다(`massloss_sizes_Lps`).
+MASSLOSS_SIZE_FRACTIONS: tuple[float, ...] = tuple(
+    fraction for fraction in SWEEP_FRACTIONS if fraction > 0.0
+)
+
 #: 전이 행의 자극 종류 — `ScenarioSpec.stimulus_kind` 가 이 셋 중 하나를 낸다.
 #:
 #: **새 시나리오를 만들지 않는다.** 이미 있는 행이 무엇으로 자극됐는지를 라벨로
 #: 적을 뿐이다 [사람이 정한 것 — 세션 5.7 ⑵]. 단일 CDU 전이는 정격 운전 중
 #: **누출이 계단으로** 들어오고(부하 불변), 다중 CDU 전이는 **부하가 계단**이고
 #: 누출은 t=0 이전부터 있다. 두 전이를 같은 자극으로 읽으면 안 된다.
+#: **네 번째 값이 세션 7.39 에서 붙었다** — 「샘」 단일 CDU 전이는 「샘」이 계단으로
+#: 들어오므로 「막힘」 계단(`leak_step`)과 같은 자극이 아니다. `leak_step` 은 이미
+#: 나간 값이라 이름을 바꾸지 않고, 새 값만 대응표 규칙 1 대로 `massloss` 로 적는다.
+#: **이 판의 데이터셋에는 이 값을 갖는 행이 아직 없다** — 규모 B 는 정상상태만이고
+#: 「샘」 전이는 미해결 #40 이 열린 채라 붙이지 않았다.
 STIMULUS_NONE: str = "none"
 STIMULUS_LEAK_STEP: str = "leak_step"
 STIMULUS_LOAD_STEP: str = "load_step"
+STIMULUS_MASSLOSS_STEP: str = "massloss_step"
 
 #: 이상 기구 — 절대 규칙 8 의 둘. `ScenarioSpec.mechanism` 이 이 셋 중 하나다.
 #:
@@ -140,8 +174,8 @@ STIMULUS_LOAD_STEP: str = "load_step"
 #: 「샘」(질량손실) 행이 K=1.0 이라는 이유로 「정상」으로 실렸다(세션 7.34 C1).
 #: 기구는 이제 spec 이 직접 들고, 라벨은 여기서만 읽는다.
 #:
-#: **CSV 열이 아니다.** 이 판은 열을 늘리지 않는다 — 「샘」 행을 실제로 얹는
-#: 것과 그때 필요한 열 신설은 다음 판이다.
+#: **CSV 열이 아니다** — 기구를 행에 싣는 열은 `leak_model` 이다(세션 7.35 결정:
+#: 한 값을 두 열에 두지 않는다). 세션 7.39 가 「샘」 행을 실제로 얹었다.
 MECHANISM_NONE: str = "none"
 MECHANISM_BLOCKAGE: str = "blockage"  # 「막힘」 — 배관 K값 증가
 MECHANISM_MASSLOSS: str = "massloss"  # 「샘」 — 질량손실(계통 밖 유출)
@@ -164,9 +198,26 @@ class ScenarioSpec:
     holdup_index: int | None = None  # transient 에만
     #: 이상 기구 [세션 7.35]. **K 배수와 독립된 축이다** — 「샘」은 K=1.0 이다.
     mechanism: str = MECHANISM_NONE
+    #: 「샘」 크기 스윕 지점 [세션 7.39]. 「샘」 행에만 있다.
+    massloss_size_fraction: float | None = None
+    #: 「샘」의 계통 배치 — 5장·5-1 이 정하지 않는 구조 자유도 둘(g · 펌프가 보는
+    #: 유량)을 담는다. **전수로 돈다 — 하나도 고정하지 않는다**(고정하면 5-1 에
+    #: 새 값이 든다 · 절대 규칙 1).
+    massloss_topology: MassLossTopology | None = None
+    #: 셋째 구조 자유도 — 공유 2차측 배분을 환수유량으로 읽는가. 다중 CDU 에만
+    #: 있다(`solve_plant_massloss`).
+    share_uses_return_flow: bool | None = None
 
     @property
-    def leak_level_percent(self) -> float:
+    def leak_level_percent(self) -> float | str:
+        """「막힘」의 K값 증가율 [%]. **「샘」 행은 빈 값**이다 [세션 7.39].
+
+        「샘」은 K 배수를 쓰지 않으므로 이 열에 실을 값이 **없다** — 0 을 실으면
+        「증가율 0 = 정상」으로 읽힌다(세션 7.34 C1 ⑶). 빈 값은 이 스키마에서
+        「이 행에 해당 없음」 표기다(`leak_cdu_index` 참조).
+        """
+        if self.mechanism == MECHANISM_MASSLOSS:
+            return ""
         return (self.leak_multiplier - 1.0) * 100.0
 
     @property
@@ -187,6 +238,10 @@ class ScenarioSpec:
         if self.regime == "steady":
             return STIMULUS_NONE
         if self.cdu_config == CONFIG_SINGLE:
+            # 단일 CDU 전이는 이상 기구가 계단으로 들어온다 — 어느 기구가
+            # 들어왔는지로 갈린다 [세션 7.39].
+            if self.mechanism == MECHANISM_MASSLOSS:
+                return STIMULUS_MASSLOSS_STEP
             return STIMULUS_LEAK_STEP
         return STIMULUS_LOAD_STEP
 
@@ -198,12 +253,16 @@ class ScenarioSpec:
         표기한다(`t_s`·`holdup_mass_kg`·`hx_duty_kW`·랙별 열). -1 같은 표지값을
         새로 만들면 규약이 둘이 된다.
 
-        **주의 — `leak_rack_index` 와 다르게 동작한다.** `leak_rack_index` 는
-        세션 5.5-B 부터 누출 유무와 무관하게 항상 0 을 싣는다("누출이 있다면
-        걸릴 자리"). 그 동작은 이 판의 범위 밖이라 바꾸지 않았다. 누출 유무의
-        판정에는 `leak_level_percent == 0` 또는 이 열의 빈 칸을 쓴다.
+        **K 배수가 아니라 기구로 판정한다** [세션 7.39]. 「샘」 행은 K=1.0 이지만
+        이상 기구가 있고 `solve_plant_massloss` 가 「샘」을 CDU
+        `LEAK_CDU_INDEX` 하나에만 걸므로(5-1 「「샘」 주입 지점」·#34) 그 번호를
+        싣는다. 종전 판정(`leak_multiplier == 1.0`)은 「막힘」 행에서는 이것과
+        같은 결과였다.
+
+        누출 유무의 판정에는 이 열의 빈 칸을 쓴다 — `leak_level_percent` 는
+        「샘」 행에서 비어 있고 「막힘」 유무만 가른다.
         """
-        if self.leak_multiplier == 1.0:
+        if self.mechanism == MECHANISM_NONE:
             return ""
         return LEAK_CDU_INDEX
 
@@ -245,8 +304,19 @@ def _range_axis_values(template: CduCase) -> dict[str, float]:
 def enumerate_specs() -> list[ScenarioSpec]:
     """전체 시나리오 목록 — 사람이 정한 규모 그대로.
 
-    정상상태: 32조합 × 부하 2 × 누출 4 × 구성 3 = 768
-    전이:     32조합 × 부하 2 × 누출 4 × 구성 2 × M 2 = 1,024
+    「막힘」(K값 증가) — 세션 5.5-B 규모::
+
+        정상상태: 32조합 × 부하 2 × 누출 4 × 구성 3 = 768
+        전이:     32조합 × 부하 2 × 누출 4 × 구성 2 × M 2 = 1,024
+
+    「샘」(질량손실) — 세션 7.39 가 얹었다. **정상상태만**이다(전이는 미해결 #40
+    이 열린 채라 붙이지 않았다 · 규모 B)::
+
+        단일:   32조합 × 부하 2 × 크기 4 × 배치 6                = 1,536
+        다중:   32조합 × 부하 2 × 크기 4 × 배치 6 × 구성 2 × 배분읽기 2 = 6,144
+
+    **「샘」 spec 을 뒤에 붙인다** — 앞의 1,792개 `scenario_id` 가 그대로 남는다
+    (48·52열본이 그 키로 나갔다 · 세션 7.34 C3 ⑴).
     """
     templates = default_cdu_cases()  # 32조합 (부하는 아래에서 덮어쓴다)
     loads = (LOAD_PROFILE.idle_load_percent, LOAD_PROFILE.rated_load_percent)
@@ -298,6 +368,66 @@ def enumerate_specs() -> list[ScenarioSpec]:
                                 mechanism=mechanism,
                             )
                         )
+
+    specs.extend(_massloss_specs(templates, loads))
+    return specs
+
+
+def _massloss_specs(
+    templates: list[CduCase], loads: tuple[float, ...]
+) -> list[ScenarioSpec]:
+    """「샘」 정상상태 시나리오 [세션 7.39].
+
+    **케이스 축은 「막힘」과 같은 것을 쓴다** — 같은 32조합 × 부하 2 다(세션 7.34
+    C4: `massloss_thermal.thermal_cases()` 와 값으로는 이미 같고 다른 것은 순서와
+    표현뿐이다). 그래서 관측 판의 케이스 순서를 건드리지 않는다.
+
+    **구조 자유도 셋을 전수로 돈다** — g 3 × 펌프가 보는 유량 2 = 배치 6, 다중
+    CDU 는 여기에 2차측 배분 읽기 2 가 더 곱해진다. 하나라도 고정하면 5-1 에 새
+    값이 들어간다(절대 규칙 1 · 5-1 「「샘」 구조 자유도」 한계 ⑵ · 세션 7.26 결정).
+    """
+    specs: list[ScenarioSpec] = []
+    for template in templates:
+        for load in loads:
+            for fraction in MASSLOSS_SIZE_FRACTIONS:
+                for topology in massloss_topologies():
+                    for config in (
+                        CONFIG_SINGLE,
+                        CONFIG_DUAL_SYMMETRIC,
+                        CONFIG_DUAL_ASYMMETRIC,
+                    ):
+                        share_readings: tuple[bool | None, ...] = (
+                            (None,) if config == CONFIG_SINGLE else (True, False)
+                        )
+                        for share_uses_return_flow in share_readings:
+                            key = (
+                                f"{template.hydraulic.label}|NTU{template.ntu:g}"
+                                f"|T2nd{template.T_secondary_supply_C:g}"
+                                f"|L{load:g}|Qfrac{fraction:g}"
+                                f"|g{topology.residual_return_share:g}"
+                                f"|pump"
+                                f"{'sup' if topology.pump_sees_supply_flow else 'ret'}"
+                                f"|{config}"
+                            )
+                            if share_uses_return_flow is not None:
+                                key += (
+                                    "|share"
+                                    f"{'ret' if share_uses_return_flow else 'sup'}"
+                                )
+                            specs.append(
+                                ScenarioSpec(
+                                    scenario_id=f"steady|massloss|{key}",
+                                    regime="steady",
+                                    cdu_config=config,
+                                    template=template,
+                                    load_percent=load,
+                                    leak_multiplier=1.0,
+                                    mechanism=MECHANISM_MASSLOSS,
+                                    massloss_size_fraction=fraction,
+                                    massloss_topology=topology,
+                                    share_uses_return_flow=share_uses_return_flow,
+                                )
+                            )
     return specs
 
 
@@ -342,6 +472,11 @@ _PROVENANCE_BY_MECHANISM: dict[str, dict[str, str]] = {
 }
 
 
+def _blank_if_none(value: object) -> object:
+    """`None` 을 스키마의 「해당 없음」 표기(빈 값)로 바꾼다."""
+    return "" if value is None else value
+
+
 def _base_row(spec: ScenarioSpec, cdu_index: int) -> dict[str, object]:
     holdup_mass_kg = (
         holdup_bounds()[spec.holdup_index].mass_kg
@@ -357,9 +492,31 @@ def _base_row(spec: ScenarioSpec, cdu_index: int) -> dict[str, object]:
         "cdu_config": spec.cdu_config,
         "cdu_index": cdu_index,
         "leak_level_percent": spec.leak_level_percent,
-        "leak_rack_index": LEAK.injection_rack_index,
+        # 「샘」 행은 **빈 값**이다 [세션 7.39]. 5-1 「「샘」 주입 지점」이 「랙
+        # 하나에 걸지만 계통은 그것을 국소로 보지 않는다」를 항목의 핵심으로
+        # 못박았으므로, 랙 번호를 실으면 「랙0 에서 샌다」로 오독된다(랙 간 비대칭
+        # 2.220e-16 L/s · 세션 5.6). 「막힘」 행은 종전대로 주입 랙을 싣는다.
+        "leak_rack_index": (
+            "" if spec.mechanism == MECHANISM_MASSLOSS else LEAK.injection_rack_index
+        ),
         "leak_cdu_index": spec.leak_cdu_index,
-        "leak_model": LEAK_MODEL_K_APPROX,
+        "leak_model": (
+            LEAK_MODEL_MASSLOSS
+            if spec.mechanism == MECHANISM_MASSLOSS
+            else LEAK_MODEL_K_APPROX
+        ),
+        # 「샘」 축 넷 — 「막힘」·정상 행에서는 전부 빈 값이다(그 기구에 이 자유도가
+        # 없다 · 세션 7.34 C2 표 ⓑ).
+        "massloss_size_fraction": _blank_if_none(spec.massloss_size_fraction),
+        "residual_return_share": (
+            "" if spec.massloss_topology is None
+            else spec.massloss_topology.residual_return_share
+        ),
+        "pump_sees_supply_flow": (
+            "" if spec.massloss_topology is None
+            else spec.massloss_topology.pump_sees_supply_flow
+        ),
+        "share_uses_return_flow": _blank_if_none(spec.share_uses_return_flow),
         "load_percent": _load_percents(spec)[cdu_index],
         "holdup_mass_kg": holdup_mass_kg,
         "t_s": "",
@@ -405,6 +562,11 @@ def steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
             row[f"rack{rack_index}_outlet_C"] = temp
         row.update(
             total_flow_Lps=result.flow.total_flow_Lps,
+            # 「막힘」·정상은 밀폐루프라 **공급 = 환수**다. 「샘」에서만 갈린다
+            # (5-1 「「샘」 크기 수준」 한계 ⑶ · 세션 5.6-B) — 그래서 이 열이
+            # 신설됐다 [세션 7.39].
+            return_flow_Lps=result.flow.total_flow_Lps,
+            massloss_flow_Lps="",
             pump_head_mAq=result.flow.pump_head_mAq,
             T_supply_C=result.thermal.T_supply_C,
             T_return_C=result.thermal.T_return_C,
@@ -546,6 +708,9 @@ def _transient_rows_from(
             row.update(
                 t_s=float(t_s),
                 total_flow_Lps="" if flow is None else flow,
+                # 전이 행은 「막힘」뿐이라 공급 = 환수다 [세션 7.39].
+                return_flow_Lps="" if flow is None else flow,
+                massloss_flow_Lps="",
                 pump_head_mAq="" if head is None else head,
                 T_supply_C=float(supply_series[cdu_index][sample_index]),
                 T_return_C=float(return_series[cdu_index][sample_index]),
@@ -562,12 +727,83 @@ def _transient_rows_from(
     return rows
 
 
+def massloss_steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
+    """「샘」(질량손실) 정상상태 시나리오 하나의 행들 [세션 7.39].
+
+    「막힘」 경로와 **다른 solver 를 탄다** — 「샘」은 K값을 바꾸지 않고 계통 밖으로
+    질량이 나가는 것이라, 헤더 압력평형 식 자체가 다르다(`massloss.solve_massloss`).
+    그래서 `steady_rows` 를 재사용하지 않는다.
+
+    **크기는 케이스마다 다시 역산한다** — 5-1 「「샘」(질량손실) 크기 수준」이
+    「막힘」 +50% 해의 누출랙 유량 감소량을 상한으로 두라고 정한다. 코드에 숫자를
+    박지 않는다(절대 규칙 1·2).
+
+    **energy balance 열은 비운다.** 6장 1-B 기준은 밀폐루프 잔차를 재는 것이고,
+    「샘」 행은 누출 엔탈피 항 없이는 닫히지 않는다(5-1 「「샘」 크기 수준」 한계 ⑷ ·
+    세션 5.7-D: 빼면 최대 1.2129% · 넣으면 0.000062%). **이 판은 그 항을 넣지
+    않는다** — 넣는 것은 스키마·게이트 결정이 따라붙는 별건이다. 대신 이 행을
+    balance 판정 대상에서 빼고, 그 사실을 `signal_sign_caveat` 이 행마다 싣는다.
+    """
+    assert spec.massloss_topology is not None
+    assert spec.massloss_size_fraction is not None
+    topology = spec.massloss_topology
+    loads = _load_percents(spec)
+    cases = tuple(replace(spec.template, load_percent=load) for load in loads)
+    size_Lps = massloss_sizes_Lps(
+        spec.template.hydraulic, rated_property_temperature_C()
+    )[SWEEP_FRACTIONS.index(spec.massloss_size_fraction)]
+
+    if spec.cdu_config == CONFIG_SINGLE:
+        results = [solve_massloss_steady(cases[0], size_Lps, topology)]
+        shares = [HEAT_EXCHANGER.secondary_flow_Lps]
+        plant_ier: object = ""
+    else:
+        assert spec.share_uses_return_flow is not None
+        plant = solve_plant_massloss(
+            cases, size_Lps, topology, spec.share_uses_return_flow
+        )
+        results = list(plant.cdu_results)
+        shares = list(plant.secondary_shares_Lps)
+        plant_ier = plant.top_level_solver_ier
+
+    rows: list[dict[str, object]] = []
+    for cdu_index, (result, share) in enumerate(zip(results, shares, strict=True)):
+        row = _base_row(spec, cdu_index)
+        for rack_index, (flow, temp) in enumerate(
+            zip(result.rack_flows_Lps, result.rack_outlet_temps_C, strict=True)
+        ):
+            row[f"rack{rack_index}_flow_Lps"] = flow
+            row[f"rack{rack_index}_outlet_C"] = temp
+        row.update(
+            # 「샘」에서만 공급 ≠ 환수다. `total_flow_Lps` 는 「막힘」 행과 같은
+            # 뜻(랙이 받는 헤더 공급유량)을 유지한다.
+            total_flow_Lps=result.supply_flow_Lps,
+            return_flow_Lps=result.return_flow_Lps,
+            massloss_flow_Lps=result.massloss_flow_Lps,
+            pump_head_mAq=result.pump_head_mAq,
+            T_supply_C=result.T_supply_C,
+            T_return_C=result.T_return_C,
+            hx_duty_kW=result.hx_duty_kW,
+            secondary_share_Lps=share,
+            heat_capacity_ratio=result.hx_effectiveness,
+            energy_balance_residual_percent="",
+            hydraulic_solver_ier=1 if result.hydraulic_solver_converged else 0,
+            thermal_solver_converged=result.outer_solver_ier == 1,
+            plant_solver_ier=plant_ier,
+            integrator_success="",
+        )
+        rows.append(row)
+    return rows
+
+
 def rows_for(spec: ScenarioSpec) -> list[dict[str, object]]:
     """시나리오 하나의 행들.
 
     **spec 하나가 결과를 완전히 결정한다** — 배치 문맥을 읽지 않는다. 그것이
     세션 5.5 게이트(상태 이월 없음)가 요구하는 성질이고, 이 함수가 그 계약이다.
     """
+    if spec.mechanism == MECHANISM_MASSLOSS:
+        return massloss_steady_rows(spec)
     return steady_rows(spec) if spec.regime == "steady" else transient_rows(spec)
 
 
@@ -634,14 +870,26 @@ def generate(
 
 
 def main() -> int:
+    """산출물 `results/cdu_dataset.csv` 를 **규모 B** 로 만든다 [사람 결정].
+
+    규모 B = 정상 + 「막힘」 + 「샘」 · **정상상태만**(세션 7.25 C4 의 이름).
+    전이를 빼는 이유는 미해결 **#40**(전이 파형이 노드 수에 지배되고 N≤64 에서
+    수렴하지 않았다)이 열린 채이기 때문이고, 「샘」 전이는 그 위에 상수 M 근사
+    유보(#38)까지 얹힌다. **`generate()` 자체는 전이를 그대로 만들 수 있다** —
+    거르는 것은 이 산출물 하나다.
+    """
     import sys
 
     if hasattr(sys.stdout, "reconfigure"):  # Windows 콘솔 기본 인코딩 대비
         sys.stdout.reconfigure(encoding="utf-8")
-    specs = enumerate_specs()
-    steady = sum(1 for s in specs if s.regime == "steady")
-    print(f"시나리오 {len(specs):,}개 (정상상태 {steady:,} · 전이 {len(specs)-steady:,})")
-    meta = generate()
+    specs = [s for s in enumerate_specs() if s.regime == "steady"]
+    massloss = sum(1 for s in specs if s.mechanism == MECHANISM_MASSLOSS)
+    print(
+        f"규모 B — 정상상태 시나리오 {len(specs):,}개 "
+        f"(「막힘」·정상 {len(specs) - massloss:,} · 「샘」 {massloss:,}) · "
+        "전이는 제외 (미해결 #40)"
+    )
+    meta = generate(specs=specs)
     print()
     for key, value in meta.items():
         print(f"{key}: {value}")

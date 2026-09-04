@@ -6,9 +6,10 @@
 
 **절대 규칙 8 의 예외가 아니다** [세션 7.32]. 세션 5.7-D 당시에는 세션 5.6 과 같은
 조건의 승인된 예외였으나, **세션 7.26 이 규칙 8 을 「막힘」·「샘」 둘로 고쳐 그
-조건이 무효가 됐다** — 「샘」은 규칙 8 이 정한 두 이상 상태 중 하나다. 남은 범위는
-하나다: 이 모듈은 데이터셋 생성 경로에 **들어가지 않는다** — 데이터셋 쪽 어느
-모듈도 이 파일을 import 하지 않는다.
+조건이 무효가 됐다** — 「샘」은 규칙 8 이 정한 두 이상 상태 중 하나다. **남아
+있던 마지막 조건(「데이터셋 생성 경로에 들어가지 않는다」)도 세션 7.39 에서
+풀렸다** — 사람이 「샘」 행을 데이터셋에 얹기로 정해 `dataset.py` 가
+`solve_massloss_steady`·`solve_plant_massloss` 를 부른다.
 
 **5-1 「보충수 처리」(세션 5.7-C 확정)가 전제다.** 보충수를 모델링하지 않는다 —
 조기감지 시나리오에 정의상 등장하지 않는다. 세션 5.6 이 수력 한정을 택한 이유가
@@ -113,11 +114,17 @@ class MassLossThermal:
     T_supply_C: float
     T_return_C: float
     rack_outlet_temps_C: tuple[float, ...]
+    #: 랙별 유량 [L/s] — 데이터셋의 `rack{i}_flow_Lps` 열이 읽는다 [세션 7.39].
+    #: 「샘」은 랙에 국소화되지 않아 이 값들이 거의 같다(5-1 「「샘」 크기 수준」).
+    rack_flows_Lps: tuple[float, ...]
     supply_flow_Lps: float
     return_flow_Lps: float
     pump_head_mAq: float
     property_eval_T_C: float
     hx_duty_kW: float
+    #: ε (열교환기 유효도) — 데이터셋의 `heat_capacity_ratio` 열이 읽는다
+    #: [세션 7.39]. `model.ThermalResult.hx_effectiveness` 와 같은 양이다.
+    hx_effectiveness: float
     rack_load_kW: float
     massloss_enthalpy_kW: float
     outer_solver_ier: int
@@ -164,10 +171,13 @@ def _steady_at_property_temperature(
     massloss_flow_Lps: float,
     topology: MassLossTopology,
     secondary_flow_Lps: float,
-) -> tuple[float, float, tuple[float, ...], float, float, float, float]:
+) -> tuple[
+    float, float, tuple[float, ...], tuple[float, ...], float, float, float, float,
+    float,
+]:
     """물성 온도가 주어졌을 때의 온도들 (순수 함수).
 
-    반환: (T_sup, T_ret, 랙 출구온도들, Q_sup, 펌프양정, Q_hx [W], ρ).
+    반환: (T_sup, T_ret, 랙 출구온도들, 랙 유량들, Q_sup, 펌프양정, Q_hx [W], ρ, ε).
 
     dT/dt = 0 을 모듈 docstring 의 두 식에 넣으면 닫힌 형태가 된다::
 
@@ -208,10 +218,12 @@ def _steady_at_property_temperature(
         T_supply_C,
         T_return_C,
         rack_outlet_temps_C,
+        flow.rack_flows_Lps,
         Q_supply_Lps,
         flow.pump_head_mAq,
         Q_hx_W,
         rho_kgm3,
+        effectiveness,
     )
 
 
@@ -251,10 +263,12 @@ def solve_massloss_steady(
         T_supply_C,
         T_return_C,
         rack_outlet_temps_C,
+        rack_flows_Lps,
         Q_supply_Lps,
         pump_head,
         Q_hx_W,
         rho_kgm3,
+        effectiveness,
     ) = _steady_at_property_temperature(
         T_prop_C, case, massloss_flow_Lps, topology, secondary_flow_Lps
     )
@@ -268,11 +282,13 @@ def solve_massloss_steady(
         T_supply_C=T_supply_C,
         T_return_C=T_return_C,
         rack_outlet_temps_C=rack_outlet_temps_C,
+        rack_flows_Lps=rack_flows_Lps,
         supply_flow_Lps=Q_supply_Lps,
         return_flow_Lps=Q_supply_Lps - massloss_flow_Lps,
         pump_head_mAq=pump_head,
         property_eval_T_C=T_prop_C,
         hx_duty_kW=Q_hx_W / _W_PER_KW,
+        hx_effectiveness=effectiveness,
         rack_load_kW=case.rack_load_kW * case.hydraulic.n_racks,
         massloss_enthalpy_kW=m_massloss_kgs * dh_Jkg / _W_PER_KW,
         outer_solver_ier=int(ier),
