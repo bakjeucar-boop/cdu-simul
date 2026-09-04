@@ -140,8 +140,23 @@ python -m venv .venv
 # 의존성 설치 (런타임 numpy·scipy·CoolProp·pandas + 개발 pytest — 절대 규칙 12)
 .venv/Scripts/python.exe -m pip install -e ".[dev]"
 
-# 테스트
-.venv/Scripts/python.exe -m pytest
+# 테스트 — 한 번에 다 돌리지 않는다. **조각으로 나눠 전경으로** 돌린다 (#58)
+#
+#   조각 가르는 기준:
+#   · **파일 단위**로 가른다 — 나눌 수 있는 최소 단위가 파일 하나다(세션 7.37 실측).
+#     한 파일이 상한을 넘으면 분할로는 못 푼다 — 그 파일 안을 고쳐야 한다.
+#   · 도구 전경 상한은 **실측 580 s** 다(「10분」이 아니다 — 세션 7.37 관측).
+#     여유를 남겨 **한 조각 400 s 이하**로 가른다.
+#   · 무거운 파일은 단독 조각으로 뺀다.
+#   · **백그라운드로 넘기지 않는다**(#57) — 상한을 넘으면 도구가 자동으로 넘긴다.
+#
+#   세션 7.38 실측 (1,208건 전부 통과):
+.venv/Scripts/python.exe -m pytest tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 7파일
+.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py   # 뒤 6파일
+.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 314~386 s (두 번 실측) — 단독 조각
+#
+#   **이 가름이 「샘」 행이 얹힌 뒤에도 성립하는지는 모른다** — 그 판에서 다시 잰다.
+#
 # tests/test_environment.py  환경 스모크(세션 1-A) — feasibility 판정이 아니다
 # tests/test_energy_balance.py  세션 1-B 게이트(energy balance <0.1%) + HX duty 항등성
 
@@ -178,7 +193,9 @@ git pull
     가장 크게 먹었거나 줄일 수 있었던 것으로 지목됐다)
 
 **종료** (하나라도 빠지면 판이 안 끝난 것이다)
-1. `.venv/Scripts/python.exe -m pytest` — **전부 통과**. 실패를 남긴 채 끝내지 않는다
+1. `pytest` — **전부 통과**. 실패를 남긴 채 끝내지 않는다. 「명령어」 절의
+   **조각 분할대로 나눠 전경으로** 돌린다 — 백그라운드로 넘기지 않는다(#57).
+   조각 합이 전 시험을 덮는지 건수로 확인한다(빠진 조각을 통과로 읽지 않는다)
 2. `.venv/Scripts/python.exe -m ruff check .` · `-m mypy src tests` — 통과
 3. `PROCEED.md` 갱신 — 완료 항목 · 만든/바꾼 파일 · 미해결과 이유 · 다음 세션 결정사항
 4. 계층별 커밋 분리(절대 규칙 14)
