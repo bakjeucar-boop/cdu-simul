@@ -136,6 +136,15 @@ input[type=range]{width:112px;accent-color:#3E4C56}
 #sec{flex:none;display:flex;align-items:center;padding:6px 10px}
 footer{flex:none;text-align:center;font-size:11px;opacity:.8;padding:1px 0 0}
 #msg{color:var(--hot);font-size:12px;padding-left:12px}
+
+/* ── ⑹ 표기 · 한계 띠 (세션 7.41) ─────────────────────────────────
+   json 이 이미 싣고 있는 caveats 를 화면 본문으로 낸다. 툴팁이 아니다 —
+   접혀 있어도 DOM 에 있고, 여는 데 마우스가 필요 없다(키보드로 열린다). */
+#cav{flex:none;font-size:11px}
+#cav>summary{cursor:pointer;padding:3px 9px}
+#cav dl{margin:0;padding:0 9px 7px;max-height:26vh;overflow:auto}
+#cav dt{margin-top:6px;font-size:10px;opacity:.65;font-family:Consolas,monospace}
+#cav dd{margin:1px 0 0;line-height:1.45}
 </style>
 </head>
 <body>
@@ -174,6 +183,11 @@ footer{flex:none;text-align:center;font-size:11px;opacity:.8;padding:1px 0 0}
   <div id="stage"></div>
   <div id="sec" class="band"></div>
 </div>
+
+<details id="cav" class="band">
+  <summary>표기 · 한계 — demo_steady.json 의 caveats <span id="cav-n" class="num"></span></summary>
+  <dl id="cav-list"></dl>
+</details>
 
 <footer id="foot">가정값 기반 — 실측 아님<span id="msg"></span></footer>
 
@@ -792,6 +806,24 @@ function paint() {
   }
   paintRoom(v, dual);
   paintAxis();
+  paintCaveats(c.caveats);
+}
+
+/* json 이 케이스마다 싣는 표기·한계를 **그대로** 낸다 [세션 7.41].
+   화면이 문언을 짓지 않는다 — 키도 값도 json 것 그대로이고, `textContent` 라
+   한 글자도 해석하지 않는다. 케이스가 바뀔 때마다 그 케이스의 것을 다시 그린다. */
+function paintCaveats(cav) {
+  const list = $("cav-list");
+  const items = Object.entries(cav || {});
+  list.textContent = "";
+  $("cav-n").textContent = items.length;
+  for (const [key, text] of items) {
+    const dt = document.createElement("dt");
+    const dd = document.createElement("dd");
+    dt.textContent = key;
+    dd.textContent = text;
+    list.append(dt, dd);
+  }
 }
 
 /* ── 컨트롤 ───────────────────────────────────────────────────────── */
