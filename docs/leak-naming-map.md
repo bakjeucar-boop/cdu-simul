@@ -104,10 +104,11 @@
 
 ## 아직 안 닫힌 자리 (사람이 정한다)
 
-1. **정본 5-1 의 코드 인용 넷**이 옛 모듈·함수 이름을 가리킨다 — 128행
-   `leak_massloss.leak_flow_bound_Lps()` · `SWEEP_FRACTIONS` ·
-   `leak_massloss_thermal.leak_sizes_Lps()`, 129행 `leak_massloss.leak_topologies()`.
-   **정본은 사람만 고친다**(절대 규칙 13) — 위 표 1 이 그대로 수정 목록이다.
+1. ~~**정본 5-1 의 코드 인용 넷**~~ — **세션 7.33 이 닫았다.** 사람의 지시로
+   128행 `massloss.massloss_flow_bound_Lps()` · `SWEEP_FRACTIONS`(안 바뀐 이름) ·
+   `massloss_thermal.massloss_sizes_Lps()`, 129행 `massloss.massloss_topologies()`
+   로 이었다. **이름만 이었고 근거란의 논증·수치는 건드리지 않았다.**
+   문서를 고쳤으므로 **프로젝트 지식 재업로드가 필요하다.**
 2. **「누출랙」 계열 낱말**(정리 126·127·128·129·134 · `project-overview.md` 268 ·
    코드 표시 문언 「⑶ 누출랙 통과유량」·「A 누출랙 출구온도」) — 상위/하위 판정이
    갈리는 자리로 세션 7.28 이 올린 뒤 계속 열려 있다. 이 판은 **식별자만** 갈랐고
@@ -117,7 +118,11 @@
    블록과 끊긴 인용뿐이었다.
 4. **`resistance_proxy`** (`demo_steady.py` 의 JSON 키) — 새 규칙 8 은 「막힘」이
    「샘」의 대용(proxy)이 **아니라고** 한다. 값 문언은 고쳤지만 **키는 그대로 두었다**
-   — `demo/`·`dist/` HTML 이 그 키로 읽는다.
+   — `demo/`·`dist/` HTML 이 그 키로 읽는다. **세션 7.33 이 산출물을 재생성해
+   고친 값 문언이 `demo/demo_steady.json` · `dist/` 에 실렸다 — 키는 여전히 열려
+   있다.**
+
+**남은 셋(2·3·4)은 스키마 판에서 데이터셋 열 이름과 함께 본다.**
 
 ## 관련
 
