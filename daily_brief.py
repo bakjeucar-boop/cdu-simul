@@ -19,7 +19,8 @@
 
 `--web` 은 **웹 대화창에 붙이는 축약**이다(세션 7.24). 셋만 낸다 — ⓐ 마지막 판
 한 줄(세션 로그의 마지막 `### ` 제목) · ⓑ 열린 미해결 **번호와 제목만** ·
-ⓒ 「현재 상태」 마지막 행의 「다음 세션 첫 작업」 **첫 ` · ` 앞까지**.
+ⓒ 「현재 상태」 마지막 행의 「다음 세션 첫 작업」 **첫 ` · ` 앞까지**
+(단 괄호 `(...)` 안의 ` · ` 는 경계로 보지 않는다 — 세션 7.37).
 본문·근거·크기 칸은 싣지 않는다. 출처는 다른 두 모드와 같은 `PROCEED.md`
 하나다 — 목록을 옮겨 적은 새 파일을 만들지 않는다.
 
@@ -223,6 +224,26 @@ def web_title(summary: str) -> str:
     return _SENTENCE_END.split(_LEADING_TAG.sub("", summary))[0].rstrip(".")
 
 
+def _first_segment(text: str) -> str:
+    """첫 ` · ` 앞까지 자른다 — **괄호 `(...)` 안의 ` · ` 는 경계로 보지 않는다**.
+
+    세션 7.37. 대상은 반각 괄호 `()` 하나뿐이다 — 「현재 상태」 표에서 ` · ` 를
+    품는 괄호를 세어 보니 `(...)` 20건뿐이고 「」·[]·{} 안에는 없었다.
+    중첩은 깊이로 센다(실측 최대 2). 닫히지 않은 `(` 를 만나면 그 뒤에서
+    경계를 찾지 않으므로 **자르지 않고 전부** 싣는다 — 조용히 짧게 자르는 쪽이
+    더 나쁘다. 짝 없는 `)` 는 깊이를 음수로 내리지 않고 무시한다.
+    """
+    depth = 0
+    for i, ch in enumerate(text):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif depth == 0 and text.startswith(" · ", i):
+            return text[:i]
+    return text
+
+
 def build_web_brief(text: str) -> str:
     """웹 대화창용 축약 브리핑 (순수 함수) — ⓐ 마지막 판 · ⓑ 열린 미해결 제목 · ⓒ 다음.
 
@@ -242,11 +263,15 @@ def build_web_brief(text: str) -> str:
     for number, summary, _impact in items:
         out += _wrap(f"  #{number} {web_title(summary)}", indent="      ")
 
-    out += ["", "다음 첫 작업 (「현재 상태」 마지막 행 — 첫 ` · ` 앞까지):"]
+    out += [
+        "",
+        "다음 첫 작업 (「현재 상태」 마지막 행 — 첫 ` · ` 앞까지 · 괄호 안 제외):",
+    ]
     # 첫 ` · ` 앞까지 싣는다(세션 7.25). 세션 7.24 는 「한 줄」 칸과 같은 규칙
     # (첫 `. ` 또는 ` — `)을 썼는데, 그러면 7.23 행의 「프로젝트 지식 재업로드
     # 필요」처럼 **웹 대화창이 놓치면 정본이 갈리는 것**이 떨어져 나갔다.
-    nxt = _strip_markup(rows[-1][3]).split(" · ")[0] if rows else "(표를 읽지 못했다)"
+    # 세션 7.37: 괄호 안의 ` · ` 에서 끊겨 7.36 행이 「(열 52→59」 로 잘렸다.
+    nxt = _first_segment(_strip_markup(rows[-1][3])) if rows else "(표를 읽지 못했다)"
     out += _wrap(f"  {nxt}")
     return "\n".join(out)
 
