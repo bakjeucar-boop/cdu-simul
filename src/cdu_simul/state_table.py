@@ -151,14 +151,14 @@ def select_states(
     ]
 
     blockage = base & (df["scenario_kind"] == "이상") & (df["leak_model"] == "K_approx")
-    for level in sorted(df.loc[blockage, "leak_level_percent"].unique()):
+    for level in sorted(df.loc[blockage, "blockage_level_percent"].unique()):
         rows.append(
             (
                 "막힘",
                 f"K +{round(level):d} %",
                 _one_row(
                     df,
-                    blockage & (df["leak_level_percent"] == level),
+                    blockage & (df["blockage_level_percent"] == level),
                     f"막힘 {level} {where}",
                 ),
             )
@@ -544,9 +544,15 @@ def format_report(df: pd.DataFrame) -> str:
     out.append("## 퇴화 배치의 총유량 차 — caveat 「정확히 0」과 맞춰본다")
     out.append("")
     out.append("`massloss` 행의 `signal_sign_caveat` 은 이렇게 적는다 — "
-               "「구조 자유도가 g=0 · 펌프=공급 배치인 행은 **수력 다섯 양이 정확히 "
-               "0** 이라 부호 자체가 없다 — 0 을 「이상 없음」으로 읽지 않는다」. "
-               f"문언은 {CAVEAT_SOURCE} 에서 온다.")
+               "「구조 자유도가 g=0 · 펌프=공급 배치인 행에서 수력 다섯 양이 "
+               "「정확히 0」이라는 것은 **수력 한정 · 물성 온도 37 ℃ 고정 "
+               "기준선**에서의 말이다. 열까지 함께 풀린 이 데이터셋 행에서는 "
+               "정확히 0 이 아니라 총유량 차가 1e-04 자리로 남으며, 갈리는 "
+               "원인은 물성 평가 온도 하나다」. "
+               f"문언은 {CAVEAT_SOURCE} 에서 온다. "
+               "**세션 7.52 가 이 조건을 caveat 안으로 옮겨 적었다** — "
+               "7.50 까지는 caveat 이 「정확히 0」이라고만 적어 아래 표와 "
+               "어긋나 있었다.")
     out.append("")
     out.append("그 「0」이 **무엇을 기준선으로 한 0 인지**는 "
                "`src/cdu_simul/massloss_gate.py:388-396` 의 주석이 적는다 — "
@@ -594,8 +600,9 @@ def format_report(df: pd.DataFrame) -> str:
                "막힘은 총유량이 줄고 샘은 는다 — 「유량 감소 = 이상」 같은 "
                "규칙을 이 표에서 끌어내면 틀린다. "
                "행마다 어느 기구인지 보고 읽어야 한다.")
-    out.append("2. **샘은 어느 랙에서 새는지 특정하지 못한다.** CSV `leak_rack_index` 가 "
-               "massloss 행에서 빈칸이다 — 계통 전체의 질량손실로만 들어간다.")
+    out.append("2. **샘은 어느 랙에서 새는지 특정하지 못한다.** CSV "
+               "`anomaly_rack_index` 가 massloss 행에서 빈칸이다 — "
+               "계통 전체의 질량손실로만 들어간다.")
     out.append("3. **전이(시간축)가 없다.** 데이터셋 전 행이 `regime=steady` 라 "
                "「몇 초 뒤」는 이 표에 없다(미해결 #40·#38).")
     out.append("4. **양 끝 두 벌은 범위의 두 점이지 범위가 아니다.** 다섯 축을 "

@@ -12,16 +12,16 @@ CLAUDE.md 절대 규칙 10: 사람이 눈으로 보지 않고 **테스트가 판
 ═══════════════════════════════════════════════════════════════════════════════
 **세션 4 게이트 판정 기준 (선기재)**
 
-신호 3종을 본다: ① 누출 랙 유량 ② 누출 랙 출구온도 ③ 펌프 운전점(양정·총유량).
+신호 3종을 본다: ① 막힘 랙 유량 ② 막힘 랙 출구온도 ③ 펌프 운전점(양정·총유량).
 
 **기준 A — 부호 일관성.** 32조합 × 누출 3수준 **전부**에서 정상 대비 부호가
 같아야 한다. 어느 조합에서 부호가 뒤집히면 그 신호는 누출의 지표가 될 수 없다.
-  · 누출 랙 유량: **감소** (Δ < 0)  — 그 랙 저항이 커졌으므로
-  · 누출 랙 출구온도: **상승** (Δ > 0) — 발열은 그대로인데 유량이 줄었으므로
+  · 막힘 랙 유량: **감소** (Δ < 0)  — 그 랙 저항이 커졌으므로
+  · 막힘 랙 출구온도: **상승** (Δ > 0) — 발열은 그대로인데 유량이 줄었으므로
   · 총유량: **감소** (Δ < 0)
   · 펌프 양정: **상승** (Δ > 0) — 정속 곡선 위에서 유량이 줄면 양정이 오른다
     [5-1 「펌프 운전 방식」]
-  · 비누출 랙 유량: **증가** (Δ > 0) — 공통 경로 강하가 줄어 남는 양정이 커진다
+  · 비막힘 랙 유량: **증가** (Δ > 0) — 공통 경로 강하가 줄어 남는 양정이 커진다
     (3-A 방향성 검사에서 이미 확인된 방향)
 
 **기준 B — 수준 간 단조.** 같은 조합 안에서 +5% < +20% < +50% 순으로 각 신호의
@@ -105,10 +105,10 @@ def test_criterion_a_signal_signs_are_consistent(signal: LeakSteadySignal) -> No
     assert signal.solvers_converged, f"{_signal_id(signal)}: solver 미수렴"
 
     assert signal.leak_rack_flow_change_percent < 0.0, (
-        f"누출 랙 유량이 줄지 않았다: {signal.leak_rack_flow_change_percent:+.6f} %"
+        f"막힘 랙 유량이 줄지 않았다: {signal.leak_rack_flow_change_percent:+.6f} %"
     )
     assert signal.leak_rack_outlet_change_C > 0.0, (
-        f"누출 랙 출구온도가 오르지 않았다: {signal.leak_rack_outlet_change_C:+.6f} K"
+        f"막힘 랙 출구온도가 오르지 않았다: {signal.leak_rack_outlet_change_C:+.6f} K"
     )
     assert signal.total_flow_change_percent < 0.0, (
         f"총유량이 줄지 않았다: {signal.total_flow_change_percent:+.6f} %"
@@ -117,7 +117,7 @@ def test_criterion_a_signal_signs_are_consistent(signal: LeakSteadySignal) -> No
         f"펌프 양정이 오르지 않았다: {signal.pump_head_change_mAq:+.6f} mAq"
     )
     assert signal.other_rack_flow_change_percent > 0.0, (
-        f"비누출 랙 유량이 늘지 않았다: "
+        f"비막힘 랙 유량이 늘지 않았다: "
         f"{signal.other_rack_flow_change_percent:+.6f} %"
     )
 
@@ -136,11 +136,11 @@ def test_criterion_b_signals_are_monotone_across_levels(case) -> None:  # type: 
     assert [s.level.k_multiplier for s in signals] == [1.05, 1.2, 1.5]
 
     for name, values in (
-        ("누출 랙 유량", [abs(s.leak_rack_flow_change_percent) for s in signals]),
-        ("누출 랙 출구온도", [abs(s.leak_rack_outlet_change_C) for s in signals]),
+        ("막힘 랙 유량", [abs(s.leak_rack_flow_change_percent) for s in signals]),
+        ("막힘 랙 출구온도", [abs(s.leak_rack_outlet_change_C) for s in signals]),
         ("총유량", [abs(s.total_flow_change_percent) for s in signals]),
         ("펌프 양정", [abs(s.pump_head_change_mAq) for s in signals]),
-        ("비누출 랙 유량", [abs(s.other_rack_flow_change_percent) for s in signals]),
+        ("비막힘 랙 유량", [abs(s.other_rack_flow_change_percent) for s in signals]),
     ):
         for index in range(1, len(values)):
             assert values[index] > values[index - 1], (
@@ -233,7 +233,7 @@ def test_leak_transient_solvers_and_direction(case: LeakStepCase) -> None:
     `solve_ivp` 의 `success` 와 매 시점 수력 `fsolve` 의 수렴을 **둘 다** 본다
     (절대 규칙 5).
 
-    방향 기대: 누출 랙 유량 **감소** · 총유량 **감소** · 펌프 양정 **상승** ·
+    방향 기대: 막힘 랙 유량 **감소** · 총유량 **감소** · 펌프 양정 **상승** ·
     T_return **상승**. 정상상태 신호와 같은 방향이어야 한다 — 다르면 동적 모델이
     정상상태와 다른 물리를 쓰고 있다는 뜻이다.
 

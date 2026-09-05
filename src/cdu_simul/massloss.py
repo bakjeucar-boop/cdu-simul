@@ -241,7 +241,7 @@ def k_approx_results(
 
 
 def massloss_flow_bound_Lps(k_results: list[FlowDistributionResult]) -> float:
-    """스윕 상한 [L/s] — K 근사 +50% 가 만든 **누출랙 통과유량 감소량**.
+    """스윕 상한 [L/s] — K 근사 +50% 가 만든 **막힘랙 통과유량 감소량**.
 
     [유도: 5-1 「「샘」(질량손실) 크기 수준」 — 「샘」에는 독립한 수준값이 없고
     「막힘」 3수준(5장 「누출 시나리오(「막힘」)」)의 해에서 역산한다. 읽는 랙은
@@ -316,7 +316,7 @@ _QUANTITIES: tuple[tuple[str, str], ...] = (
     ("⑴ 랙 통과 총유량", "supply_flow_change_Lps"),
     ("⑴' 펌프 통과유량", "pump_flow_change_Lps"),
     ("⑵ 펌프 양정", "pump_head_change_mAq"),
-    ("⑶ 누출랙 통과유량", "injection_rack_flow_change_Lps"),
+    ("⑶ 주입랙 통과유량", "injection_rack_flow_change_Lps"),
     ("⑷ 타 7랙 유량", "other_rack_flow_change_Lps"),
 )
 
@@ -539,7 +539,7 @@ def format_comparison_table(run: ComparisonRun) -> str:
         "  (계통 밖으로 나가는 유량이 없다).",
         "",
         "[표 2] 질량손실 — 정상(Q_massloss=0) 대비 변화 (8조합 × 크기 4수준 범위)",
-        "  누출 크기는 조합마다 0 부터 **K 근사 +50% 가 만든 누출랙 유량 감소량**"
+        "  「샘」 크기는 조합마다 0 부터 **K 근사 +50% 가 만든 막힘랙 유량 감소량**"
         " 까지 스윕했다.",
         f"  상한 범위: {min(run.massloss_bounds_Lps):.6f} ~ "
         f"{max(run.massloss_bounds_Lps):.6f} L/s (새 숫자가 아니다 — K 근사의 산출값).",
@@ -572,7 +572,7 @@ def format_comparison_table(run: ComparisonRun) -> str:
         f" 최대 차 = {run.isolation_max_abs_diff_Lps:.3e} L/s",
         f"랙 간 비대칭(질량손실 전 조합): 최대 "
         f"{run.massloss_max_rack_asymmetry_Lps:.3e} L/s — 5-1 이 헤더를 저항 0 의",
-        "  공통 노드로 두므로 랙 출구 누출은 **랙에 국소화되지 않는다**. ⑶ 과 ⑷ 가",
+        "  공통 노드로 두므로 랙 출구 「샘」은 **랙에 국소화되지 않는다**. ⑶ 과 ⑷ 가",
         "  같이 움직이는 것이 그 결과다(K 근사는 정반대로 갈라진다).",
         f"solver(기준 D): {run.n_solves} 회 전부 `ier=1` · 실패 "
         f"{run.n_solver_failures} 건 · 압력평형 최대 잔차 "
@@ -581,7 +581,7 @@ def format_comparison_table(run: ComparisonRun) -> str:
         "읽는 법:",
         "  · `갈림` = 조합·크기·수준에 따라 부호가 뒤집힌다(기준 B 반례 확인).",
         f"  · `0` = 변화가 {_SIGN_ZERO_TOL:.0e} 미만이다.",
-        "  · 배치 g 는 잔여저항 중 **누출점 하류(환수측)** 몫이며 5장·5-1 에 없다.",
+        "  · 배치 g 는 잔여저항 중 **질량손실점 하류(환수측)** 몫이며 5장·5-1 에 없다.",
         "    값을 고르지 않고 정의상 양 끝을 포함해 전수로 돌린 것이다.",
         "",
         "※ " + ASSUMPTION_TAG,
@@ -650,20 +650,20 @@ def format_mismatch_table(run: ComparisonRun) -> str:
     degenerate = [r for r in rows if r.path_label == "g=0.0/펌프=공급"]
     nonzero = [r for r in degenerate if r.size_index > 0]
     lines += [
-        "기준 B — 단조: 질량손실 전 배치에서 Δ 가 누출 크기 4수준에 대해 엄격히",
-        "  증가한다. K 근사는 누출 크기 축이 없고 Δ ≡ 0 이라 대상이 아니다.",
+        "기준 B — 단조: 질량손실 전 배치에서 Δ 가 「샘」 크기 4수준에 대해 엄격히",
+        "  증가한다. K 근사는 「샘」 크기 축이 없고 Δ ≡ 0 이라 대상이 아니다.",
         "",
         "기준 A — 검산:",
-        f"  · 질량손실 Δ 와 누출 유량의 차 최대 {ml_identity_max:.3e} L/s",
+        f"  · 질량손실 Δ 와 「샘」 유량의 차 최대 {ml_identity_max:.3e} L/s",
         f"  · K 근사 Δ 최대 {max(abs(r.mismatch_Lps) for r in k_rows):.3e} L/s",
         "  · **이 둘은 구성상 항등식이다** — `solve_massloss` 가 환수유량을",
         "    Q_ret = Q_sup − Q_massloss 으로 정의하고, K 근사에는 유출 경로가 없다.",
         "    통과의 뜻은 「코드가 정의대로 계산한다」까지이고 **질량보존의 물리적",
         "    검증이 아니다**(세션 5.6-B 판정 기준 「먼저 적어 두는 것」).",
         "",
-        "기준 C — 배치 불변: 같은 (조합 · 누출 크기)에서 배치 6 에 걸친 Δ 의 최대 편차 "
+        "기준 C — 배치 불변: 같은 (조합 · 「샘」 크기)에서 배치 6 에 걸친 Δ 의 최대 편차 "
         f"{_mismatch_spread_across_topologies(rows):.3e} L/s",
-        f"  · `g=0.0/펌프=공급` 배치의 Δ (누출 크기 4수준): "
+        f"  · `g=0.0/펌프=공급` 배치의 Δ (「샘」 크기 4수준): "
         f"{span([r.mismatch_Lps for r in nonzero])} L/s",
         "    — 세션 5.6 관측 ④ 에서 다섯 양이 전부 정확히 0 이었던 배치다.",
         "",

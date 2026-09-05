@@ -4,7 +4,7 @@
 (`CLAUDE.md` 절대 규칙 11 · 세션 5.5 게이트) — 이 데이터로 학습한 모델의 한계를
 아는 유일한 단서가 될 수 있기 때문이다.
 
-**규모·표기·부하 수준·누출 랙은 사람이 정했다**(세션 5.5-B 「사람이 정한 것」).
+**규모·표기·부하 수준·막힘 랙은 사람이 정했다**(세션 5.5-B 「사람이 정한 것」).
 이 모듈이 다시 정하지 않는다. 규약은 5-1 「데이터셋 스키마 규약」에 있다.
 
 행 단위 = **(시나리오 × CDU × 시각)** 하나당 한 행. 랙별 값은 열로 편다
@@ -22,7 +22,7 @@
                                     누출은 그 전이의 **모양을 바꾸는** 조건이다.
 
 두 전이를 같은 자극으로 보면 안 된다. 다중 CDU 전이에서 누출의 효과를 보려면
-같은 부하 스텝 안에서 `leak_level_percent` 를 가로질러 비교한다.
+같은 부하 스텝 안에서 `blockage_level_percent` 를 가로질러 비교한다.
 **다중 전이도 누출을 스텝으로 넣을지는 사람이 정한다** — 세션 5.5-D 는 바꾸지
 않았고 의견만 보고했다.
 
@@ -130,7 +130,7 @@ DATASET_VERSION: str = "session-7.39"
 #: 이 데이터셋의 이상 상태는 전부 **「막힘」(배관 K값 증가)** 이다(절대 규칙 8 ·
 #: 5장 「누출 시나리오(「막힘」)」). 「샘」(질량손실)은 `massloss.py`·
 #: `massloss_thermal.py` 에만 있고 데이터셋 생성 경로에 들어가지 않는다(세션 5.6).
-#: 두 기구는 총유량·누출랙 유량의 **부호가 정반대**이므로(세션 5.6 · 미해결 #36)
+#: 두 기구는 총유량·주입 랙 유량의 **부호가 정반대**이므로(세션 5.6 · 미해결 #36)
 #: 이 열이 없으면 나중에 어느 쪽 데이터인지 알 수 없다. **열 이름과 값
 #: (`leak_model` · "K_approx")은 이미 나간 것이라 바꾸지 않는다**(세션 7.32 ·
 #: 대응표 `docs/leak-naming-map.md`).
@@ -209,12 +209,12 @@ class ScenarioSpec:
     share_uses_return_flow: bool | None = None
 
     @property
-    def leak_level_percent(self) -> float | str:
+    def blockage_level_percent(self) -> float | str:
         """「막힘」의 K값 증가율 [%]. **「샘」 행은 빈 값**이다 [세션 7.39].
 
         「샘」은 K 배수를 쓰지 않으므로 이 열에 실을 값이 **없다** — 0 을 실으면
         「증가율 0 = 정상」으로 읽힌다(세션 7.34 C1 ⑶). 빈 값은 이 스키마에서
-        「이 행에 해당 없음」 표기다(`leak_cdu_index` 참조).
+        「이 행에 해당 없음」 표기다(`anomaly_cdu_index` 참조).
         """
         if self.mechanism == MECHANISM_MASSLOSS:
             return ""
@@ -246,7 +246,7 @@ class ScenarioSpec:
         return STIMULUS_LOAD_STEP
 
     @property
-    def leak_cdu_index(self) -> int | str:
+    def anomaly_cdu_index(self) -> int | str:
         """누출이 걸린 CDU 번호. **누출이 없으면 빈 값**이다 [세션 5.5-D].
 
         빈 값을 쓰는 이유: 이 스키마에서 「이 행에 해당 없음」은 이미 빈 칸으로
@@ -259,7 +259,7 @@ class ScenarioSpec:
         싣는다. 종전 판정(`leak_multiplier == 1.0`)은 「막힘」 행에서는 이것과
         같은 결과였다.
 
-        누출 유무의 판정에는 이 열의 빈 칸을 쓴다 — `leak_level_percent` 는
+        누출 유무의 판정에는 이 열의 빈 칸을 쓴다 — `blockage_level_percent` 는
         「샘」 행에서 비어 있고 「막힘」 유무만 가른다.
         """
         if self.mechanism == MECHANISM_NONE:
@@ -491,15 +491,15 @@ def _base_row(spec: ScenarioSpec, cdu_index: int) -> dict[str, object]:
         "stimulus_kind": spec.stimulus_kind,
         "cdu_config": spec.cdu_config,
         "cdu_index": cdu_index,
-        "leak_level_percent": spec.leak_level_percent,
+        "blockage_level_percent": spec.blockage_level_percent,
         # 「샘」 행은 **빈 값**이다 [세션 7.39]. 5-1 「「샘」 주입 지점」이 「랙
         # 하나에 걸지만 계통은 그것을 국소로 보지 않는다」를 항목의 핵심으로
         # 못박았으므로, 랙 번호를 실으면 「랙0 에서 샌다」로 오독된다(랙 간 비대칭
         # 2.220e-16 L/s · 세션 5.6). 「막힘」 행은 종전대로 주입 랙을 싣는다.
-        "leak_rack_index": (
+        "anomaly_rack_index": (
             "" if spec.mechanism == MECHANISM_MASSLOSS else LEAK.injection_rack_index
         ),
-        "leak_cdu_index": spec.leak_cdu_index,
+        "anomaly_cdu_index": spec.anomaly_cdu_index,
         "leak_model": (
             LEAK_MODEL_MASSLOSS
             if spec.mechanism == MECHANISM_MASSLOSS
@@ -735,7 +735,7 @@ def massloss_steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
     그래서 `steady_rows` 를 재사용하지 않는다.
 
     **크기는 케이스마다 다시 역산한다** — 5-1 「「샘」(질량손실) 크기 수준」이
-    「막힘」 +50% 해의 누출랙 유량 감소량을 상한으로 두라고 정한다. 코드에 숫자를
+    「막힘」 +50% 해의 막힘 랙 유량 감소량을 상한으로 두라고 정한다. 코드에 숫자를
     박지 않는다(절대 규칙 1·2).
 
     **energy balance 열은 비운다.** 6장 1-B 기준은 밀폐루프 잔차를 재는 것이고,

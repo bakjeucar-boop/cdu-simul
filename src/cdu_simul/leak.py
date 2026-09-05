@@ -105,16 +105,16 @@ class LeakSteadySignal:
 
     @property
     def leak_rack_flow_change_percent(self) -> float:
-        """누출 랙 유량 변화 [%] — 기대 부호: 음(감소)."""
+        """막힘 랙 유량 변화 [%] — 기대 부호: 음(감소)."""
         before = self.normal.flow.rack_flows_Lps[self.rack_index]
         after = self.leaked.flow.rack_flows_Lps[self.rack_index]
         return (after - before) / before * 100.0
 
     @property
     def other_rack_flow_change_percent(self) -> float:
-        """비누출 랙 유량 변화 [%] — 기대 부호: 양(증가).
+        """비막힘 랙 유량 변화 [%] — 기대 부호: 양(증가).
 
-        나머지 7랙은 전부 같은 조건이므로 첫 비누출 랙 하나로 대표한다.
+        나머지 7랙은 전부 같은 조건이므로 첫 비막힘 랙 하나로 대표한다.
         """
         other = 1 if self.rack_index == 0 else 0
         before = self.normal.flow.rack_flows_Lps[other]
@@ -130,7 +130,7 @@ class LeakSteadySignal:
 
     @property
     def leak_rack_outlet_change_C(self) -> float:
-        """누출 랙 출구온도 변화 [K] — 기대 부호: 양(상승)."""
+        """막힘 랙 출구온도 변화 [K] — 기대 부호: 양(상승)."""
         before = self.normal.thermal.rack_return_temps_C[self.rack_index]
         after = self.leaked.thermal.rack_return_temps_C[self.rack_index]
         return after - before
@@ -201,8 +201,8 @@ def format_steady_signal_table(signals: list[LeakSteadySignal]) -> str:
     """
     levels = leak_levels()[1:]
     header = (
-        f"{'누출 수준':<12}{'누출랙 유량':>22}{'타랙 유량':>22}"
-        f"{'총유량':>22}{'누출랙 출구온도':>24}{'펌프 양정':>22}{'balance':>20}"
+        f"{'막힘 수준':<12}{'막힘랙 유량':>22}{'타랙 유량':>22}"
+        f"{'총유량':>22}{'막힘랙 출구온도':>24}{'펌프 양정':>22}{'balance':>20}"
     )
     units = (
         f"{'':<12}{'[%]':>22}{'[%]':>22}{'[%]':>22}{'[K]':>24}"
@@ -274,7 +274,7 @@ def format_transient_table(results: list[LeakTransientResult]) -> str:
     """
     header = (
         f"{'case':<44}{'tau':>8}{'t63':>9}{'t95':>9}"
-        f"{'Tret 초기':>11}{'Tret 최종':>11}{'누출랙 Q':>11}{'총 Q':>10}"
+        f"{'Tret 초기':>11}{'Tret 최종':>11}{'막힘랙 Q':>11}{'총 Q':>10}"
         f"{'양정':>9}{'ivp':>6}{'fsol':>6}"
     )
     units = (
@@ -319,7 +319,7 @@ def format_transient_table(results: list[LeakTransientResult]) -> str:
         "-" * len(header),
         "",
         "부하는 바뀌지 않는다 — 정격 운전 중 누출만 계단으로 들어온다.",
-        "누출랙 Q·총 Q·양정 = 누출 전 정상상태 대비 변화.",
+        "막힘랙 Q·총 Q·양정 = 막힘 전 정상상태 대비 변화.",
         "2차측·NTU·수력 조합은 이 표에서 범위 하단 고정.",
         "",
         "※ " + ASSUMPTION_TAG,

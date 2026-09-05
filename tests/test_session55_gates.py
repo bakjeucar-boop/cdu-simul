@@ -265,9 +265,9 @@ def test_criterion_d_holds_for_massloss_branch() -> None:
 
     # 값 열 넷의 규약 [사람 결정 · 세션 7.39]. 「막힘」 축은 빈 값이고, 「샘」에
     # 대응물이 있는 둘만 값을 싣는다.
-    assert row["leak_level_percent"] == "", "「샘」 행에 K 증가율이 실렸다"
-    assert row["leak_rack_index"] == "", "「샘」 행에 랙 번호가 실렸다"
-    assert row["leak_cdu_index"] == LEAK_CDU_INDEX
+    assert row["blockage_level_percent"] == "", "「샘」 행에 K 증가율이 실렸다"
+    assert row["anomaly_rack_index"] == "", "「샘」 행에 랙 번호가 실렸다"
+    assert row["anomaly_cdu_index"] == LEAK_CDU_INDEX
     assert row["leak_model"] == LEAK_MODEL_MASSLOSS
 
     for name in REQUIRED_PROVENANCE:

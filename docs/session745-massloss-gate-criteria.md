@@ -55,7 +55,7 @@
 | `HEAD_NOISE_THRESHOLD_mAq` | 1.0e-4 mAq | 같은 파일 `:75` |
 
 세션 4 가 본 신호는 다섯이다(`:98-122`): ⑴ 총유량 · ⑵ 펌프 양정 ·
-⑶ 누출랙 통과유량 · ⑷ 타 랙 유량 · ⑸ 누출랙 출구온도.
+⑶ 주입랙 통과유량 · ⑷ 타 랙 유량 · ⑸ 주입랙 출구온도.
 
 ---
 
@@ -69,7 +69,7 @@
 ### 2-2. 비교 대상 (무엇 대비 무엇인가)
 
 같은 운전조건의 **정상 행**(`scenario_kind == "정상"` · `leak_model == "K_approx"` ·
-`leak_level_percent == 0`) 하나. 짝짓는 열 여덟:
+`blockage_level_percent == 0`) 하나. 짝짓는 열 여덟:
 
 ```
 pump_head_rated_mAq · branch_dp_rated_mAq · valve_dp_rated_mAq · ntu ·
@@ -100,13 +100,13 @@ T_secondary_supply_C · cdu_config · cdu_index · load_percent
 |---|---|---|
 | ⑴ 총유량(=랙이 받는 헤더 공급유량) | `total_flow_Lps` | 상대 % |
 | ⑵ 펌프 양정 | `pump_head_mAq` | mAq |
-| ⑶ 누출랙 통과유량 | `rack0_flow_Lps` | 상대 % |
+| ⑶ 주입랙 통과유량 | `rack0_flow_Lps` | 상대 % |
 | ⑷ 타 랙 유량 | `rack1_flow_Lps` | 상대 % |
-| ⑸ 누출랙 출구온도 | `rack0_outlet_C` | K |
+| ⑸ 주입랙 출구온도 | `rack0_outlet_C` | K |
 
 - 상대 % 는 세션 4 와 같은 정의다: `(after − before) / before × 100`
   (`src/cdu_simul/leak.py:111`).
-- **랙0 을 「누출랙」으로 읽는다.** 「샘」 행의 `leak_rack_index` 는 빈 값이지만
+- **랙0 을 「주입랙」으로 읽는다.** 「샘」 행의 `anomaly_rack_index` 는 빈 값이지만
   (오독 방지 · `dataset.py:494-501`), 주입 지점 자체는 5-1 「「샘」 주입 지점」이
   정한 `LEAK.injection_rack_index = 0`(`assumptions.py:494`)이고 코드도 그
   지점에 건다. 「샘」은 랙에 국소화되지 않으므로(랙 간 비대칭 2.220e-16 L/s ·
@@ -123,11 +123,11 @@ T_secondary_supply_C · cdu_config · cdu_index · load_percent
 |---|---|---|
 | ⑴ 총유량 | **+ (증가)** | 미해결 #36 관측(`PROCEED.md:9223`): 질량손실 +3.0e-03 ~ +1.5e-01 L/s · K 근사와 정반대 |
 | ⑵ 펌프 양정 | `pump_sees_supply_flow`=True → **−** / False → **+** | 같은 곳: 「펌프가 공급유량을 보면 하강, 환수유량을 보면 상승」 |
-| ⑶ 누출랙 통과유량 | **+ (증가)** | 같은 곳: 「누출랙 통과유량도 K 근사 감소·질량손실 증가로 정반대」 |
+| ⑶ 주입랙 통과유량 | **+ (증가)** | 같은 곳: 「주입랙 통과유량도 K 근사 감소·질량손실 증가로 정반대」 |
 | ⑷ 타 랙 유량 | **+ (증가)** | 같은 곳: 「랙에 국소화되지 않아 ⑶ 과 ⑷ 가 같이 움직인다」 |
-| ⑸ 누출랙 출구온도 | **− (하강)** | 세션 5.7-D(같은 곳): 「누출랙 출구온도와 CDU 환수온도가 K 근사(+)와 질량손실(−)에서 정반대이고 1,536건 전 조합에서 뒤집히지 않는다」 |
+| ⑸ 주입랙 출구온도 | **− (하강)** | 세션 5.7-D(같은 곳): 「주입랙 출구온도와 CDU 환수온도가 K 근사(+)와 질량손실(−)에서 정반대이고 1,536건 전 조합에서 뒤집히지 않는다」 |
 
-**이웃 CDU 행(`cdu_index != leak_cdu_index`)에도 같은 기대를 적용한다** —
+**이웃 CDU 행(`cdu_index != anomaly_cdu_index`)에도 같은 기대를 적용한다** —
 다만 위 기대는 전부 **「샘」을 진 CDU** 에서 나온 것이므로, 이웃 CDU 에서
 실패하면 그것은 **「기대가 이웃까지 미치지 않는다」**는 뜻이고 모델 결함이
 아니다. **실패 건수는 `cdu_index` 로 반드시 갈라 적는다.** 이웃 CDU 의 기대
@@ -180,7 +180,7 @@ T_secondary_supply_C · cdu_config · cdu_index · load_percent
    데이터셋 열로 `residual_return_share == 0.0` **이고**
    `pump_sees_supply_flow == True` (이하 **퇴화 배치**).
 2. 그 신호가 **수력 넷** 중 하나다 — ⑴ 총유량 · ⑵ 펌프 양정 ·
-   ⑶ 누출랙 통과유량 · ⑷ 타 랙 유량.
+   ⑶ 주입랙 통과유량 · ⑷ 타 랙 유량.
 
 **그 배치가 왜 그런가 — 식으로.** `solve_massloss` 의 수력식
 (`src/cdu_simul/massloss.py:175-193`)에서 `massloss_flow_Lps`(=Q)가 들어가는
@@ -266,7 +266,7 @@ K 근사 정상식과도 같다. 세션 7.46 이 이것을 재서 확인했다: 
 ## 3. 「막힘」 대조 (판정이 아니라 대조)
 
 같은 기준 셋을 CSV 의 「막힘」 960행(`leak_model == "K_approx"` ·
-`leak_level_percent > 0`)에 돌려 통과 건수를 나란히 적는다. 기대 부호는
+`blockage_level_percent > 0`)에 돌려 통과 건수를 나란히 적는다. 기대 부호는
 세션 4 원문 그대로다(⑴ − · ⑵ + · ⑶ − · ⑷ + · ⑸ +). 기준 B 의 수준은
 5 → 20 → 50 % 셋이다.
 

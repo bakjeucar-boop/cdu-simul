@@ -137,7 +137,7 @@ class MassLossThermal:
 
     @property
     def injection_rack_outlet_temp_C(self) -> float:
-        """누출랙 콜드플레이트 출구온도 [℃] — 판정 기준 A.
+        """주입랙 콜드플레이트 출구온도 [℃] — 판정 기준 A.
 
         `LEAK.injection_rack_index` 는 **「막힘」의 이름을 빌려 쓴 것**이다
         [세션 7.32 · 대응표 `docs/leak-naming-map.md`]. 문서 쪽 주입 지점은
@@ -580,7 +580,7 @@ def massloss_thermal_deltas(
 def k_approx_thermal_deltas(case: CduCase, k_multiplier: float) -> ThermalDeltas:
     """K 근사의 정상 대비 변화 — **기존 모듈을 그대로 쓴다**(본문 무수정).
 
-    누출 랙만 K 가 올라가므로 랙별 유량이 갈리고, 랙 출구온도도 갈린다.
+    막힘 랙만 K 가 올라가므로 랙별 유량이 갈리고, 랙 출구온도도 갈린다.
     """
     from cdu_simul.hydraulics import apply_leak_to_rack
 
@@ -835,7 +835,7 @@ def _delta_field(deltas: list[ThermalDeltas], field: str) -> list[float]:
 
 
 _THERMAL_QUANTITIES: tuple[tuple[str, str], ...] = (
-    ("A 누출랙 출구온도", "injection_rack_outlet_C"),
+    ("A 주입랙 출구온도", "injection_rack_outlet_C"),
     ("B CDU 환수온도", "T_return_C"),
     ("C CDU 공급온도", "T_supply_C"),
 )
@@ -845,7 +845,7 @@ def format_sign_table(sweep: SteadySweep) -> str:
     """A·B·C 부호 대조표 — K 근사 대 질량손실 (순수 함수)."""
     lines = [
         "표 1. 정상상태 온도 신호의 부호 — K 근사 대 질량손실",
-        "  (같은 조합의 누출 0 해 대비 변화. 부호만 대조한다)",
+        "  (같은 조합의 「샘」 0 해 대비 변화. 부호만 대조한다)",
         "",
         f"{'양':<22}{'K 근사':>10}{'질량손실':>12}   {'질량손실 범위 [K]':>28}",
         "-" * 78,
@@ -860,7 +860,7 @@ def format_sign_table(sweep: SteadySweep) -> str:
     lines += [
         "-" * 78,
         f"K 근사 {len(sweep.k_approx)}건 · 질량손실 {len(sweep.massloss)}건"
-        f" (정상 해 {sweep.n_solves}건 중 누출 있는 것)",
+        f" (정상 해 {sweep.n_solves}건 중 「샘」 있는 것)",
         "부호가 한 글자면 전 조합에서 일정하다 — 반례 확인(collaboration.md ⑥).",
     ]
     return "\n".join(lines)
@@ -912,7 +912,7 @@ def format_balance_table(sweep: SteadySweep) -> str:
             "잔차 = (Q_hx + ṁ_massloss·[h(T_ret) − h(T_sup)] − Q_rack) / Q_rack × 100.",
             "Q_hx 는 ε-NTU 경로 · Q_rack 은 5장 입력 · 엔탈피는 CoolProp 직접 조회 —",
             "세 경로가 다르므로 항등식이 아니다.",
-            f"격리 확인(누출 0 = 밀폐루프 해): 최대 편차 "
+            f"격리 확인(「샘」 0 = 밀폐루프 해): 최대 편차 "
             f"{sweep.isolation_max_abs_K:.3e} K",
         ]
     )
@@ -949,7 +949,7 @@ def format_transient_table(sweep: TransientSweep) -> str:
 def format_plant_table(sweep: PlantSweep) -> str:
     """F 다중 CDU — 누출 없는 CDU B 의 반응 (순수 함수)."""
     lines = [
-        "표 5. 다중 CDU — 판정 기준 F (누출은 CDU A 에만)",
+        "표 5. 다중 CDU — 판정 기준 F (「샘」은 CDU A 에만)",
         "  세션 5.5-D 의 K 근사 관측: B 의 2차측 몫 **증가** · B 의 환수온도 **감소**",
         "",
         f"{'배분이 보는 1차측 유량':<26}{'B 몫 부호':>12}{'B 환수온도 부호':>16}"
@@ -966,7 +966,7 @@ def format_plant_table(sweep: PlantSweep) -> str:
     lines += [
         "-" * 82,
         f"결합 해 {sweep.n_solves}건.",
-        f"누출 크기에 대한 B 몫의 엄격 단조 위반: {len(sweep.monotonic_failures)}건",
+        f"「샘」 크기에 대한 B 몫의 엄격 단조 위반: {len(sweep.monotonic_failures)}건",
     ]
     return "\n".join(lines)
 

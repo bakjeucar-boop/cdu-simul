@@ -133,7 +133,7 @@ def test_criterion_1_leak_sits_on_the_declared_cdu() -> None:
     for index, cdu in enumerate(plant.cdus):
         changed = [K for K in cdu.hydraulic.rack_branch_K if K != normal_K]
         if index == LEAK_CDU_INDEX:
-            assert len(changed) == 1, f"CDU {index}: 누출 랙이 {len(changed)}개다"
+            assert len(changed) == 1, f"CDU {index}: 막힘 랙이 {len(changed)}개다"
         else:
             assert not changed, f"CDU {index}: 누출이 걸려 있다 — 걸리면 안 된다"
 
@@ -297,11 +297,11 @@ def test_criterion_4_coupling_is_above_the_symmetric_case() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 데이터셋 스키마 — `leak_cdu_index` 열 (C4)
+# 데이터셋 스키마 — `anomaly_cdu_index` 열 (C4)
 # ─────────────────────────────────────────────────────────────────────────────
-def test_leak_cdu_index_column_exists() -> None:
-    """`leak_cdu_index` 열이 스키마에 있다."""
-    assert "leak_cdu_index" in column_names()
+def test_anomaly_cdu_index_column_exists() -> None:
+    """`anomaly_cdu_index` 열이 스키마에 있다."""
+    assert "anomaly_cdu_index" in column_names()
 
 
 def _first(
@@ -326,27 +326,27 @@ def _first(
 
 
 @pytest.mark.parametrize("config", [CONFIG_SINGLE, CONFIG_DUAL_ASYMMETRIC])
-def test_leak_cdu_index_is_blank_without_leak(config: str) -> None:
+def test_anomaly_cdu_index_is_blank_without_leak(config: str) -> None:
     """**이상 기구가 없으면** 빈 값이다 — 이 스키마의 「해당 없음」 표기 규약이다.
 
     판정이 K 배수에서 기구로 옮겨졌다 [세션 7.39] — 「샘」 행은 K=1.0 이지만
     이상이 있으므로 CDU 번호를 싣는다(아래 시험).
     """
     for row in rows_for(_first("steady", config, 1.0, MECHANISM_NONE)):
-        assert row["leak_cdu_index"] == ""
+        assert row["anomaly_cdu_index"] == ""
 
 
 @pytest.mark.parametrize("config", [CONFIG_SINGLE, CONFIG_DUAL_ASYMMETRIC])
-def test_leak_cdu_index_names_the_leaking_cdu(config: str) -> None:
+def test_anomaly_cdu_index_names_the_leaking_cdu(config: str) -> None:
     """이상이 있으면 그것이 걸린 CDU 번호를 싣는다 — 행마다 같은 값이다.
 
     「샘」 행도 같은 규약을 따른다 — `solve_plant_massloss` 가 「샘」을 CDU
     `LEAK_CDU_INDEX` 하나에만 건다(5-1 「「샘」 주입 지점」 · 세션 7.39).
     """
     for row in rows_for(_first("steady", config, 1.0, MECHANISM_MASSLOSS)):
-        assert row["leak_cdu_index"] == LEAK_CDU_INDEX
+        assert row["anomaly_cdu_index"] == LEAK_CDU_INDEX
     for row in rows_for(_first("steady", config, 1.5)):
-        assert row["leak_cdu_index"] == LEAK_CDU_INDEX
+        assert row["anomaly_cdu_index"] == LEAK_CDU_INDEX
 
 
 def test_dual_transient_row_count_is_unchanged() -> None:

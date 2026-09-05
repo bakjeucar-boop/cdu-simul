@@ -90,9 +90,9 @@ class Signal:
 SIGNALS: tuple[Signal, ...] = (
     Signal("⑴ 총유량", "total_flow_Lps", "%", +1, -1),
     Signal("⑵ 펌프 양정", "pump_head_mAq", "mAq", 0, +1),
-    Signal("⑶ 누출랙 통과유량", "rack0_flow_Lps", "%", +1, -1),
+    Signal("⑶ 주입랙 통과유량", "rack0_flow_Lps", "%", +1, -1),
     Signal("⑷ 타 랙 유량", "rack1_flow_Lps", "%", +1, +1),
-    Signal("⑸ 누출랙 출구온도", "rack0_outlet_C", "K", -1, +1),
+    Signal("⑸ 주입랙 출구온도", "rack0_outlet_C", "K", -1, +1),
 )
 
 #: 「해당 없음」 규정이 걸리는 신호 — **수력 넷**이다(기준 문서 2-5-B ⑵).
@@ -104,14 +104,14 @@ HYDRAULIC_SIGNALS: frozenset[str] = frozenset(
 #: 기구별 「누출 수준」 열 — 기준 B 가 이 열을 따라 단조를 본다.
 LEVEL_COLUMN: dict[str, str] = {
     LEAK_MODEL_MASSLOSS: "massloss_size_fraction",
-    LEAK_MODEL_K_APPROX: "leak_level_percent",
+    LEAK_MODEL_K_APPROX: "blockage_level_percent",
 }
 
 _READ_COLUMNS: list[str] = [
     "scenario_kind",
     "leak_model",
-    "leak_level_percent",
-    "leak_cdu_index",
+    "blockage_level_percent",
+    "anomaly_cdu_index",
     "massloss_size_fraction",
     "return_flow_Lps",
     "massloss_flow_Lps",
@@ -159,13 +159,13 @@ def signal_deltas(frame: pd.DataFrame, leak_model: str) -> pd.DataFrame:
         before = merged[f"base_{signal.column}"]
         delta = after - before
         piece = merged[
-            [*PAIR_COLUMNS, *TOPOLOGY_COLUMNS, "leak_cdu_index", level_column]
+            [*PAIR_COLUMNS, *TOPOLOGY_COLUMNS, "anomaly_cdu_index", level_column]
         ].copy()
         piece["signal"] = signal.label
         piece["unit"] = signal.unit
         #: 이 행의 CDU 가 이상 기구를 진 쪽인가. 기대 부호는 진 쪽에서 나온 것이라
         #: 이웃 CDU 의 실패를 따로 세야 한다(기준 문서 2-4).
-        piece["leak_cdu"] = merged["cdu_index"] == merged["leak_cdu_index"]
+        piece["leak_cdu"] = merged["cdu_index"] == merged["anomaly_cdu_index"]
         piece["level"] = merged[level_column]
         piece["delta_abs"] = delta
         #: 기준 C 가 보는 값 — 유량 셋만 상대 % 다(세션 4 와 같은 정의).

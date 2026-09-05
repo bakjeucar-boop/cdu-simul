@@ -696,7 +696,7 @@ def run_counterexample_sweep(n_fine: int) -> CounterexampleRun:
 _SIGNAL_FIELDS: tuple[tuple[str, str], ...] = (
     ("⑴ 총유량", "total_flow_Lps"),
     ("⑵ 펌프 양정", "pump_head_mAq"),
-    ("⑶ 누출랙 출구온도", "rack_outlet_C"),
+    ("⑶ 막힘랙 출구온도", "rack_outlet_C"),
     ("⑷ CDU 환수온도", "T_return_C"),
 )
 

@@ -41,8 +41,8 @@ outline 을 고치지 않았다 — 다른 값은 **둘 다** 적었다.
 | 17 | 25A 랙 분기 1.94 L/s 의 유속 | 3.4805 | m/s | `assumptions.PIPING` 내경 26.64 mm 로 재계산 | **재산출** (산술) | outline §5 는 3.48 — **같다** | 25A(NPS 1) 내경 26.64 mm · 5장 랙당 정격 1.94 L/s |
 | 18 | 자동 시험 건수 | 1,207 | 건 | `pytest` 전체 실행 | **재산출** (540 s · 전부 통과) | outline §4 3-4 는 1,207 — **같다** | 저장소 전체 시험 |
 | 19 | 데모 케이스 수 | 136 | 케이스 | `demo/demo_steady.json` 세기 | **재산출** (JSON 읽기) | outline §4 3-4 는 136 — **같다** | 구성 2 × 부하 17단계(20~100%, 5% 간격) × 저항 4단계(0/5/20/50%) |
-| 20 | 데이터셋 「정상」 행 수 | 320 | 행 | `dataset_report._steady_rows_by_leak_level()` 재실행 | **재산출** | outline §5 ⑷ 는 320 — **같다** | `regime=steady` 중 `leak_level_percent == 0` |
-| 21 | 데이터셋 「이상」 행 수 | 960 | 행 | 〃 | **재산출** | outline §5 ⑷ 는 960 — **같다** | `regime=steady` 중 `leak_level_percent` 5/20/50 각 320행 |
+| 20 | 데이터셋 「정상」 행 수 | 320 | 행 | `dataset_report._steady_rows_by_leak_level()` 재실행 | **재산출** | outline §5 ⑷ 는 320 — **같다** | `regime=steady` 중 `blockage_level_percent == 0` |
+| 21 | 데이터셋 「이상」 행 수 | 960 | 행 | 〃 | **재산출** | outline §5 ⑷ 는 960 — **같다** | `regime=steady` 중 `blockage_level_percent` 5/20/50 각 320행 |
 | 22 | 편차 막대 축척 | 77 | px 당 1 m³/h | `demo/pfd.html` `DEV_PX` 읽기 | 재산출 (읽기) | outline 에 없음 | 랙 편차 막대와 총유량 편차 막대가 **같은 축척**을 쓴다 |
 | 23 | 편차 막대 상한 (클램프) | 50 px = 0.6494 | m³/h | `demo/pfd.html` `DEV_MAX` 읽기 | 재산출 (읽기) | outline 에 없음 | 136 케이스 전체 최대 편차가 0.5859 m³/h(45.1 px)이므로 **클램프에 닿는 케이스가 없다** |
 | 24 | 저항 50% · 총유량 편차 막대 | 11.13 px = **−0.14452 m³/h** | m³/h | `demo/demo_steady.json` + `DEV_PX` | **재산출** | outline 에 없음 | `single/L100/R50` · 같은 구성·부하의 R0 해 대비 |
