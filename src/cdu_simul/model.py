@@ -380,6 +380,35 @@ def solve_steady_state(case: SteadyStateCase) -> SteadyStateResult:
     )
 
 
+def enthalpy_balance_residual_percent(
+    m_dot_kgs: float,
+    T_supply_C: float,
+    T_return_C: float,
+    q_rack_kW: float,
+    extra_enthalpy_kW: float = 0.0,
+) -> float:
+    """세션 1-B 게이트 잔차의 **공용 알맹이** [%] [세션 7.53].
+
+        잔차[%] = ( ṁ·[h(T_ret) − h(T_sup)] + Q_추가 − Q_rack ) / Q_rack × 100
+
+    `extra_enthalpy_kW` 는 **밀폐루프가 아닌 계통에서 ṁ 에 담기지 못한 엔탈피
+    흐름**을 받는다. 「막힘」·정상은 밀폐루프라 0 이고(기본값), 「샘」은 ṁ 을
+    환수유량으로 두고 계통 밖으로 나간 몫을 이 인자로 받는다 — 둘을 더하면
+    랙을 지난 공급유량의 엔탈피 상승과 같다(`MassLossThermal.
+    energy_balance_residual_percent`).
+
+    **한 식을 두 곳이 따로 쓰지 않게 여기 한 번만 적는다**(collaboration.md ③).
+    """
+    if q_rack_kW == 0.0:
+        raise ValueError(
+            "부하 0 에서는 상대 잔차가 정의되지 않는다 (0 으로 나눈다) — "
+            "극단 케이스(6장)는 비발산으로 판정하고 이 잔차를 쓰지 않는다"
+        )
+    dh_Jkg = coolant_enthalpy_Jkg(T_return_C) - coolant_enthalpy_Jkg(T_supply_C)
+    q_enthalpy_kW = m_dot_kgs * dh_Jkg / _W_PER_KW + extra_enthalpy_kW
+    return (q_enthalpy_kW - q_rack_kW) / q_rack_kW * 100.0
+
+
 def energy_balance_residual_percent(result: SteadyStateResult) -> float:
     """energy balance 잔차 [%] — 세션 1-B 게이트가 판정하는 값.
 
@@ -396,17 +425,12 @@ def energy_balance_residual_percent(result: SteadyStateResult) -> float:
     구조상 항등적으로 0인 잔차는 `hx_duty_identity_residual_percent` 쪽이며
     그것은 게이트 판정에 쓰지 않는다.
     """
-    dh_Jkg = coolant_enthalpy_Jkg(result.T_return_C) - coolant_enthalpy_Jkg(
-        result.T_supply_C
+    return enthalpy_balance_residual_percent(
+        result.m_dot_kgs,
+        result.T_supply_C,
+        result.T_return_C,
+        result.case.total_load_kW,
     )
-    q_rack_kW = result.case.total_load_kW
-    if q_rack_kW == 0.0:
-        raise ValueError(
-            "부하 0 에서는 상대 잔차가 정의되지 않는다 (0 으로 나눈다) — "
-            "극단 케이스(6장)는 비발산으로 판정하고 이 잔차를 쓰지 않는다"
-        )
-    q_enthalpy_kW = result.m_dot_kgs * dh_Jkg / _W_PER_KW
-    return (q_enthalpy_kW - q_rack_kW) / q_rack_kW * 100.0
 
 
 def hx_duty_identity_residual_percent(result: SteadyStateResult) -> float:

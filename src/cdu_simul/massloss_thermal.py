@@ -92,6 +92,7 @@ from cdu_simul.massloss import (
 from cdu_simul.model import (
     CduCase,
     default_cdu_cases,
+    enthalpy_balance_residual_percent,
     hx_capacity_terms,
     property_temperature_from_state,
     solve_cdu_steady_state,
@@ -145,6 +146,34 @@ class MassLossThermal:
         랙 번호가 같을 뿐 성립 이유가 다르다 — 「샘」은 랙에 국소화되지 않는다.
         """
         return self.rack_outlet_temps_C[LEAK.injection_rack_index]
+
+    @property
+    def energy_balance_residual_percent(self) -> float:
+        """6장 ① 게이트 잔차 [%] — **「막힘」·정상 행과 같은 기준·같은 임계**
+        [세션 7.53].
+
+        `model.enthalpy_balance_residual_percent` 를 그대로 쓴다. 밀폐루프에서
+        하나였던 ṁ 이 「샘」에서 환수유량 + 유출유량으로 갈리므로, 앞을 ṁ 으로
+        뒤를 `massloss_enthalpy_kW` 로 넣는다 — 둘 다 같은 Δh 를 쓰므로 합은
+        **랙을 지난 공급유량의 엔탈피 상승**과 항등이다. `massloss_flow_Lps = 0`
+        이면 `energy_balance_residual_percent(정상 해)` 와 같은 값이 된다.
+
+        `balance_residual_with_massloss_percent` 와 **다른 양이다** — 그쪽은
+        `hx_duty` 로 잰 열교환기측 잔차라 cp 오차가 유출 몫에만 실려 값이 두
+        자리 이상 작다(세션 7.53 D2). 6장 ① 판정에는 이 property 를 쓴다.
+        """
+        m_return_kgs = (
+            self.return_flow_Lps
+            * _M3_PER_LITRE
+            * coolant_density_kgm3(self.property_eval_T_C)
+        )
+        return enthalpy_balance_residual_percent(
+            m_return_kgs,
+            self.T_supply_C,
+            self.T_return_C,
+            self.rack_load_kW,
+            extra_enthalpy_kW=self.massloss_enthalpy_kW,
+        )
 
     @property
     def balance_residual_without_massloss_percent(self) -> float:

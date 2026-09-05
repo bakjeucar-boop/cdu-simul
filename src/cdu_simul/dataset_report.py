@@ -118,9 +118,9 @@ def _balance_column_rows() -> tuple[int, int]:
     """(balance 열이 채워진 행, 산출물 전체 행) — 규모 B 기준 (순수 함수) [세션 7.41].
 
     **수를 박지 않고 센다**(절대 규칙 1). 산출물 `results/cdu_dataset.csv` 는
-    `dataset.main()` 이 만드는 **규모 B** — 정상상태 행만이다. 그 안에서
-    `energy_balance_residual_percent` 를 채우는 것은 「막힘」 행뿐이고
-    「샘」 행은 비운다(`dataset.massloss_steady_rows` docstring).
+    `dataset.main()` 이 만드는 **규모 B** — 정상상태 행만이다. **세션 7.53 부터
+    「샘」 행도 채우므로 두 수가 같다** — 세는 자리를 지우지 않고 남겨 둔다(다시
+    갈리면 여기서 드러난다).
 
     행 수 세는 법은 `_steady_rows_by_leak_level()` 과 같다 — 다중 CDU 시나리오는
     CDU 마다 한 행을 낸다(5-1 「데이터셋 스키마 규약」).
@@ -131,8 +131,7 @@ def _balance_column_rows() -> tuple[int, int]:
             continue
         n_rows = 1 if spec.cdu_config == "single" else PLANT.cdu_count
         total += n_rows
-        if spec.mechanism != MECHANISM_MASSLOSS:
-            filled += n_rows
+        filled += n_rows
     return filled, total
 
 
@@ -147,19 +146,17 @@ def _gate_results() -> list[tuple[str, str, str]]:
             "(세션 1-B ※). HX duty 항등식은 구조상 0 이라 게이트에 쓰지 않았다. "
             "통과의 뜻은 「무너지지 않는다」까지이고 「정확하다」가 아니다 — "
             "실측이 없다. "
-            "**[세션 7.41] 판정 범위**: 이 판정은 산출물에서 "
+            "**[세션 7.53] 판정 범위**: 이 판정은 산출물에서 "
             "`energy_balance_residual_percent` 열이 **채워진 행**에서만 나온 것이다 — "
             f"{balance_filled:,} / {balance_total:,} 행"
             f"({100.0 * balance_filled / balance_total:.1f}%). "
-            f"나머지 {balance_total - balance_filled:,} 행은 그 열이 **비어 있고, "
-            "빈칸은 「통과」도 「잔차 0」도 아니다.** 두 무리를 가르는 것은 "
-            "`leak_model` 열이다 — `K_approx`(「막힘」)가 채운 쪽이고 "
-            "`massloss`(「샘」)가 빈 쪽이다. 41번 열 `signal_sign_caveat` 이 「샘」 "
-            "행마다 같은 취지를 싣는다: 「**`energy_balance_residual_percent` 는 "
-            "이 행에서 비어 있다** — 6장 1-B 기준은 밀폐루프 잔차이고 「샘」은 누출 "
-            "엔탈피 항 없이는 닫히지 않으므로(5-1 「「샘」 크기 수준」 한계 ⑷ · "
-            "세션 5.7-D: 빼면 최대 1.2129% · 넣으면 0.000062%) 이 행을 그 기준으로 "
-            "판정하지 않는다. 빈 값을 「잔차 0」 또는 「검사 통과」로 읽지 않는다」",
+            "**세션 7.53 이 「샘」 행을 채워 두 수가 같아졌다** — 7.41~7.52 판본은 "
+            "「샘」 행이 빈 채였고 그 판본의 비율과 나란히 읽지 않는다. 「샘」 행이 "
+            "쓰는 기준·임계는 「막힘」·정상 행과 같으며, 밀폐루프에서 하나였던 ṁ 이 "
+            "환수유량과 계통 밖으로 나간 유량으로 갈리는 몫만 누출 엔탈피 항으로 "
+            "더한다(`model.enthalpy_balance_residual_percent`). "
+            "**여기서 잰 최대 |잔차| 는 「막힘」·정상 32조합의 것이다** — 전 행의 "
+            "분포는 이 리포트가 재지 않는다",
         ),
         (
             "6장 ② T_return 방향성",

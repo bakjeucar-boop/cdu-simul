@@ -738,11 +738,11 @@ def massloss_steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
     「막힘」 +50% 해의 막힘 랙 유량 감소량을 상한으로 두라고 정한다. 코드에 숫자를
     박지 않는다(절대 규칙 1·2).
 
-    **energy balance 열은 비운다.** 6장 1-B 기준은 밀폐루프 잔차를 재는 것이고,
-    「샘」 행은 누출 엔탈피 항 없이는 닫히지 않는다(5-1 「「샘」 크기 수준」 한계 ⑷ ·
-    세션 5.7-D: 빼면 최대 1.2129% · 넣으면 0.000062%). **이 판은 그 항을 넣지
-    않는다** — 넣는 것은 스키마·게이트 결정이 따라붙는 별건이다. 대신 이 행을
-    balance 판정 대상에서 빼고, 그 사실을 `signal_sign_caveat` 이 행마다 싣는다.
+    **energy balance 열을 채운다** [세션 7.53]. 세션 7.39 는 비웠으나, 필요한
+    엔탈피 항(`massloss_enthalpy_kW`)이 이미 해에 실려 있어 **물리 모델을 고치지
+    않고** 채울 수 있었다. 기준·임계는 「막힘」·정상 행과 **같은 것**이다
+    (`model.enthalpy_balance_residual_percent` · 6장 ① <0.1%) — 밀폐루프에서
+    하나였던 ṁ 이 「샘」에서 환수유량과 유출유량으로 갈릴 뿐이다.
     """
     assert spec.massloss_topology is not None
     assert spec.massloss_size_fraction is not None
@@ -786,7 +786,7 @@ def massloss_steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
             hx_duty_kW=result.hx_duty_kW,
             secondary_share_Lps=share,
             heat_capacity_ratio=result.hx_effectiveness,
-            energy_balance_residual_percent="",
+            energy_balance_residual_percent=result.energy_balance_residual_percent,
             hydraulic_solver_ier=1 if result.hydraulic_solver_converged else 0,
             thermal_solver_converged=result.outer_solver_ier == 1,
             plant_solver_ier=plant_ier,
