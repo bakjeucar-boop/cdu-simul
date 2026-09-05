@@ -99,21 +99,21 @@ def load_dataset() -> pd.DataFrame:
 
 def branch_counts(df: pd.DataFrame) -> list[tuple[str, str, int]]:
     """(갈래, 정의, 행 수) — 7.44 D1 의 갈래를 그대로 센다."""
-    normal = (df["scenario_kind"] == "정상") & (df["leak_model"] == "K_approx")
-    blockage = (df["scenario_kind"] == "이상") & (df["leak_model"] == "K_approx")
-    massloss = df["leak_model"] == "massloss"
+    normal = (df["scenario_kind"] == "정상") & (df["anomaly_mechanism"] == "K_approx")
+    blockage = (df["scenario_kind"] == "이상") & (df["anomaly_mechanism"] == "K_approx")
+    massloss = df["anomaly_mechanism"] == "massloss"
     return [
         (
             "정상",
-            "scenario_kind=정상 · leak_model=K_approx · level=0.0",
+            "scenario_kind=정상 · anomaly_mechanism=K_approx · level=0.0",
             int(normal.sum()),
         ),
         (
             "막힘",
-            "scenario_kind=이상 · leak_model=K_approx · level>0",
+            "scenario_kind=이상 · anomaly_mechanism=K_approx · level>0",
             int(blockage.sum()),
         ),
-        ("샘", "leak_model=massloss (level 빈칸)", int(massloss.sum())),
+        ("샘", "anomaly_mechanism=massloss (level 빈칸)", int(massloss.sum())),
     ]
 
 
@@ -150,7 +150,9 @@ def select_states(
         )
     ]
 
-    blockage = base & (df["scenario_kind"] == "이상") & (df["leak_model"] == "K_approx")
+    blockage = (
+        base & (df["scenario_kind"] == "이상") & (df["anomaly_mechanism"] == "K_approx")
+    )
     for level in sorted(df.loc[blockage, "blockage_level_percent"].unique()):
         rows.append(
             (
@@ -164,7 +166,7 @@ def select_states(
             )
         )
 
-    massloss = base & (df["leak_model"] == "massloss")
+    massloss = base & (df["anomaly_mechanism"] == "massloss")
     for label, (share, pump_supply) in (
         ("샘(대표)", REP_TOPOLOGY),
         ("샘(퇴화)", DEGENERATE_TOPOLOGY),

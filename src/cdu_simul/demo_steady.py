@@ -17,7 +17,7 @@
 (랙 배관 K값 증가 = 이상 상태 「막힘」 · 절대 규칙 8). 파일럿 종료 판정 5-b 가
 **X** 이기 때문이다 — 여기 실린 구분은 「막힘」이고 **「샘」의 방향으로 읽으면
 안 된다**(세션 5.6 수력 · 세션 5.7-D 열에서 부호가 정반대로 나왔다).
-`leak_model` 표기를 함께 싣는다.
+`anomaly_mechanism` 표기를 함께 싣는다.
 
 **표시는 HTML 이 맡는다.** 이 모듈은 완성된 수치만 낸다 — 화면이 계산하지
 않게 한다. Python 의존성을 늘리지 않았다(표준 라이브러리 `json` 뿐).
@@ -193,7 +193,12 @@ CASE_CAVEATS: dict[str, str] = {
         "5-1 에 넣지 않았다. 데이터셋(58열본)은 여전히 양 끝 2수준이므로 둘을 "
         "섞어 읽지 않는다"
     ),
-    "resistance_proxy": (
+    # 세션 7.55 — 키 이름에서 `proxy` 를 뺐다. 절대 규칙 8 이 「막힘」은 「샘」의
+    # 대용(proxy)이 **아니라** 독립된 이상 상태라고 못박는데 키가 그 반대를 적고
+    # 있었다(`docs/leak-naming-map.md` 4). **값 문언은 7.33 이 이미 고쳤다.**
+    # 이 키는 `pfd.html:paintCaveats` 가 `<dt>` 로 **화면에 그대로 낸다** —
+    # 로직 층 이름이면서 표시 문언이기도 하다.
+    "resistance_blockage": (
         "resistance_increase_percent 는 **랙 배관 K값 증가**이며 이상 상태 "
         "「막힘」이다(절대 규칙 8). **「샘」(질량손실)의 대용이 아니라 독립된 "
         "이상 상태**다 — 파일럿 종료 판정 5-b 가 X 인 것이 이것이다: 여기 실린 "
@@ -204,7 +209,7 @@ CASE_CAVEATS: dict[str, str] = {
         "총유량만 보면 +50% 도 −0.16~0.37% 라 놓칠 수 있다(세션 4 관측 ③). "
         "랙별 유량·랙별 출구온도와 함께 읽는다. "
         "**이 수치도 처방도 「막힘」 것이다** — 이 화면은 「막힘」만 싣는다"
-        "(resistance_proxy 표기). 「샘」은 총유량이 **반대 방향(증가)** 으로 "
+        "(resistance_blockage 표기). 「샘」은 총유량이 **반대 방향(증가)** 으로 "
         "움직이고 랙에 국소화되지 않아 랙별 열이 어느 랙인지 가리키지 못한다"
         "(미해결 #36 · 절대 규칙 8) — 이 문언을 「샘」 쪽으로 옮겨 읽지 않는다"
     ),
@@ -283,7 +288,7 @@ def _case_header(
         "resistance_label": level.label,
         "resistance_rack_index": RESISTANCE_RACK_INDEX,
         "resistance_cdu_index": RESISTANCE_CDU_INDEX,
-        "leak_model": LEAK_MODEL_K_APPROX,
+        "anomaly_mechanism": LEAK_MODEL_K_APPROX,
         "caveats": CASE_CAVEATS,
     }
 
@@ -361,7 +366,7 @@ def build_document() -> dict[str, Any]:
         "meta": {
             "purpose": "PFD 시연용 정상상태 데이터. 표시는 HTML 이 맡는다",
             "assumption_tag": ASSUMPTION_TAG,
-            "leak_model": LEAK_MODEL_K_APPROX,
+            "anomaly_mechanism": LEAK_MODEL_K_APPROX,
             "tag_map": "demo/tag-map.md",
             "racks_per_cdu": SCENARIO.racks_per_cdu,
             "cdu_count_dual": PLANT.cdu_count,
@@ -467,8 +472,8 @@ def verify(document: dict[str, Any]) -> list[str]:
         case_id = case.get("case_id", "?")
         if case.get("caveats") != CASE_CAVEATS:
             problems.append(f"{case_id}: 표기(caveats)가 없거나 다르다")
-        if not case.get("leak_model"):
-            problems.append(f"{case_id}: leak_model 표기가 없다")
+        if not case.get("anomaly_mechanism"):
+            problems.append(f"{case_id}: anomaly_mechanism 표기가 없다")
         for cdu in case["cdus"]:
             for key in TAG_KEYS:
                 if cdu.get(key) in (None, "", []):

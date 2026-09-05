@@ -131,12 +131,15 @@ DATASET_VERSION: str = "session-7.39"
 #: 5장 「누출 시나리오(「막힘」)」). 「샘」(질량손실)은 `massloss.py`·
 #: `massloss_thermal.py` 에만 있고 데이터셋 생성 경로에 들어가지 않는다(세션 5.6).
 #: 두 기구는 총유량·주입 랙 유량의 **부호가 정반대**이므로(세션 5.6 · 미해결 #36)
-#: 이 열이 없으면 나중에 어느 쪽 데이터인지 알 수 없다. **열 이름과 값
-#: (`leak_model` · "K_approx")은 이미 나간 것이라 바꾸지 않는다**(세션 7.32 ·
+#: 이 열이 없으면 나중에 어느 쪽 데이터인지 알 수 없다. **열 이름은 세션 7.55 가
+#: `leak_model` → `anomaly_mechanism` 으로 바꿨다** — 「누출」은 상위 개념이고 모델
+#: 안의 기구는 「막힘」·「샘」이라는 절대 규칙 8 낱말 규약에 맞춘 것이며, 같은 판이
+#: 이미 쓰는 `anomaly_rack_index`·`anomaly_cdu_index` 와 접두어가 같아진다.
+#: **값("K_approx")은 이미 나간 것이라 바꾸지 않는다**(세션 7.32 ·
 #: 대응표 `docs/leak-naming-map.md`).
 LEAK_MODEL_K_APPROX: str = "K_approx"
 
-#: 「샘」(질량손실) 행의 `leak_model` 값 [세션 7.39]. **라벨 문자열 하나이고 물리
+#: 「샘」(질량손실) 행의 `anomaly_mechanism` 값 [세션 7.39]. **라벨 문자열 하나이고 물리
 #: 가정이 아니다** — 값을 `massloss` 로 적는 것은 대응표 규칙 1(「샘」 전용 이름에서
 #: `leak` 를 빼고 정의어 `massloss` 만 남긴다 · `docs/leak-naming-map.md`)이다.
 #: **「막힘」 쪽 값 `K_approx` 는 이미 나간 것이라 바꾸지 않는다**(세션 7.32).
@@ -174,7 +177,7 @@ STIMULUS_MASSLOSS_STEP: str = "massloss_step"
 #: 「샘」(질량손실) 행이 K=1.0 이라는 이유로 「정상」으로 실렸다(세션 7.34 C1).
 #: 기구는 이제 spec 이 직접 들고, 라벨은 여기서만 읽는다.
 #:
-#: **CSV 열이 아니다** — 기구를 행에 싣는 열은 `leak_model` 이다(세션 7.35 결정:
+#: **CSV 열이 아니다** — 기구를 행에 싣는 열은 `anomaly_mechanism` 이다(세션 7.35 결정:
 #: 한 값을 두 열에 두지 않는다). 세션 7.39 가 「샘」 행을 실제로 얹었다.
 MECHANISM_NONE: str = "none"
 MECHANISM_BLOCKAGE: str = "blockage"  # 「막힘」 — 배관 K값 증가
@@ -272,7 +275,7 @@ class ScenarioSpec:
 
         절대 규칙 8 이 「이상 상태는 「막힘」과 「샘」 둘이고 이 둘이 이상
         시나리오의 전부」라고 못박았으므로, 이상 여부는 `mechanism` 이 결정한다.
-        **어느 기구인지는 이 열이 갖지 않는다** — 기구 열(`leak_model`)이 이미
+        **어느 기구인지는 이 열이 갖지 않는다** — 기구 열(`anomaly_mechanism`)이 이미
         싣고 있고, 한 값을 두 열에 두면 언젠가 갈린다.
 
         **바뀐 것 둘** (이전 값 셋은 「정상 / 이상 / 누출」이었다):
@@ -500,7 +503,7 @@ def _base_row(spec: ScenarioSpec, cdu_index: int) -> dict[str, object]:
             "" if spec.mechanism == MECHANISM_MASSLOSS else LEAK.injection_rack_index
         ),
         "anomaly_cdu_index": spec.anomaly_cdu_index,
-        "leak_model": (
+        "anomaly_mechanism": (
             LEAK_MODEL_MASSLOSS
             if spec.mechanism == MECHANISM_MASSLOSS
             else LEAK_MODEL_K_APPROX

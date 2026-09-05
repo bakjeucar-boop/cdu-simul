@@ -465,7 +465,7 @@ SCHEMA_DRAFT: tuple[tuple[str, str, str], ...] = (
     (
         "scenario_kind",
         "str",
-        "정상 / 이상 — 이상 기구 유무. 어느 기구인지는 leak_model 이 싣는다. "
+        "정상 / 이상 — 이상 기구 유무. 어느 기구인지는 anomaly_mechanism 이 싣는다. "
         "유휴 부하는 5장 부하 프로파일이라 「정상」이다(세션 7.35)",
     ),
     ("regime", "str", "**steady / transient** — 사람이 정한 것 2. 섞어 읽지 않는다"),
@@ -489,7 +489,7 @@ SCHEMA_DRAFT: tuple[tuple[str, str, str], ...] = (
         "이상이 걸린 CDU 번호. 이상이 없으면 빈 값이다(세션 5.5-D · 7.39)",
     ),
     (
-        "leak_model",
+        "anomaly_mechanism",
         "str",
         "어느 기구를 모사했는가 — `K_approx`(「막힘」) / `massloss`(「샘」). "
         "**두 기구는 부호가 정반대다**(미해결 #36) — 이 열을 읽지 않고 신호를 "

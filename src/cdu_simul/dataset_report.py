@@ -334,7 +334,7 @@ OPEN_LIMITS: tuple[tuple[str, str], ...] = (
         "#36 「막힘」(K값 근사)과 「샘」(질량손실)이 같은 방향을 가리키지 않는다 "
         "(세션 5.6 · 5.6-B)",
         "`total_flow_Lps` · `pump_head_mAq` · `rack{i}_flow_Lps` — 아래 ③ 절에 "
-        "전문이 있다. `leak_model` 열이 **행마다** 어느 쪽인지 싣는다 — "
+        "전문이 있다. `anomaly_mechanism` 열이 **행마다** 어느 쪽인지 싣는다 — "
         "`K_approx`(「막힘」)와 `massloss`(「샘」)가 세션 7.39 부터 한 표에 있다",
     ),
     (
@@ -390,7 +390,7 @@ def _steady_rows_by_leak_level() -> list[tuple[float, int]]:
 
     **「샘」 행은 세지 않는다** [세션 7.39] — K값 증가율이라는 축이 없어
     `blockage_level_percent` 가 빈 값이다 — 이 표에서 빠지는 것이 맞고, 「샘」 행은
-    `leak_model` 로 고른다.
+    `anomaly_mechanism` 로 고른다.
     """
     counts: dict[float, int] = {}
     for spec in enumerate_specs():
@@ -437,7 +437,7 @@ def format_report() -> str:
         "",
         "  **위 표는 「막힘」 행만 센다** [세션 7.39] — 「샘」 행은",
         "  `blockage_level_percent` 가 **빈 값**이라(K 배수 축이 없다) 이 표에 없다.",
-        "  「샘」 행은 `leak_model == massloss` 로 고른다.",
+        "  「샘」 행은 `anomaly_mechanism == massloss` 로 고른다.",
         "",
         "  → **정상상태에서 「정상」 표본을 고르려면 `blockage_level_percent == 0` 으로",
         f"     거른다.** 그 결과가 {_steady_rows_by_leak_level()[0][1]:,} 행이다.",
@@ -520,13 +520,13 @@ def format_report() -> str:
         "  · 세션 4 게이트(96건 전수)는 **뒤집히지 않았다.** 이 데이터셋의 신호는",
         "    부호가 일관되고 수준 간 단조다 — 그 판정은 그대로 유효하다.",
         "  · **다만 그 구분은 「막힘」 안에서의 구분이다.** 세션 4 게이트가 판정한",
-        f"    행은 전부 `leak_model={LEAK_MODEL_K_APPROX}` — 배관 K값 증가, 곧",
+        f"    행은 전부 `anomaly_mechanism={LEAK_MODEL_K_APPROX}` — 배관 K값 증가, 곧",
         "    **「막힘」**이다. 「막힘」은 「샘」의 대용(proxy)이 아니라 **독립된",
         "    이상 상태**이므로(절대 규칙 8), 이 판정을 「샘」 행으로 옮겨 읽지",
         "    않는다.",
         "  · **세션 7.39 부터 이 데이터셋에 「샘」 행이 함께 있다**",
-        "    (`leak_model=massloss`). 「샘」에는 게이트가 없다 — CLAUDE.md 게이트",
-        "    표의 세션 4 는 「막힘」만 판정했다. 행마다 `leak_model` 을 보고",
+        "    (`anomaly_mechanism=massloss`). 「샘」에는 게이트가 없다 — CLAUDE.md 게이트",
+        "    표의 세션 4 는 「막힘」만 판정했다. 행마다 `anomaly_mechanism` 을 보고",
         "    어느 기구인지 갈라 읽는다.",
         "  · 질량손실(계통 밖 유출)로 모사하면 **총유량과 주입랙 통과유량의 부호가",
         "    정반대**로 나온다 — K 근사는 둘 다 감소, 질량손실은 둘 다 증가다",
@@ -611,7 +611,8 @@ def format_report() -> str:
         "  `dataset_version` 열의 **부재 자체가 5.7 이전 판본이라는 표지**다.",
         "  · 세션 7.39 에서 **「샘」(질량손실) 행이 처음 들어왔다** — 이전 판본은",
         "    전부 「막힘」(K값 증가)뿐이었다. 두 기구는 부호가 정반대이므로",
-        "    (미해결 #36) **`leak_model` 을 읽지 않고 두 판본을 나란히 읽지 않는다.**",
+        "    (미해결 #36) **`anomaly_mechanism` 을 읽지 않고 두 판본을 나란히 읽지",
+        "    않는다.**",
         "    이 판본은 **정상상태만** 담는다(규모 B) — 전이 행은 미해결 #40 이",
         "    열린 채라 붙이지 않았다. 이전 판본의 전이 행과 섞어 읽지 않는다.",
         "  · 세션 5.7 에서 M 을 8랙 계통 전체로 고쳐 **τ·t63·t95 가 8배 이동**했다 —",

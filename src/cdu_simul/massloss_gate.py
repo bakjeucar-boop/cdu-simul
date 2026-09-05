@@ -113,7 +113,7 @@ LEVEL_COLUMN: dict[str, str] = {
 
 _READ_COLUMNS: list[str] = [
     "scenario_kind",
-    "leak_model",
+    "anomaly_mechanism",
     "blockage_level_percent",
     "anomaly_cdu_index",
     "massloss_size_fraction",
@@ -141,13 +141,14 @@ def _baseline(frame: pd.DataFrame) -> pd.DataFrame:
     return base
 
 
-def signal_deltas(frame: pd.DataFrame, leak_model: str) -> pd.DataFrame:
+def signal_deltas(frame: pd.DataFrame, anomaly_mechanism: str) -> pd.DataFrame:
     """(행 · 신호) 짝마다 한 줄인 긴 표. 정상 대비 Δ 와 기대 부호를 담는다.
 
     순수 함수 — 전역 상태를 읽지 않는다.
     """
     rows = frame[
-        (frame["leak_model"] == leak_model) & (frame["scenario_kind"] == "이상")
+        (frame["anomaly_mechanism"] == anomaly_mechanism)
+        & (frame["scenario_kind"] == "이상")
     ]
     merged = rows.merge(_baseline(frame), on=list(PAIR_COLUMNS), how="left")
     if len(merged) != len(rows):
@@ -156,7 +157,7 @@ def signal_deltas(frame: pd.DataFrame, leak_model: str) -> pd.DataFrame:
     if missing:
         raise ValueError(f"기준선을 못 찾은 행 {missing}건")
 
-    level_column = LEVEL_COLUMN[leak_model]
+    level_column = LEVEL_COLUMN[anomaly_mechanism]
     pieces: list[pd.DataFrame] = []
     for signal in SIGNALS:
         after = merged[signal.column]
@@ -174,16 +175,16 @@ def signal_deltas(frame: pd.DataFrame, leak_model: str) -> pd.DataFrame:
         piece["delta_abs"] = delta
         #: 기준 C 가 보는 값 — 유량 셋만 상대 % 다(세션 4 와 같은 정의).
         piece["delta_judged"] = delta / before * 100.0 if signal.unit == "%" else delta
-        piece["expected_sign"] = _expected_sign(merged, signal, leak_model)
+        piece["expected_sign"] = _expected_sign(merged, signal, anomaly_mechanism)
         pieces.append(piece)
     return pd.concat(pieces, ignore_index=True)
 
 
 def _expected_sign(
-    merged: pd.DataFrame, signal: Signal, leak_model: str
+    merged: pd.DataFrame, signal: Signal, anomaly_mechanism: str
 ) -> pd.Series:  # type: ignore[type-arg]
     """기대 부호. 0(배치가 정한다)은 `pump_sees_supply_flow` 로 갈린다."""
-    fixed = signal.massloss_sign if leak_model == LEAK_MODEL_MASSLOSS else (
+    fixed = signal.massloss_sign if anomaly_mechanism == LEAK_MODEL_MASSLOSS else (
         signal.blockage_sign
     )
     if fixed != 0:
@@ -430,7 +431,7 @@ def _mismatch_lines(frame: pd.DataFrame) -> list[str]:
     delta = frame["total_flow_Lps"] - frame["return_flow_Lps"]
     lines = ["공급 − 환수 유량 불일치 Δ = total_flow_Lps − return_flow_Lps", "-" * 62]
     for model in (LEAK_MODEL_MASSLOSS, LEAK_MODEL_K_APPROX):
-        mask = frame["leak_model"] == model
+        mask = frame["anomaly_mechanism"] == model
         values = delta[mask]
         nonzero = values.abs() > SIGN_ZERO_TOL
         lines.append(
@@ -441,7 +442,7 @@ def _mismatch_lines(frame: pd.DataFrame) -> list[str]:
         "  · K_approx 행 수는 「막힘」 960 + 정상 320 이다 — 둘 다 밀폐루프라 "
         "공급 = 환수다."
     )
-    massloss = frame[frame["leak_model"] == LEAK_MODEL_MASSLOSS]
+    massloss = frame[frame["anomaly_mechanism"] == LEAK_MODEL_MASSLOSS]
     identity = (
         massloss["total_flow_Lps"]
         - massloss["return_flow_Lps"]
@@ -468,8 +469,10 @@ def format_report(frame: pd.DataFrame) -> str:
         "=" * 78,
         "※ " + ASSUMPTION_TAG,
         "※ 「통과」 = 모델 안에서 신호가 잡음 위에 있다. 실측 감지 가능성이 아니다.",
-        "※ energy balance 는 미판정이다 — 「샘」 행은 누출 엔탈피 항 없이 닫히지",
-        "   않는다(세션 5.7-D). 그 항을 넣는 것은 물리 모델 변경이라 범위 밖이다.",
+        "※ energy balance 는 이 판정기가 재지 않는다 — 그러나 미판정은 아니다"
+        "[세션 7.55].",
+        "   세션 7.53 이 계통 밖으로 나간 몫을 넣어 「샘」 행의 잔차를 채웠고 6장 ①",
+        "   기준·임계를 그대로 적용해 전수 통과했다. 이 리포트는 기준 A·B·C 만 잰다.",
         "",
     ]
 
