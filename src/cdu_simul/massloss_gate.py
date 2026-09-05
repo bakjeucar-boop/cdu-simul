@@ -32,10 +32,13 @@ from cdu_simul.dataset import (
     LEAK_MODEL_MASSLOSS,
 )
 
-# 「흔적 없음」(해당 없음) 경계. **새 임계값을 만들지 않으려고 세션 5.6 이 쓴 것을
-# 그대로 가져온다** — 관측 ④ 의 「다섯 양이 전부 정확히 0」 판정이 이 값으로
-# 내려졌다(`massloss.sign_summary`). 사(私)이름이라 import 가 어색하지만, 숫자를
-# 한 벌 더 적는 것보다 낫다(절대 규칙 1·2).
+# 부호를 0 으로 읽는 절대 임계. **새 임계값을 만들지 않으려고 세션 5.6 이 쓴 것을
+# 그대로 가져온다**. 사(私)이름이라 import 가 어색하지만, 숫자를 한 벌 더 적는
+# 것보다 낫다(절대 규칙 1·2).
+#
+# **세션 7.47 이후 「해당 없음」 판정에는 쓰이지 않는다** — 새 규정(기준 문서
+# 2-5-B · 커밋 `9ca4f14`)이 수치 임계를 쓰지 않는다. 남은 쓰임은 공급−환수
+# 불일치 Δ≠0 을 세는 자리 하나뿐이다(`_mismatch_lines`).
 from cdu_simul.massloss import _SIGN_ZERO_TOL as SIGN_ZERO_TOL
 
 #: 세션 4 가 쓴 잡음 임계 셋. **원본은 `tests/test_session4_gates.py:65·70·75`**
@@ -90,6 +93,12 @@ SIGNALS: tuple[Signal, ...] = (
     Signal("⑶ 누출랙 통과유량", "rack0_flow_Lps", "%", +1, -1),
     Signal("⑷ 타 랙 유량", "rack1_flow_Lps", "%", +1, +1),
     Signal("⑸ 누출랙 출구온도", "rack0_outlet_C", "K", -1, +1),
+)
+
+#: 「해당 없음」 규정이 걸리는 신호 — **수력 넷**이다(기준 문서 2-5-B ⑵).
+#: ⑸ 출구온도는 퇴화 배치에서도 물성 온도를 통해 응답하므로 덮지 않는다.
+HYDRAULIC_SIGNALS: frozenset[str] = frozenset(
+    signal.label for signal in SIGNALS if signal.unit != "K"
 )
 
 #: 기구별 「누출 수준」 열 — 기준 B 가 이 열을 따라 단조를 본다.
@@ -179,12 +188,30 @@ def _expected_sign(
     return sees_supply.map({True: -1, False: +1}).astype("int64")
 
 
+def not_applicable(long: pd.DataFrame) -> pd.Series:  # type: ignore[type-arg]
+    """「해당 없음」 — 「샘」의 수력 응답이 **항등적으로 0** 인 배치의 수력 신호.
+
+    기준 문서 2-5-B(세션 7.47 · 커밋 `9ca4f14`). **수치 임계를 쓰지 않는다** —
+    퇴화 배치(`residual_return_share == 0.0` 이고 `pump_sees_supply_flow == True`)
+    에서는 `massloss_flow_Lps` 가 수력식에서 통째로 떨어져 나간다(g=0 이라
+    환수측 잔여저항 항이 0 · 펌프가 공급유량을 본다 · `massloss.py:175-193`).
+    그 배치의 Δ 는 물성 평가 온도가 남긴 몫이지 「샘」의 수력 흔적이 아니다
+    (세션 7.46 D6).
+
+    「막힘」 행은 두 열이 빈 값이라 결코 걸리지 않는다 — 구조 자유도가 없다.
+    """
+    degenerate = (long["residual_return_share"] == 0.0) & long[
+        "pump_sees_supply_flow"
+    ].astype("boolean").fillna(False)
+    return (degenerate & long["signal"].isin(HYDRAULIC_SIGNALS)).astype(bool)
+
+
 def criterion_a(long: pd.DataFrame) -> pd.Series:  # type: ignore[type-arg]
-    """부호 일관성 — 기대 부호와 같으면 통과, 흔적이 없으면 해당 없음."""
-    trace = long["delta_abs"].abs() > SIGN_ZERO_TOL
+    """부호 일관성 — 기대 부호와 같으면 통과. 퇴화 배치의 수력 신호는 해당 없음."""
+    skip = not_applicable(long)
     correct = (long["delta_abs"] > 0) == (long["expected_sign"] > 0)
     return pd.Series(
-        [NA if not t else (PASS if c else FAIL) for t, c in zip(trace, correct)],
+        [NA if s else (PASS if c else FAIL) for s, c in zip(skip, correct)],
         index=long.index,
     )
 
@@ -193,10 +220,10 @@ def criterion_c(long: pd.DataFrame, smallest: float) -> pd.Series:  # type: igno
     """잡음 대비 — 가장 작은 누출 수준의 행만 본다."""
     rows = long[long["level"] == smallest]
     threshold = rows["unit"].map(NOISE_THRESHOLD)
-    trace = rows["delta_abs"].abs() > SIGN_ZERO_TOL
+    skip = not_applicable(rows)
     loud = rows["delta_judged"].abs() > threshold
     return pd.Series(
-        [NA if not t else (PASS if v else FAIL) for t, v in zip(trace, loud)],
+        [NA if s else (PASS if v else FAIL) for s, v in zip(skip, loud)],
         index=rows.index,
     )
 
@@ -204,17 +231,24 @@ def criterion_c(long: pd.DataFrame, smallest: float) -> pd.Series:  # type: igno
 def criterion_b(
     long: pd.DataFrame, group_columns: tuple[str, ...]
 ) -> pd.Series:  # type: ignore[type-arg]
-    """수준 간 엄격 단조 — 판정 단위는 (무리 · 신호) 짝이다."""
+    """수준 간 엄격 단조 — 판정 단위는 (무리 · 신호) 짝이다.
+
+    배치는 무리 안에서 상수이므로(무리 키에 구조 자유도 셋이 들어간다)
+    「해당 없음」도 무리 통째로 갈린다.
+    """
 
     def verdict(group: pd.DataFrame) -> str:
-        values = group.sort_values("level")["delta_abs"].abs().to_numpy()
-        if (values <= SIGN_ZERO_TOL).all():
+        if bool(group["na"].all()):
             return NA
+        values = group.sort_values("level")["delta_abs"].abs().to_numpy()
         rising = all(values[i] > values[i - 1] for i in range(1, len(values)))
         return PASS if rising else FAIL
 
+    flagged = long.assign(na=not_applicable(long))
     keys = [*group_columns, "signal"]
-    return long.groupby(keys, dropna=False)[["level", "delta_abs"]].apply(verdict)
+    return flagged.groupby(keys, dropna=False)[["level", "delta_abs", "na"]].apply(
+        verdict
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -333,10 +367,16 @@ def _pass_rate_lines(
 
 
 def _span_lines(rows: pd.DataFrame) -> list[str]:
-    """신호별 |Δ| 최소~최대 (그 신호의 단위 그대로)."""
+    """신호별 |Δ| 최소~최대 — **판정단위**(`delta_judged`)로 찍는다.
+
+    미해결 #65(세션 7.47 에서 닫음): 이 표는 `delta_abs`(원단위 — 유량은 L/s)를
+    찍으면서 `unit`(판정단위 — 유량은 %)을 라벨로 붙였다. 유량 셋만 어긋났다
+    (양정 mAq · 온도 K 는 원단위가 곧 판정단위다). 판정이 보는 값과 같은
+    `delta_judged` 를 찍는 쪽으로 맞춘다 — 라벨과 값이 이제 같은 단위다.
+    """
     lines = []
     for label, group in rows.groupby("signal"):
-        magnitude = group["delta_abs"].abs()
+        magnitude = group["delta_judged"].abs()
         lines.append(
             f"    {label:<18} {len(group):>6,}건 · "
             f"{magnitude.min():.3e} ~ {magnitude.max():.3e} [{group['unit'].iloc[0]}]"
@@ -347,12 +387,13 @@ def _span_lines(rows: pd.DataFrame) -> list[str]:
 def _degenerate_lines(
     massloss_long: pd.DataFrame, blockage_long: pd.DataFrame
 ) -> list[str]:
-    """퇴화 배치의 Δ 가 얼마나 되는가 — 「해당 없음」이 왜 0 인지의 재료.
+    """퇴화 배치의 Δ 가 얼마나 되는가 — 「해당 없음」으로 세는 몫의 크기.
 
     세션 5.6 관측 ④ 는 `g=0 · 펌프=공급` 배치에서 수력 다섯 양이 **정확히 0** 이라고
     했다(수력 한정 · 물성 37 ℃ 고정). 데이터셋의 「샘」 해는 열까지 물린 것이라
-    그 배치에서도 Δ 가 0 이 아니다. 이 절은 그 크기를 재기만 한다 — **원인을
-    가르지 않는다**(경로 차인지 물성 결합인지는 재계산 없이 갈리지 않는다).
+    그 배치에서도 Δ 가 0 이 아니다. **세션 7.46 이 그 갈래를 갈랐다** — 기준선
+    경로 차의 몫은 0 이고 남는 것은 물성 평가 온도 하나다(D6). 세션 7.47 의
+    「해당 없음」 규정이 이 절의 ㄱ 을 통째로 덮는다.
     """
     degenerate = massloss_long[
         (massloss_long["residual_return_share"] == 0.0)
@@ -361,19 +402,22 @@ def _degenerate_lines(
     ]
     neighbour = blockage_long[~blockage_long["leak_cdu"]]
     return [
-        "퇴화 배치의 Δ 크기 — 「해당 없음」이 0건인 까닭 (재기만 한다)",
+        "퇴화 배치의 Δ 크기 — 「해당 없음」으로 세는 몫 (판정단위 · 재기만 한다)",
         "-" * 62,
         "  ㄱ. 「샘」 · g=0 · 펌프=공급 · 이상 기구를 진 CDU:",
         *_span_lines(degenerate),
         "  ㄴ. 대조 — 「막힘」의 **이웃 CDU**(같은 solver 경로 · 2차측으로만 물린다):",
         *_span_lines(neighbour),
-        f"  · 선기재한 「흔적 없음」 경계는 {SIGN_ZERO_TOL:.0e} 이고 ㄱ 은 그보다",
-        "    여러 자리 크다 — 그래서 퇴화 배치가 「해당 없음」이 아니라 「실패」로",
-        "    세어졌다. **기준을 고치지 않는다**(결과를 보고 기준을 고치지 않는다).",
-        "  · ㄴ 의 최대가 ㄱ 의 최대와 **한 자리 안**이라는 것은 ㄱ 을 기준선 경로",
-        "    차만으로 설명할 수 없다는 뜻이다 — ㄴ 은 기준선과 **같은 경로**로 풀린",
-        "    행이고 2차측 결합이 물성을 통해 수력을 이만큼 움직인다. 다만 ㄱ 의",
-        "    크기를 경로 차와 물성 결합으로 **가르지는 못했다**(재계산 필요 · 범위 밖).",
+        "  · ㄱ 은 0 이 아니지만 **「샘」의 수력 응답이 아니다.** 세션 7.46 이 갈랐다:",
+        "    기준선 경로 차의 몫은 배치 6 전수에서 0(g=0.5 의 1.147813e-14 % 는",
+        "    부동소수 잡음)이고, 남는 채널은 **물성 평가 온도 하나**다(D6 — 온도만",
+        "    옮긴 예측이 실제를 차 0.000e+00 로 덮는다). 단일 CDU 행에는 2차측",
+        "    결합이 없다 — 1차측 물성 온도 고정점이 그 채널이다.",
+        "  · 그래서 세션 7.47 이 ㄱ 을 「해당 없음」으로 규정했다(기준 문서 2-5-B).",
+        "    **수치 임계로 가른 것이 아니라 배치로 갈랐다.**",
+        "  · ㄴ 의 최대가 ㄱ 의 최대와 **한 자리 안**이다 — ㄴ 은 기준선과 같은 경로로",
+        "    풀린 행이고, 두 크기가 같은 자리라는 관측은 그대로 둔다(ㄴ 은 판정 대상이",
+        "    아니라 대조다).",
     ]
 
 
@@ -414,6 +458,9 @@ def format_report(frame: pd.DataFrame) -> str:
     lines: list[str] = [
         "=" * 78,
         "세션 7.45 — 「샘」(질량손실) 게이트 판정 (판정 기준 선기재 · 커밋 3001588)",
+        "  · 「해당 없음」 규정만 세션 7.47 이 물리로 다시 세웠다(커밋 9ca4f14) —",
+        "    수치 임계가 아니라 「샘의 수력 응답이 항등적으로 0 인 배치」로 가른다.",
+        "    세션 7.45 가 낸 건수는 옛 규정(|Δ|≤1e-12)의 것이라 아래와 다르다.",
         "=" * 78,
         "※ " + ASSUMPTION_TAG,
         "※ 「통과」 = 모델 안에서 신호가 잡음 위에 있다. 실측 감지 가능성이 아니다.",
