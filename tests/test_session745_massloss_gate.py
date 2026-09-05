@@ -140,16 +140,18 @@ def dataset() -> pd.DataFrame:
     return read_dataset(CSV_PATH)
 
 
-@pytest.mark.parametrize("leak_model", [LEAK_MODEL_MASSLOSS, LEAK_MODEL_K_APPROX])
+@pytest.mark.parametrize("anomaly_mechanism", [LEAK_MODEL_MASSLOSS, LEAK_MODEL_K_APPROX])
 def test_every_abnormal_row_finds_its_baseline(
-    dataset: pd.DataFrame, leak_model: str
+    dataset: pd.DataFrame, anomaly_mechanism: str
 ) -> None:
     """짝짓는 열 여덟이 이상 행마다 정상 행 하나를 정확히 집는다.
 
     집지 못하면 `signal_deltas` 가 예외를 던진다(조용히 넘어가지 않는다).
     """
-    long = signal_deltas(dataset, leak_model)
-    rows = (dataset["leak_model"] == leak_model) & (dataset["scenario_kind"] == "이상")
+    long = signal_deltas(dataset, anomaly_mechanism)
+    rows = (dataset["anomaly_mechanism"] == anomaly_mechanism) & (
+        dataset["scenario_kind"] == "이상"
+    )
     assert len(long) == int(rows.sum()) * len(SIGNALS)
     assert long["delta_abs"].notna().all()
 
@@ -171,7 +173,10 @@ def test_report_carries_the_assumption_notice(dataset: pd.DataFrame) -> None:
     report = format_report(dataset)
     assert "실측 아님" in report
     assert "실측 감지 가능성이 아니다" in report
-    assert "energy balance 는 미판정" in report
+    # 세션 7.55 — 「미판정」 문언을 7.53 의 판정 결과에 맞췄다. 이 assert 가 지키는
+    # 것은 **리포트가 balance 상태를 밝힌다**이지 그 상태가 「미판정」이라는 것이
+    # 아니다(세션 7.54 가 머리 docstring 을 먼저 같은 뜻으로 고쳤다).
+    assert "energy balance 는 이 판정기가 재지 않는다" in report
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -268,7 +268,7 @@ def test_criterion_d_holds_for_massloss_branch() -> None:
     assert row["blockage_level_percent"] == "", "「샘」 행에 K 증가율이 실렸다"
     assert row["anomaly_rack_index"] == "", "「샘」 행에 랙 번호가 실렸다"
     assert row["anomaly_cdu_index"] == LEAK_CDU_INDEX
-    assert row["leak_model"] == LEAK_MODEL_MASSLOSS
+    assert row["anomaly_mechanism"] == LEAK_MODEL_MASSLOSS
 
     for name in REQUIRED_PROVENANCE:
         value = row.get(name)
