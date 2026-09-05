@@ -18,9 +18,9 @@
 
 | 갈래 | 정의 (CSV 열과 값) | 행 수 |
 |---|---|---|
-| 정상 | scenario_kind=정상 · leak_model=K_approx · level=0.0 | 320 |
-| 막힘 | scenario_kind=이상 · leak_model=K_approx · level>0 | 960 |
-| 샘 | leak_model=massloss (level 빈칸) | 13,824 |
+| 정상 | scenario_kind=정상 · anomaly_mechanism=K_approx · level=0.0 | 320 |
+| 막힘 | scenario_kind=이상 · anomaly_mechanism=K_approx · level>0 | 960 |
+| 샘 | anomaly_mechanism=massloss (level 빈칸) | 13,824 |
 | 합 |  | 15,104 |
 
 「유휴」는 별도 갈래가 아니다 — 위 세 갈래 안의 `load_percent=20.0` 행이다. 5장 부하 「유휴 20 % ~ 정격 100 %」를 그대로 읽은 것이라 **새 값이 0개**다.
