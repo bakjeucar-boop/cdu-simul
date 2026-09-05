@@ -113,7 +113,7 @@ feasibility(무너지지 않는가)만 본다. 정확도 검증은 파일럿 종
 | 세션 | 대상 | 게이트 |
 |---|---|---|
 | 1-A | 저장소 clone · 가상환경 · 저장소 골격 · 5장 가정치 전사(`assumptions.py`) · CoolProp 래퍼 · `PROCEED.md`·`daily_brief.py` 초기 구성 · 문서 4종 커밋 | **게이트 없음** — 물리 모델이 없다. 환경 스모크 테스트(import·Python 버전·CoolProp 물성 조회)만 돌리고, 이것을 feasibility 통과로 적지 않는다 |
-| 1-B | 단일 랙 + 단일 CDU, 2차측 고정온도, 정상상태 모델 | energy balance 오차 <0.1% |
+| 1-B | 단일 랙 + 단일 CDU, 2차측 고정온도, 정상상태 모델. **「샘」 행 13,824건도 같은 식·같은 임계로 판정돼 전수 통과했다**(세션 7.53 — 잔차 −0.005087 ~ −0.004933 % · \|최대\| 0.005087 % · 임계 초과 0건 · 빈칸 0. 「막힘」·정상 1,280행은 \|최대\| 0.005086 % 로 같은 자리다). 식은 공용 알맹이 `model.enthalpy_balance_residual_percent` 하나이고, 「샘」은 밀폐루프에서 하나였던 ṁ 이 환수유량 + 유출유량으로 갈리는 몫만 더한다. **통과의 뜻은 「상수 cp 선형화가 CoolProp 엔탈피 차와 어긋나지 않는다」까지 — 모델 안의 정합성이지 실측 정확도가 아니다** | energy balance 오차 <0.1% |
 | 1-C | 저장소 위생 정비 (lint·타입검사 도입 · 미해결 위생항목 정리) | **게이트 없음** — 물리 모델을 건드리지 않는다. 기존 테스트가 전부 그대로 통과하는 것만 확인한다 |
 | 2 | 시간축 추가 (`solve_ivp`) | 부하 변화에 대한 T_return이 물리적으로 타당한 방향(상승)으로 반응 |
 | 3 | 랙 개수 확장 | 헤더 압력평형 기반 유량분배(`fsolve`) 수렴, 극단 케이스(부하 0/최대) 비발산 |
@@ -154,9 +154,11 @@ python -m venv .venv
 #   · 무거운 파일은 단독 조각으로 뺀다.
 #   · **백그라운드로 넘기지 않는다**(#57) — 상한을 넘으면 도구가 자동으로 넘긴다.
 #
-#   세션 7.39 실측 (「샘」 행이 얹힌 뒤 · 1,333건 전부 통과):
+#   세션 7.39 실측 (「샘」 행이 얹힌 뒤) · 조각 합 **1,343건**
+#   (세션 7.53 — 그때까지 목록에서 빠져 있던 test_session745_massloss_gate.py
+#    10건 · 6 s 를 뒤 조각에 넣어 15파일 전수가 된 수다. 시간은 다시 재지 않았다):
 .venv/Scripts/python.exe -m pytest tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 7파일 · 392건 · 89 s (×1.25 = 111 s)
-.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py   # 뒤 6파일 · 771건 · 151 s (×1.25 = 189 s)
+.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py tests/test_session745_massloss_gate.py   # 뒤 7파일 · 781건 · 157 s (×1.25 = 196 s)
 .venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 · 324 s (×1.25 = 405 s) — 단독 조각
 #
 #   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다**(세션 7.39 재측) — 조각별 최대가
