@@ -1,41 +1,71 @@
-"""세션 7.49 — 네 상태(정상·유휴·막힘·샘)의 운전 결과값 표 (뽑는 판).
+"""세션 7.49·7.50 — 네 상태(정상·유휴·막힘·샘)의 운전 결과값 표.
 
-**계산하지 않는다.** 물리 모델을 한 줄도 부르지 않고 `results/cdu_dataset.csv`
-를 읽어 고르고 모으기만 한다. **판정하지 않는다** — 「신호가 있다·없다」를
-적지 않고 값만 놓는다.
+**표는 CSV 에서 뽑기만 한다.** 표의 수는 전부 `results/cdu_dataset.csv` 에서
+읽은 것이고 단위 환산이 없다. **판정하지 않는다** — 「신호가 있다·없다」를 적지
+않고 값만 놓는다.
 
 **평균으로 뭉개지 않는다.** 가정치 축이 여섯이라 한 상태 안에도 여러 행이
-있으므로, 대표 조합 하나를 고정해 **행 하나**를 집어 낸다(`FIXED`·`REP_*`).
-어느 조합인지는 표 머리에 적힌다.
+있으므로, 대표 조합 하나를 고정해 **행 하나**를 집어 낸다(`_one_row`).
+
+세션 7.50 이 바꾼 것 둘:
+⑴ 표를 **안 ㄴ 하나로 고정**했다(안 ㄱ 은 지웠다 · C2).
+⑵ 대표 조합을 **5장 범위의 양 끝 두 벌**(`ENDS`)로 냈다 — 중점은 만들지 않는다.
+
+**한 곳만 물리 모델을 부른다** — C5(퇴화 배치의 총유량 차) 절이다. 그 절은
+CSV 를 덮지 않고 이 문서에 수를 적기만 한다.
 
 **모든 수치는 가정값 기반이며 실측이 아니다.**
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
+
+from cdu_simul.dataset import _range_axis_values
+from cdu_simul.hydraulics import rated_property_temperature_C
+from cdu_simul.massloss import (
+    SWEEP_FRACTIONS,
+    MassLossTopology,
+    solve_massloss,
+)
+from cdu_simul.massloss_thermal import massloss_sizes_Lps, solve_massloss_steady
+from cdu_simul.model import CduCase, default_cdu_cases
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CSV_PATH = REPO_ROOT / "results" / "cdu_dataset.csv"
 OUTPUT_PATH = REPO_ROOT / "docs" / "session749-state-table.md"
 
-#: 고정한 대표 조합 — **5장 범위의 낮은 쪽 끝**으로 통일한다(중점을 만들지 않는다).
-#: 값은 전부 CSV 열에 있는 것이고 이 판이 새로 만든 숫자가 아니다.
-FIXED: dict[str, object] = {
-    "cdu_config": "single",  # 단일 CDU — 다중은 이웃 CDU 뜻이 안 정해졌다(7.45)
-    "cdu_index": 0,
-    "pump_head_rated_mAq": 20.0,  # Range(20, 30) 의 낮은 끝
-    "branch_dp_rated_mAq": 2.0,  # Range(2, 3) 의 낮은 끝
-    "valve_dp_rated_mAq": 3.0,  # Range(3, 5) 의 낮은 끝
-    "ntu": 2.0,  # Range(2, 3) 의 낮은 끝
-    "T_secondary_supply_C": 27.0,  # Range(27, 30) 의 낮은 끝
+#: 어느 조합에서도 같은 고정 — 단일 CDU 하나.
+#: 다중 CDU 는 이웃 CDU 의 기대 부호가 안 정해졌다(7.45).
+FIXED_COMMON: dict[str, object] = {"cdu_config": "single", "cdu_index": 0}
+
+#: 5장 범위의 **양 끝 두 벌**. 값은 전부 CSV 열에 실제로 있는 것이고
+#: 이 판이 새로 만든 숫자가 아니다 — 각 열의 고유값이 정확히 이 둘뿐이다.
+#: 중점을 만들지 않는다.
+ENDS: dict[str, dict[str, float]] = {
+    "low": {
+        "pump_head_rated_mAq": 20.0,  # Range(20, 30) 의 낮은 끝
+        "branch_dp_rated_mAq": 2.0,  # Range(2, 3) 의 낮은 끝
+        "valve_dp_rated_mAq": 3.0,  # Range(3, 5) 의 낮은 끝
+        "ntu": 2.0,  # Range(2, 3) 의 낮은 끝
+        "T_secondary_supply_C": 27.0,  # Range(27, 30) 의 낮은 끝
+    },
+    "high": {
+        "pump_head_rated_mAq": 30.0,  # Range(20, 30) 의 높은 끝
+        "branch_dp_rated_mAq": 3.0,  # Range(2, 3) 의 높은 끝
+        "valve_dp_rated_mAq": 5.0,  # Range(3, 5) 의 높은 끝
+        "ntu": 3.0,  # Range(2, 3) 의 높은 끝
+        "T_secondary_supply_C": 30.0,  # Range(27, 30) 의 높은 끝
+    },
 }
 
+END_LABELS: dict[str, str] = {"low": "낮은 끝", "high": "높은 끝"}
+
 #: 「샘」 구조 자유도 여섯 배치 중 대표 — `g=0` · 펌프=환수.
-#: 퇴화 배치와 **한 자리만 다르게** 골랐다(펌프 위치). 둘을 나란히 놓으면
-#: 퇴화의 원인이 펌프 위치라는 것이 표에서 바로 보인다.
+#: 퇴화 배치와 **한 자리만 다르게** 골랐다(펌프 위치).
 REP_TOPOLOGY: tuple[float, bool] = (0.0, False)
 #: 퇴화 배치 — `g=0` · 펌프=공급. 수력이 「샘」을 못 본다(5-1 한계 ⑴ · 7.46·7.47).
 DEGENERATE_TOPOLOGY: tuple[float, bool] = (0.0, True)
@@ -58,6 +88,8 @@ VALUE_COLUMNS: tuple[tuple[str, str], ...] = (
 #: 값 표에만 붙는 랙 요약 두 열 — 랙 여덟을 다 싣지 않기 위한 줄임이다.
 RACK_FLOW_COLUMNS = tuple(f"rack{i}_flow_Lps" for i in range(8))
 RACK_OUTLET_COLUMNS = tuple(f"rack{i}_outlet_C" for i in range(8))
+
+Row = tuple[str, str, str, "pd.Series[float]"]
 
 
 def load_dataset() -> pd.DataFrame:
@@ -85,14 +117,16 @@ def branch_counts(df: pd.DataFrame) -> list[tuple[str, str, int]]:
     ]
 
 
-def _fixed_mask(df: pd.DataFrame) -> pd.Series:
+def _fixed_mask(df: pd.DataFrame, end: str) -> "pd.Series[bool]":
     mask = pd.Series(True, index=df.index)
-    for column, value in FIXED.items():
+    for column, value in (FIXED_COMMON | ENDS[end]).items():
         mask &= df[column] == value
     return mask
 
 
-def _one_row(df: pd.DataFrame, mask: pd.Series, what: str) -> pd.Series:
+def _one_row(
+    df: pd.DataFrame, mask: "pd.Series[bool]", what: str
+) -> "pd.Series[float]":
     """조건에 맞는 행이 **정확히 하나**인지 확인하고 그 행을 낸다."""
     picked = df[mask]
     if len(picked) != 1:
@@ -103,19 +137,16 @@ def _one_row(df: pd.DataFrame, mask: pd.Series, what: str) -> pd.Series:
 
 
 def select_states(
-    df: pd.DataFrame, load_percent: float
-) -> list[tuple[str, str, pd.Series]]:
-    """한 부하 수준에서 (상태, 수준, 행) 목록을 낸다."""
-    base = _fixed_mask(df) & (df["load_percent"] == load_percent)
-    rows: list[tuple[str, str, pd.Series]] = [
+    df: pd.DataFrame, end: str, load_percent: float
+) -> list[tuple[str, str, "pd.Series[float]"]]:
+    """한 끝·한 부하 수준에서 (상태, 수준, 행) 목록을 낸다."""
+    base = _fixed_mask(df, end) & (df["load_percent"] == load_percent)
+    where = f"{end} @{load_percent}%"
+    rows: list[tuple[str, str, "pd.Series[float]"]] = [
         (
             "정상",
             "—",
-            _one_row(
-                df,
-                base & (df["scenario_kind"] == "정상"),
-                f"정상 @{load_percent}%",
-            ),
+            _one_row(df, base & (df["scenario_kind"] == "정상"), f"정상 {where}"),
         )
     ]
 
@@ -128,7 +159,7 @@ def select_states(
                 _one_row(
                     df,
                     blockage & (df["leak_level_percent"] == level),
-                    f"막힘 {level} @{load_percent}%",
+                    f"막힘 {level} {where}",
                 ),
             )
         )
@@ -151,14 +182,14 @@ def select_states(
                     _one_row(
                         df,
                         topology & (df["massloss_size_fraction"] == size),
-                        f"{label} {size} @{load_percent}%",
+                        f"{label} {size} {where}",
                     ),
                 )
             )
     return rows
 
 
-def _value(row: pd.Series, column: str) -> float:
+def _value(row: "pd.Series[float]", column: str) -> float:
     """CSV 값 하나. `massloss_flow_Lps` 의 빈칸은 0 으로 읽는다.
 
     빈칸은 K_approx 행(질량보존)에서만 나오고, 전 15,104행에서
@@ -169,7 +200,7 @@ def _value(row: pd.Series, column: str) -> float:
     return 0.0 if pd.isna(value) else float(value)
 
 
-def _spread(row: pd.Series, columns: tuple[str, ...]) -> float:
+def _spread(row: "pd.Series[float]", columns: tuple[str, ...]) -> float:
     values = [float(row[c]) for c in columns]
     return max(values) - min(values)
 
@@ -183,7 +214,7 @@ def _md_table(header: list[str], body: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
-def value_table(rows: list[tuple[str, str, str, pd.Series]]) -> str:
+def value_table(rows: list[Row]) -> str:
     """값 표 — 상태별 운전 결과값 + 랙 요약 두 열."""
     header = ["상태", "수준", "부하 %"]
     header += [name for name, _ in VALUE_COLUMNS]
@@ -198,49 +229,226 @@ def value_table(rows: list[tuple[str, str, str, pd.Series]]) -> str:
     return _md_table(header, body)
 
 
-def delta_table(
-    rows: list[tuple[str, str, str, pd.Series]], bases: list[pd.Series]
-) -> str:
+def _delta(row: "pd.Series[float]", base: "pd.Series[float]", column: str) -> float:
+    return _value(row, column) - _value(base, column)
+
+
+def _delta_cell(delta: float, reference: float) -> str:
+    if reference == 0.0:
+        return f"{delta:+.4f} (—)"
+    return f"{delta:+.4f} ({delta / reference * 100.0:+.2f} %)"
+
+
+def delta_table(rows: list[Row], bases: list["pd.Series[float]"]) -> str:
     """차이 표 — 각 칸은 `절대 (상대 %)`. 부호를 살린다."""
     header = ["상태", "수준", "부하 %"] + [name for name, _ in VALUE_COLUMNS]
     body = []
     for (state, level, load, row), base in zip(rows, bases, strict=True):
         cells = [state, level, load]
-        for _, col in VALUE_COLUMNS:
-            delta = _value(row, col) - _value(base, col)
-            reference = _value(base, col)
-            if reference == 0.0:
-                cells.append(f"{delta:+.4f} (—)")
-            else:
-                cells.append(f"{delta:+.4f} ({delta / reference * 100.0:+.2f} %)")
+        cells += [
+            _delta_cell(_delta(row, base, col), _value(base, col))
+            for _, col in VALUE_COLUMNS
+        ]
         body.append(cells)
     return _md_table(header, body)
 
 
-def _plan_a(df: pd.DataFrame) -> list[tuple[str, str, str, pd.Series]]:
-    """안 ㄱ — 정상을 부하로 갈라 「정상(정격)」·「유휴」 둘로 세운다.
-
-    막힘·샘은 정격(100 %)에 놓는다 — 20 % 쪽은 안 ㄴ 에 있다.
-    """
-    rated = select_states(df, RATED_LOAD)
-    idle_normal = select_states(df, IDLE_LOAD)[0]
-    rows: list[tuple[str, str, str, pd.Series]] = [
-        ("정상(정격)", "—", f"{RATED_LOAD:g}", rated[0][2]),
-        ("유휴", "—", f"{IDLE_LOAD:g}", idle_normal[2]),
-    ]
-    rows += [(s, lv, f"{RATED_LOAD:g}", r) for s, lv, r in rated[1:]]
-    return rows
-
-
-def _plan_b(df: pd.DataFrame) -> list[tuple[str, str, str, pd.Series]]:
+def plan_rows(df: pd.DataFrame, end: str) -> list[Row]:
     """안 ㄴ — 부하를 상태가 아니라 축으로 둔다. 네 상태를 부하 두 수준에서 낸다."""
-    rows: list[tuple[str, str, str, pd.Series]] = []
+    rows: list[Row] = []
     for load in (RATED_LOAD, IDLE_LOAD):
-        rows += [(s, lv, f"{load:g}", r) for s, lv, r in select_states(df, load)]
+        rows += [(s, lv, f"{load:g}", r) for s, lv, r in select_states(df, end, load)]
     return rows
 
 
-def _solver_flags(rows: list[tuple[str, str, str, pd.Series]]) -> str:
+def plan_bases(df: pd.DataFrame, end: str, rows: list[Row]) -> list["pd.Series[float]"]:
+    """차이의 기준 — **같은 부하의 정상 행**이다."""
+    normal = {
+        load: select_states(df, end, load)[0][2] for load in (RATED_LOAD, IDLE_LOAD)
+    }
+    return [normal[float(load)] for _, _, load, _ in rows]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C4 — 양 끝 대조. **판정하지 않는다.** 값이 어디로 움직이는지만 적는다
+# ─────────────────────────────────────────────────────────────────────────────
+def _paired_deltas(
+    df: pd.DataFrame,
+) -> list[tuple[str, str, str, dict[str, tuple[float, float]]]]:
+    """같은 (상태·수준·부하) 를 양 끝에서 짝지어 Δ 두 개를 낸다."""
+    low, high = (plan_rows(df, e) for e in ("low", "high"))
+    base_low = plan_bases(df, "low", low)
+    base_high = plan_bases(df, "high", high)
+    paired = []
+    for (state, level, load, r_lo), b_lo, (s2, lv2, ld2, r_hi), b_hi in zip(
+        low, base_low, high, base_high, strict=True
+    ):
+        if (state, level, load) != (s2, lv2, ld2):
+            raise ValueError(f"양 끝 행이 짝지어지지 않는다: {state}/{level}/{load}")
+        deltas = {
+            col: (_delta(r_lo, b_lo, col), _delta(r_hi, b_hi, col))
+            for _, col in VALUE_COLUMNS
+        }
+        paired.append((state, level, load, deltas))
+    return paired
+
+
+def end_compare_table(df: pd.DataFrame) -> str:
+    """각 칸은 `Δ낮은끝 → Δ높은끝` (절대값, 정상 대비)."""
+    header = ["상태", "수준", "부하 %"] + [name for name, _ in VALUE_COLUMNS]
+    body = []
+    for state, level, load, deltas in _paired_deltas(df):
+        cells = [state, level, load]
+        cells += [
+            f"{deltas[col][0]:+.4f} → {deltas[col][1]:+.4f}" for _, col in VALUE_COLUMNS
+        ]
+        body.append(cells)
+    return _md_table(header, body)
+
+
+def sign_flip_lines(df: pd.DataFrame) -> list[str]:
+    """부호가 뒤집히는 자리 — 양 끝에서 Δ 의 부호가 갈리는 칸만 센다.
+
+    부호는 `0.0` 을 제 갈래로 둔다(양수·0·음수 셋). 0 은 「뒤집힘」이 아니라
+    **부호가 없는 것**이라, 0 이 낀 짝은 「0 을 지난다」로 따로 적는다.
+    """
+    flips: list[str] = []
+    through_zero: list[str] = []
+    for state, level, load, deltas in _paired_deltas(df):
+        for name, col in VALUE_COLUMNS:
+            lo, hi = deltas[col]
+            where = f"{state} · {level} · 부하 {load} % · {name}: {lo:+.4e} → {hi:+.4e}"
+            if lo * hi < 0.0:
+                flips.append(where)
+            elif (lo == 0.0) != (hi == 0.0):
+                through_zero.append(where)
+    lines = [f"- **부호가 뒤집히는 칸: {len(flips)}개**"]
+    lines += [f"  - {w}" for w in flips] or ["  - (없다)"]
+    lines.append(f"- **한쪽 끝에서만 정확히 0 인 칸: {len(through_zero)}개**")
+    lines += [f"  - {w}" for w in through_zero] or ["  - (없다)"]
+    return lines
+
+
+def magnitude_table(df: pd.DataFrame) -> str:
+    """신호 크기가 어느 방향으로 움직이는가 — |Δ| 를 상태별·신호별로 센다.
+
+    정상 행(Δ 가 정의상 0)은 세지 않는다.
+    """
+    states = ("막힘", "샘(대표)", "샘(퇴화)")
+    counts: dict[tuple[str, str], list[int]] = {
+        (state, col): [0, 0, 0] for state in states for _, col in VALUE_COLUMNS
+    }
+    for state, _level, _load, deltas in _paired_deltas(df):
+        if state not in states:
+            continue
+        for _, col in VALUE_COLUMNS:
+            lo, hi = (abs(v) for v in deltas[col])
+            bucket = 0 if hi > lo else (1 if hi < lo else 2)
+            counts[(state, col)][bucket] += 1
+    header = ["신호"] + [f"{s} (커짐/작아짐/같음)" for s in states]
+    body = [
+        [name] + ["/".join(str(n) for n in counts[(state, col)]) for state in states]
+        for name, col in VALUE_COLUMNS
+    ]
+    return _md_table(header, body)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C5 — 퇴화 배치(`g=0` · 펌프=공급)의 총유량 차. **물리 모델을 부르는 유일한 절**
+# ─────────────────────────────────────────────────────────────────────────────
+#: caveat 문언이 나오는 자리 — 이 판은 **고치지 않는다**(확인만 한다).
+CAVEAT_SOURCE = "src/cdu_simul/dataset_plan.py:606-618 `MASSLOSS_PROVENANCE`"
+
+
+def _end_case(end: str, load_percent: float) -> CduCase:
+    """`ENDS[end]` 와 값이 같은 `default_cdu_cases()` 조합 하나를 집는다."""
+    wanted = ENDS[end]
+    picked = [
+        case
+        for case in default_cdu_cases()
+        if _range_axis_values(case) == wanted
+    ]
+    if len(picked) != 1:
+        raise ValueError(f"{end}: 32조합에서 {len(picked)}개가 집혔다")
+    return replace(picked[0], load_percent=load_percent)
+
+
+def degenerate_lines(df: pd.DataFrame, end: str = "low") -> list[str]:
+    """세 기준선에서 잰 퇴화 배치의 총유량 차 — 값만 적는다.
+
+    ㄱ. **CSV · K_approx 정상 행** — 7.49 표가 쓴 기준선. 계산하지 않는다.
+    ㄴ. **같은 배치의 Q=0 해 · 열까지 물린 것**(`solve_massloss_steady`)
+        — 데이터셋의 「샘」 해가 실제로 도는 경로다.
+    ㄷ. **같은 배치의 Q=0 해 · 수력 한정 · 물성 온도 고정**(`solve_massloss`)
+        — caveat 의 「정확히 0」이 나온 자리(세션 5.6 관측 ④).
+
+    절대 규칙 5: ㄴ·ㄷ 의 solver 표시를 결과에 함께 싣는다.
+    """
+    topology = MassLossTopology(
+        label="g=0.0/펌프=공급",
+        residual_return_share=DEGENERATE_TOPOLOGY[0],
+        pump_sees_supply_flow=DEGENERATE_TOPOLOGY[1],
+    )
+    T_prop_C = rated_property_temperature_C()
+    header = [
+        "부하 %",
+        "크기",
+        "ㄱ CSV−K_approx 정상 L/s",
+        "ㄴ 모델−같은배치 Q=0 (열 포함) L/s",
+        "ㄷ 모델−같은배치 Q=0 (수력 한정) L/s",
+    ]
+    body: list[list[str]] = []
+    iers: set[str] = set()
+    baseline_gaps: list[float] = []
+    for load in (RATED_LOAD, IDLE_LOAD):
+        case = _end_case(end, load)
+        sizes_Lps = massloss_sizes_Lps(case.hydraulic, T_prop_C)
+        thermal_zero = solve_massloss_steady(case, 0.0, topology)
+        hydraulic_zero = solve_massloss(case.hydraulic, 0.0, topology, T_prop_C)
+        iers.add(f"열 Q=0 ier={thermal_zero.outer_solver_ier}")
+        iers.add(f"수력 Q=0 ier={hydraulic_zero.solver_ier}")
+        csv_rows = {
+            level: row
+            for state, level, row in select_states(df, end, load)
+            if state == "샘(퇴화)"
+        }
+        csv_normal = select_states(df, end, load)[0][2]
+        baseline_gaps.append(
+            _value(csv_normal, "total_flow_Lps") - thermal_zero.supply_flow_Lps
+        )
+        for fraction in SWEEP_FRACTIONS[1:]:
+            size_Lps = sizes_Lps[SWEEP_FRACTIONS.index(fraction)]
+            thermal = solve_massloss_steady(case, size_Lps, topology)
+            hydraulic = solve_massloss(case.hydraulic, size_Lps, topology, T_prop_C)
+            iers.add(f"열 Q>0 ier={thermal.outer_solver_ier}")
+            iers.add(f"수력 Q>0 ier={hydraulic.solver_ier}")
+            csv_row = csv_rows[f"크기 {fraction:g}"]
+            body.append(
+                [
+                    f"{load:g}",
+                    f"{fraction:g}",
+                    f"{_delta(csv_row, csv_normal, 'total_flow_Lps'):+.6e}",
+                    f"{thermal.supply_flow_Lps - thermal_zero.supply_flow_Lps:+.6e}",
+                    f"{hydraulic.supply_flow_Lps - hydraulic_zero.supply_flow_Lps:+.6e}",
+                ]
+            )
+    return [
+        f"기준 조합은 표와 같은 **{END_LABELS[end]}**이고 배치는 "
+        "`g=0` · 펌프=공급(퇴화)이다. 총유량은 헤더 공급유량 ΣQ_i 다.",
+        "",
+        _md_table(header, body),
+        "",
+        f"- 위 ㄴ·ㄷ 은 **물리 모델을 부른 것**이다. solver 표시: "
+        f"{' · '.join(sorted(iers))} (전부 `ier=1`). "
+        "CSV 를 덮지 않았다 — 이 표에 적기만 했다.",
+        f"- **ㄱ 과 ㄴ 의 기준선이 값으로 같다** — CSV 의 K_approx 정상 행 "
+        "`total_flow_Lps` 와 모델의 같은 배치 Q=0 해 공급유량의 차가 "
+        f"최대 {max(abs(g) for g in baseline_gaps):.3e} L/s 다(부동소수 잡음 자리). "
+        "그래서 ㄱ 열과 ㄴ 열이 같은 수로 나온다.",
+    ]
+
+
+def _solver_flags(rows: list[Row]) -> str:
     hydraulic = sorted({str(row["hydraulic_solver_ier"]) for *_, row in rows})
     thermal = sorted({str(row["thermal_solver_converged"]) for *_, row in rows})
     return (
@@ -252,38 +460,33 @@ def _solver_flags(rows: list[tuple[str, str, str, pd.Series]]) -> str:
 def format_report(df: pd.DataFrame) -> str:
     counts = branch_counts(df)
     total = sum(n for *_, n in counts)
-    plan_a = _plan_a(df)
-    plan_b = _plan_b(df)
-    base_a = [plan_a[0][3]] * len(plan_a)
-    #: 안 ㄴ 의 기준은 **같은 부하의 정상 행**이다.
-    normal_by_load = {
-        load: select_states(df, load)[0][2] for load in (RATED_LOAD, IDLE_LOAD)
-    }
-    base_b = [normal_by_load[float(load)] for _, _, load, _ in plan_b]
-
-    fixed_line = " · ".join(f"`{k}`={v}" for k, v in FIXED.items())
     version = sorted(df["dataset_version"].unique())
 
     out: list[str] = []
-    out.append("# 세션 7.49 — 네 상태의 운전 결과값 표")
+    out.append("# 세션 7.49·7.50 — 네 상태의 운전 결과값 표 (양 끝 두 벌)")
     out.append("")
     out.append("> **가정값 기반 — 실측 아님.** 설계데이터가 없는 파일럿 단계의 값이다.")
     out.append(">")
     out.append(f"> 데이터셋 판본 `dataset_version` = {', '.join(version)} · "
                f"원본 `results/cdu_dataset.csv` ({total:,}행)")
     out.append(">")
-    out.append("> **단일 CDU · 정상상태(`regime=steady`, 전이 행 없음).**")
+    out.append("> **단일 CDU · 정상상태(`regime=steady`, 전이 행 없음).** "
+               f"고정: {' · '.join(f'`{k}`={v}' for k, v in FIXED_COMMON.items())}")
     out.append(">")
-    out.append(f"> 고정한 대표 조합: {fixed_line}")
-    out.append(">")
-    out.append("> 가정치 축 여섯 중 다섯(정격양정·분기 ΔP·밸브 ΔP·NTU·2차측 온도)은 "
-               "**5장 범위의 낮은 쪽 끝**으로 통일해 고정했다 — 중점을 만들지 않았다. "
+    out.append("> 가정치 축 다섯(정격양정·분기 ΔP·밸브 ΔP·NTU·2차측 온도)을 "
+               "**5장 범위의 양 끝 두 벌**로 낸다 — 중점을 만들지 않았다. "
                "부하는 표의 축이다.")
     out.append(">")
     out.append("> **이 문서는 판정하지 않는다.** 값만 놓는다.")
     out.append(">")
-    out.append("> 이 문서의 수는 전부 CSV 에서 읽은 것이다 — **새로 만든 숫자가 없다.** "
-               "단위는 CSV 열 그대로이며 환산하지 않았다.")
+    out.append("> 표의 수는 전부 CSV 에서 읽은 것이다 — 단위를 환산하지 않았다. "
+               "**예외는 「퇴화 배치의 총유량 차」 절 하나**이고, 그 절은 물리 "
+               "모델을 불러 잰 값임을 그 자리에 밝힌다.")
+    out.append("")
+    out.append("**세션 7.50 이 「안 ㄱ」(정상을 부하로 갈라 네 상태를 세우는 표)을 "
+               "지웠다.** 사람이 안 ㄴ 하나로 정했다(7.49 D8-1) — 안 ㄱ 은 "
+               "막힘·샘의 부하 20 % 쪽이 빠져 안 ㄴ 이 덮는 것을 못 덮는다. "
+               "**되살리려면 7.49 커밋에서 꺼낸다.**")
     out.append("")
 
     out.append("## 갈래별 행 수")
@@ -299,30 +502,73 @@ def format_report(df: pd.DataFrame) -> str:
                "그대로 읽은 것이라 **새 값이 0개**다.")
     out.append("")
 
-    out.append("## 안 ㄱ — 정상을 부하로 갈라 네 상태를 세운다")
+    for end in ("low", "high"):
+        rows = plan_rows(df, end)
+        bases = plan_bases(df, end, rows)
+        axis = " · ".join(f"`{k}`={v:g}" for k, v in ENDS[end].items())
+        out.append(f"## 대표 조합 — 5장 범위의 **{END_LABELS[end]}**")
+        out.append("")
+        out.append(f"{axis}")
+        out.append("")
+        out.append(f"### {END_LABELS[end]} · 값")
+        out.append("")
+        out.append(value_table(rows))
+        out.append("")
+        out.append(f"### {END_LABELS[end]} · 같은 부하의 정상 대비 차이 "
+                   "— `절대 (상대 %)`")
+        out.append("")
+        out.append(delta_table(rows, bases))
+        out.append("")
+        out.append(f"고른 행의 solver 표시: {_solver_flags(rows)}.")
+        out.append("")
+
+    out.append("## 양 끝 대조 — 가정치를 바꾸면 신호가 어디로 움직이는가")
     out.append("")
-    out.append("막힘·샘은 정격(100 %)에 놓았다. 20 % 쪽은 안 ㄴ 에 있다.")
+    out.append("각 칸은 **`Δ낮은끝 → Δ높은끝`**(같은 부하의 정상 대비 절대차)다. "
+               "**판정하지 않는다** — 값이 어디로 갔는지만 적는다.")
     out.append("")
-    out.append("### ㄱ-1 값")
+    out.append(end_compare_table(df))
     out.append("")
-    out.append(value_table(plan_a))
+    out.append("### 부호")
     out.append("")
-    out.append("### ㄱ-2 정상(정격) 대비 차이 — `절대 (상대 %)`")
+    out += sign_flip_lines(df)
     out.append("")
-    out.append(delta_table(plan_a, base_a))
+    out.append("### 크기 — |Δ| 가 높은 끝에서 커지는가 작아지는가")
+    out.append("")
+    out.append(magnitude_table(df))
+    out.append("")
+    out.append("칸의 수는 **행 수**다(막힘 6 = 3수준 × 2부하 · 샘 각 8 = 4크기 × "
+               "2부하). 정상 행은 Δ 가 정의상 0 이라 세지 않았다.")
     out.append("")
 
-    out.append("## 안 ㄴ — 부하를 축으로 두고 네 상태를 부하 두 수준에서 낸다")
+    out.append("## 퇴화 배치의 총유량 차 — caveat 「정확히 0」과 맞춰본다")
     out.append("")
-    out.append("차이의 기준은 **같은 부하의 정상 행**이다.")
+    out.append("`massloss` 행의 `signal_sign_caveat` 은 이렇게 적는다 — "
+               "「구조 자유도가 g=0 · 펌프=공급 배치인 행은 **수력 다섯 양이 정확히 "
+               "0** 이라 부호 자체가 없다 — 0 을 「이상 없음」으로 읽지 않는다」. "
+               f"문언은 {CAVEAT_SOURCE} 에서 온다.")
     out.append("")
-    out.append("### ㄴ-1 값")
+    out.append("그 「0」이 **무엇을 기준선으로 한 0 인지**는 "
+               "`src/cdu_simul/massloss_gate.py:388-396` 의 주석이 적는다 — "
+               "「세션 5.6 관측 ④ 는 … **수력 한정 · 물성 37 ℃ 고정**」이고, "
+               "「데이터셋의 「샘」 해는 열까지 물린 것이라 그 배치에서도 Δ 가 "
+               "0 이 아니다」. 기준선은 **같은 배치의 Q=0 해**이지 K_approx 정상 "
+               "행이 아니다(`massloss_thermal.massloss_thermal_deltas` 의 "
+               "docstring: 「기준은 같은 배치의 Q_massloss=0 해다」).")
     out.append("")
-    out.append(value_table(plan_b))
+    out += degenerate_lines(df)
     out.append("")
-    out.append("### ㄴ-2 같은 부하의 정상 대비 차이 — `절대 (상대 %)`")
-    out.append("")
-    out.append(delta_table(plan_b, base_b))
+    out.append("- **ㄷ 이 caveat 이 말하는 자리다.** 수력 한정·물성 고정이면 "
+               "`solve_massloss` 식에서 Q 가 사라져 Q=0 해와 항등이다"
+               "(5-1 「「샘」 구조 자유도 셋」 한계 ⑴).")
+    out.append("- **ㄴ 은 열이 물린 자리**라 물성 평가 온도 하나가 남는다"
+               "(세션 7.46 D6).")
+    out.append("- **ㄱ 과 ㄴ 은 기준선이 달라 보이지만 값이 같다**(위 마지막 줄). "
+               "7.49 D7-1 은 「두 수는 기준선이 달라 서로 다른 것을 잰 것으로 "
+               "보인다」고 적었는데, **재어 보니 그 갈래가 아니다** — "
+               "ㄱ 과 ㄴ 은 같은 수이고, 갈리는 것은 **ㄷ**(수력 한정·물성 고정) "
+               "하나다.")
+    out.append("- **이 판은 문언을 고치지 않았다.** 값만 놓았다.")
     out.append("")
 
     out.append("## 읽는 데 필요한 것")
@@ -340,7 +586,6 @@ def format_report(df: pd.DataFrame) -> str:
                "`total_flow_Lps − return_flow_Lps` 와 일치한다(불일치 0건).")
     out.append("- 랙 여덟 중 `rack0` 만 대표로 실었고, 나머지는 "
                "`최대−최소` 폭 두 열로 줄였다.")
-    out.append(f"- 고른 행의 solver 표시: {_solver_flags(plan_b)}.")
     out.append("")
 
     out.append("## 이 표의 한계")
@@ -353,8 +598,9 @@ def format_report(df: pd.DataFrame) -> str:
                "massloss 행에서 빈칸이다 — 계통 전체의 질량손실로만 들어간다.")
     out.append("3. **전이(시간축)가 없다.** 데이터셋 전 행이 `regime=steady` 라 "
                "「몇 초 뒤」는 이 표에 없다(미해결 #40·#38).")
-    out.append("4. 대표 조합 하나를 고정한 값이다. 5장 범위의 **다른 끝**에서는 "
-               "수가 다르다 — 이 표는 범위를 보여주지 않는다.")
+    out.append("4. **양 끝 두 벌은 범위의 두 점이지 범위가 아니다.** 다섯 축을 "
+               "한꺼번에 옮겼으므로 **어느 축이 얼마나 움직였는지는 이 표가 "
+               "가르지 않는다** — 축 하나씩 흔든 것이 아니다.")
     out.append("5. 단일 CDU 다. 다중 CDU(`dual_symmetric`·`dual_asymmetric`) 행은 "
                "이웃 CDU 의 기대 부호가 정해지지 않아 뺐다(7.45).")
     out.append("")
