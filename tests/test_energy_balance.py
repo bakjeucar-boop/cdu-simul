@@ -178,6 +178,15 @@ def test_energy_balance_residual_undefined_at_zero_load() -> None:
     0 으로 나누는 자리라 `ZeroDivisionError` 가 나면 원인을 읽기 어렵다. 극단
     케이스(6장)는 **비발산**으로 판정하고 이 잔차를 쓰지 않는다는 것을 함수가
     스스로 말하게 한다(`test_session3_gates.py` 참조).
+
+    **세션 7.61 에 성질이 바뀌었다.** 펌프 수력동력이 들어오기 전에는 부하 0 에서
+    분자와 분모가 **둘 다 구조적으로 0** 이었다(T_supply == T_return). 이제는
+    펌프 일이 남아 계통이 2차측보다 위에서 멎고 열교환기가 그것을 그대로 버린다 —
+    **분모만 0 이다.** 예외는 그대로 던져진다: 두 함수 모두 분모를 먼저 보기
+    때문이다. 관측(H22.4/dPb2/dPv3 · NTU=2 · T2nd=27C · load=0%): T_supply
+    27.042873 ℃ · T_return 27.073509 ℃ · ΔT +3.064e-02 K · HX duty 3.035836 kW
+    = P_hyd. 아래에서 그 값이 실제로 P_hyd 와 같은지 함께 잰다 — 부하 0 은 펌프
+    일만 남는 자리라 이 등식이 **펌프 항이 살아 있는지**를 가장 곧게 말한다.
     """
     zero_case = default_cdu_cases(load_percent=0.0)[0]
     result = solve_cdu_steady_state(zero_case)
@@ -185,3 +194,11 @@ def test_energy_balance_residual_undefined_at_zero_load() -> None:
         energy_balance_residual_percent(result.thermal)
     with pytest.raises(ValueError, match="부하 0"):
         hx_duty_identity_residual_percent(result.thermal)
+
+    thermal_case = result.thermal.case
+    pump_heat_kW = (
+        thermal_case.pump_heat_supply_node_kW + thermal_case.pump_heat_return_node_kW
+    )
+    assert pump_heat_kW > 0.0
+    assert result.thermal.hx_duty_kW == pytest.approx(pump_heat_kW, rel=1.0e-9)
+    assert result.thermal.T_supply_C > zero_case.T_secondary_supply_C
