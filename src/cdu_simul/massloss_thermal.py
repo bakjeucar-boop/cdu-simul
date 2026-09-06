@@ -129,6 +129,11 @@ class MassLossThermal:
     hx_effectiveness: float
     rack_load_kW: float
     massloss_enthalpy_kW: float
+    #: 펌프 수력동력 중 **랙 다리(환수 노드)** 에 얹힌 몫 [kW]
+    #: [규약: 프로젝트정리 5-1 「펌프 일의 노드 배분」 · 세션 7.61].
+    #: 6장 ① 잔차가 재는 구간(T_supply → T_return)에 들어간 열이라 잔차식이
+    #: 이 값을 뺀다. 공급 노드 몫은 그 구간 밖이라 싣지 않는다.
+    pump_heat_return_node_kW: float
     outer_solver_ier: int
     outer_solver_message: str
     hydraulic_solver_converged: bool
@@ -174,6 +179,7 @@ class MassLossThermal:
             self.T_return_C,
             self.rack_load_kW,
             extra_enthalpy_kW=self.massloss_enthalpy_kW,
+            pump_heat_return_node_kW=self.pump_heat_return_node_kW,
         )
 
     @property
@@ -203,11 +209,12 @@ def _steady_at_property_temperature(
     secondary_flow_Lps: float,
 ) -> tuple[
     float, float, tuple[float, ...], tuple[float, ...], float, float, float, float,
-    float,
+    float, float,
 ]:
     """물성 온도가 주어졌을 때의 온도들 (순수 함수).
 
-    반환: (T_sup, T_ret, 랙 출구온도들, 랙 유량들, Q_sup, 펌프양정, Q_hx [W], ρ, ε).
+    반환: (T_sup, T_ret, 랙 출구온도들, 랙 유량들, Q_sup, 펌프양정, Q_hx [W], ρ, ε,
+    펌프 환수 노드 몫 [W]).
 
     dT/dt = 0 을 모듈 docstring 의 두 식에 넣으면 닫힌 형태가 된다::
 
@@ -268,6 +275,7 @@ def _steady_at_property_temperature(
         Q_hx_W,
         rho_kgm3,
         effectiveness,
+        pump_heat.return_node_W,
     )
 
 
@@ -313,6 +321,7 @@ def solve_massloss_steady(
         Q_hx_W,
         rho_kgm3,
         effectiveness,
+        pump_heat_return_node_W,
     ) = _steady_at_property_temperature(
         T_prop_C, case, massloss_flow_Lps, topology, secondary_flow_Lps
     )
@@ -335,6 +344,7 @@ def solve_massloss_steady(
         hx_effectiveness=effectiveness,
         rack_load_kW=case.rack_load_kW * case.hydraulic.n_racks,
         massloss_enthalpy_kW=m_massloss_kgs * dh_Jkg / _W_PER_KW,
+        pump_heat_return_node_kW=pump_heat_return_node_W / _W_PER_KW,
         outer_solver_ier=int(ier),
         outer_solver_message=str(message).strip(),
         hydraulic_solver_converged=True,

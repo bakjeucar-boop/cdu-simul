@@ -408,16 +408,25 @@ def enthalpy_balance_residual_percent(
     T_return_C: float,
     q_rack_kW: float,
     extra_enthalpy_kW: float = 0.0,
+    pump_heat_return_node_kW: float = 0.0,
 ) -> float:
-    """세션 1-B 게이트 잔차의 **공용 알맹이** [%] [세션 7.53].
+    """세션 1-B 게이트 잔차의 **공용 알맹이** [%] [세션 7.53 · 7.61].
 
-        잔차[%] = ( ṁ·[h(T_ret) − h(T_sup)] + Q_추가 − Q_rack ) / Q_rack × 100
+        잔차[%] = ( ṁ·[h(T_ret) − h(T_sup)] + Q_추가 − Q_rack − P_환수 )
+                  / Q_rack × 100
 
     `extra_enthalpy_kW` 는 **밀폐루프가 아닌 계통에서 ṁ 에 담기지 못한 엔탈피
     흐름**을 받는다. 「막힘」·정상은 밀폐루프라 0 이고(기본값), 「샘」은 ṁ 을
     환수유량으로 두고 계통 밖으로 나간 몫을 이 인자로 받는다 — 둘을 더하면
     랙을 지난 공급유량의 엔탈피 상승과 같다(`MassLossThermal.
     energy_balance_residual_percent`).
+
+    `pump_heat_return_node_kW` 는 **랙 다리에 얹힌 펌프 수력동력**이다
+    [5-1 「펌프 일의 노드 배분」 · 세션 7.61]. 이 잔차가 재는 것은 T_supply →
+    T_return 구간의 엔탈피 상승이고 그 구간에 들어간 열은 Q_rack **+ P_환수**
+    이므로, 랙 발열량만 빼면 P_환수/Q_rack 만큼 남는다(32조합 실측 +0.42~+0.45%).
+    **공급 노드 몫 P_공급 은 이 구간 밖이라 들어가지 않는다** — 넣으면 그만큼
+    다시 어긋난다. **분모는 Q_rack 그대로다**(6장 ① 정의를 바꾸지 않는다).
 
     **한 식을 두 곳이 따로 쓰지 않게 여기 한 번만 적는다**(collaboration.md ③).
     """
@@ -428,7 +437,9 @@ def enthalpy_balance_residual_percent(
         )
     dh_Jkg = coolant_enthalpy_Jkg(T_return_C) - coolant_enthalpy_Jkg(T_supply_C)
     q_enthalpy_kW = m_dot_kgs * dh_Jkg / _W_PER_KW + extra_enthalpy_kW
-    return (q_enthalpy_kW - q_rack_kW) / q_rack_kW * 100.0
+    return (
+        (q_enthalpy_kW - q_rack_kW - pump_heat_return_node_kW) / q_rack_kW * 100.0
+    )
 
 
 def energy_balance_residual_percent(result: SteadyStateResult) -> float:
@@ -436,11 +447,13 @@ def energy_balance_residual_percent(result: SteadyStateResult) -> float:
 
     잔차 정의:
 
-        잔차[%] = ( m_dot · [h(T_return) - h(T_supply)] - Q_rack ) / Q_rack × 100
+        잔차[%] = ( m_dot · [h(T_return) - h(T_supply)] - Q_rack - P_환수 )
+                  / Q_rack × 100
 
     - 왼쪽 항: 해로 나온 두 온도에서 **CoolProp 엔탈피를 직접 조회**해 얻은 1차측
       흡열량. 모델이 해를 구할 때 쓴 경로(상수 cp 선형화, cp·ΔT)를 쓰지 않는다.
-    - 오른쪽 항: 5장 랙 발열량(입력값).
+    - 오른쪽 항: 5장 랙 발열량(입력값) + 랙 다리에 얹힌 펌프 수력동력
+      [5-1 「펌프 일의 노드 배분」 · 세션 7.61].
 
     두 항이 **서로 다른 경로**로 계산되므로 이 잔차는 항등적으로 0이 아니다 —
     모델이 쓴 상수 cp 근사가 실제 엔탈피 변화와 얼마나 어긋나는지를 잰다.
@@ -452,6 +465,7 @@ def energy_balance_residual_percent(result: SteadyStateResult) -> float:
         result.T_supply_C,
         result.T_return_C,
         result.case.total_load_kW,
+        pump_heat_return_node_kW=result.case.pump_heat_return_node_kW,
     )
 
 
