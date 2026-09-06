@@ -133,6 +133,11 @@ def test_eight_racks_match_single_rack_model(case: CduCase) -> None:
     두면 Cr 이 0.125 로 떨어져 아예 다른 열교환기를 비교하게 된다. 랙 축을 나누는
     것과 열교환기를 바꾸는 것은 다른 이야기다 — 두 모델이 **같은 Cr** 을 보도록
     2차측도 랙 수로 나눈다. 허용오차를 늘린 것이 아니라 비교 기준을 맞춘 것이다.
+
+    **펌프 수력동력도 같은 배수로 나눈다**(세션 7.61). 2차측 유량과 같은 이유다 —
+    P 는 CDU 1대분 양이므로 1랙 모델에는 1/8 만 들어가야 8랙과 같은 온도해가
+    나온다. 나누지 않으면 두 모델이 다른 열원을 보게 되고, 그것은 랙 축을 나누는
+    것이 아니라 계통을 바꾸는 것이다.
     """
     result = solve_cdu_steady_state(case)
     assert result.solver_converged, f"{case.label}: 결합 해 미수렴"
@@ -146,6 +151,12 @@ def test_eight_racks_match_single_rack_model(case: CduCase) -> None:
             rack_flows_Lps=(result.flow.mean_rack_flow_Lps,),
             secondary_flow_Lps=(
                 result.thermal.case.secondary_flow_Lps / SCENARIO.racks_per_cdu
+            ),
+            pump_heat_supply_node_kW=(
+                result.thermal.case.pump_heat_supply_node_kW / SCENARIO.racks_per_cdu
+            ),
+            pump_heat_return_node_kW=(
+                result.thermal.case.pump_heat_return_node_kW / SCENARIO.racks_per_cdu
             ),
         )
     )

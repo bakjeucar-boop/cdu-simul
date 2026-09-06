@@ -94,15 +94,23 @@ def test_gate_zero_load_steady_state_matches_prediction(case: CduCase) -> None:
     """세션 3 게이트 ㉡ (정상상태 · 부하 0) — **예상을 먼저 적고 대조한다.**
 
     **사전 예상** (돌리기 전에 식에서 적은 것):
-    발열량 Q_총 = 0 이면 `_state_at_property_temperature` 의 두 식이
+    발열량 Q_총 = 0 이어도 **펌프 일은 0 이 아니다**
+    [5-1 「펌프 일의 노드 배분」 · 세션 7.61]. `_state_at_property_temperature`
+    의 두 식에 Q_총 = 0 을 넣으면
 
-        T_return = T_2차공급 + 0/(ε·C) = T_2차공급
-        T_supply = T_return - 0/C      = T_2차공급
+        T_return = T_2차공급 + P_hyd/(ε·C_min)
+        T_supply = T_return  − P_환수/C_총
 
-    가 되므로 **1차측 공급·환수가 둘 다 2차측 공급온도로 수렴하고 ΔT = 0** 이어야
-    한다. 물리적으로도 그렇다 — 열원이 없으면 1차측은 열교환기를 통해 2차측 온도로
-    끌려간다. ε·C 는 유량이 0이 아닌 한 0이 아니므로 **0으로 나누는 자리가 없다**
-    (유량은 펌프가 만들며 부하와 무관하다).
+    이 되므로 **1차측은 2차측 공급온도보다 위에서 멎고 ΔT = P_환수/C_총 > 0** 이다.
+    물리적으로도 그렇다 — 열원이 랙에서 사라져도 펌프가 유체를 계속 젓고, 그 일이
+    열로 남아 열교환기가 그것을 버린다. ε·C 는 유량이 0이 아닌 한 0이 아니므로
+    **0으로 나누는 자리가 없다**(유량은 펌프가 만들며 부하와 무관하다).
+
+    **세션 7.61 이전의 예상은 「둘 다 2차측 공급온도 · ΔT = 0」이었다.** 그때는
+    펌프 일이 모델 밖이었다 — 예상을 바꾼 것이 아니라 같은 두 식에 이제 0 이
+    아닌 항이 하나 더 들어간다. 실측 이동은 T_supply +0.0429 K · ΔT +3.06e-02 K
+    (H22.4/dPb2/dPv3 · T2nd=27C) 이며, 아래 검사는 **그 두 식을 그대로 대조**한다
+    — 관측값을 기대값으로 박지 않는다.
 
     상대 잔차(`energy_balance_residual_percent`)는 Q=0 에서 정의되지 않는다 —
     그 함수는 명시적으로 `ValueError` 를 던지고, 이 게이트는 **비발산**으로 본다.
@@ -111,15 +119,32 @@ def test_gate_zero_load_steady_state_matches_prediction(case: CduCase) -> None:
     assert result.solver_converged, f"{case.label}: 부하 0 에서 미수렴"
 
     T_2nd_C = case.T_secondary_supply_C
-    assert math.isfinite(result.thermal.T_supply_C)
-    assert math.isfinite(result.thermal.T_return_C)
-    assert abs(result.thermal.T_supply_C - T_2nd_C) < ZERO_LOAD_TOLERANCE_C, (
-        f"{case.label}: T_supply {result.thermal.T_supply_C} vs 예상 {T_2nd_C}"
+    thermal = result.thermal
+    assert math.isfinite(thermal.T_supply_C)
+    assert math.isfinite(thermal.T_return_C)
+
+    # 열교환기가 버리는 것은 펌프 일 전량이다 (Q_총 = 0 이므로).
+    pump_heat_kW = (
+        thermal.case.pump_heat_supply_node_kW + thermal.case.pump_heat_return_node_kW
     )
-    assert abs(result.thermal.T_return_C - T_2nd_C) < ZERO_LOAD_TOLERANCE_C, (
-        f"{case.label}: T_return {result.thermal.T_return_C} vs 예상 {T_2nd_C}"
+    assert pump_heat_kW > 0.0
+    assert thermal.hx_duty_kW == pytest.approx(pump_heat_kW, rel=1.0e-9), (
+        f"{case.label}: HX duty {thermal.hx_duty_kW} vs 예상 {pump_heat_kW}"
     )
-    assert abs(result.thermal.dT_primary_C) < ZERO_LOAD_TOLERANCE_C
+
+    # 랙 다리 온도상승은 환수 노드 몫뿐이다: ΔT = P_환수 / (ṁ·cp).
+    dT_expected_C = (
+        thermal.case.pump_heat_return_node_kW
+        * 1.0e3
+        / (thermal.m_dot_kgs * thermal.cp_Jkg_K)
+    )
+    assert thermal.dT_primary_C == pytest.approx(
+        dT_expected_C, abs=ZERO_LOAD_TOLERANCE_C
+    ), f"{case.label}: ΔT {thermal.dT_primary_C} vs 예상 {dT_expected_C}"
+
+    # 비발산 — 2차측보다 위에 있되 5장 1차측 환수온도 근처에도 못 간다.
+    assert T_2nd_C < thermal.T_supply_C < SCENARIO.T_primary_return_C
+    assert thermal.T_supply_C < thermal.T_return_C
 
 
 @pytest.mark.parametrize(
@@ -191,10 +216,14 @@ def _extreme_transient_cases() -> list[LoadStepCase]:
 def test_gate_extreme_load_transient_does_not_diverge(case: LoadStepCase) -> None:
     """세션 3 게이트 ㉡ (동적) — 극단 부하 스텝에서 시간적분이 발산하지 않는다.
 
-    **사전 예상**: 100→0% 는 두 온도가 2차측 공급온도로 단조 접근하고, 0→100% 는
-    정격 정상상태로 접근한다. 두 경우 모두 온도가 2차측 공급온도와 정격 환수온도
-    사이에 머물러야 한다 — 이 계에는 열원이 랙 하나뿐이고 열침도 열교환기 하나뿐이라
-    그 밖으로 나갈 경로가 없다.
+    **사전 예상**: 100→0% 는 두 온도가 **부하 0 의 정상상태**로 단조 접근하고,
+    0→100% 는 정격 정상상태로 접근한다. 두 경우 모두 온도가 2차측 공급온도와
+    정격 환수온도 사이에 머물러야 한다 — 이 계에는 열원이 **랙과 펌프 둘**이고
+    열침은 열교환기 하나뿐이라 그 밖으로 나갈 경로가 없다.
+
+    **세션 7.61 이전에는 100→0% 의 종착지를 2차측 공급온도로 적었다.** 펌프 일이
+    모델 밖이었기 때문이다. 이제 펌프가 계속 젓고 있으므로 종착지는 2차측보다
+    P_hyd/(ε·C_min) 만큼 위다 [5-1 「펌프 일의 노드 배분」].
 
     `solve_ivp` 의 `success` 와 매 시점 수력 `fsolve` 의 수렴을 **둘 다** 본다
     (절대 규칙 5). 수렴시간은 판정하지 않는다(미해결 #21).
@@ -221,7 +250,17 @@ def test_gate_extreme_load_transient_does_not_diverge(case: LoadStepCase) -> Non
         )
 
     if case.load_after_percent == ZERO_LOAD_PERCENT:
-        assert abs(result.T_return_final_C - T_2nd_C) < TRAJECTORY_NOISE_FLOOR_C, (
-            f"{case.label}: 부하 0 의 t→∞ 가 2차측 온도로 가지 않았다 "
-            f"({result.T_return_final_C} ℃)"
+        # 대조 대상은 **부하 0 의 정상상태 해**다 — 2차측 온도가 아니다.
+        # 펌프 일이 들어온 뒤로 부하 0 의 종착지는 2차측보다 P_hyd/(ε·C_min)
+        # 만큼 위다 [5-1 「펌프 일의 노드 배분」 · 세션 7.61]. 관측값을 박지
+        # 않고 같은 정상상태 solver 로 다시 풀어 견준다.
+        target = solve_cdu_steady_state(case.steady_case(ZERO_LOAD_PERCENT))
+        assert target.solver_converged
+        assert target.thermal.T_return_C > T_2nd_C
+        assert (
+            abs(result.T_return_final_C - target.thermal.T_return_C)
+            < TRAJECTORY_NOISE_FLOOR_C
+        ), (
+            f"{case.label}: 부하 0 의 t→∞ 가 부하 0 정상상태로 가지 않았다 "
+            f"({result.T_return_final_C} ℃ vs {target.thermal.T_return_C} ℃)"
         )
