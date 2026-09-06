@@ -385,6 +385,88 @@ def residual_share_at_rated_percent(case: HydraulicCase) -> float:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 펌프 수력동력 — 열로 들어간다 (5-1 「펌프 일의 노드 배분」 · 세션 7.61)
+# ─────────────────────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class PumpHydraulicPower:
+    """펌프 수력동력의 노드 배분 [W].
+
+    [규약: 프로젝트정리 5-1 「펌프 일의 노드 배분」 · 세션 7.61 확정]
+
+    밀폐루프이므로 수력동력은 마찰로 **전량 유체에 남는다** — 가정이 아니라
+    1법칙 결과다. 모터 입력전력은 이보다 크며 그 차이(효율·모터 방열·모터
+    위치)는 5장에 없으므로 **넣지 않는다**.
+    """
+
+    #: 랙 분기 ΔP + 밸브 ΔP 가 만든 몫 — 랙 다리에서 일어나므로 환수 노드 전량.
+    branch_valve_W: float
+    #: 잔여저항(HX 1차측 + CDU 내부배관 + 헤더) 몫 — 공급 50% · 환수 50%.
+    residual_W: float
+
+    @property
+    def total_W(self) -> float:
+        return self.branch_valve_W + self.residual_W
+
+    @property
+    def supply_node_W(self) -> float:
+        """공급 노드로 가는 몫 [W] — 잔여저항 몫의 50% 다.
+
+        50/50 은 5-1 「계통 보유수량 M의 노드 배분」이 쓴 것과 **같은 규약**이라
+        `assumptions.PIPING` 의 그 값을 그대로 읽는다(절대 규칙 2 — 숫자를 여기
+        새로 적지 않는다). 두 배분은 근거가 같을 뿐 물리적으로 같은 양이 아니다.
+        """
+        return PIPING.holdup_supply_node_fraction * self.residual_W
+
+    @property
+    def return_node_W(self) -> float:
+        """환수 노드로 가는 몫 [W] — 분기·밸브 전량 + 잔여저항 몫의 50%."""
+        return (
+            self.branch_valve_W
+            + PIPING.holdup_return_node_fraction * self.residual_W
+        )
+
+
+def pump_hydraulic_power_W(
+    head_mAq: float,
+    Q_pump_Lps: float,
+    rack_flows_Lps: tuple[float, ...],
+    case: HydraulicCase,
+    T_property_C: float,
+) -> PumpHydraulicPower:
+    """펌프 수력동력을 내고 5-1 배분대로 두 몫으로 가른다 (순수 함수).
+
+        P_hyd [W] = H [mAq] × (1 mAq → Pa) × Q_pump [L/s] × (L/s → m³/s)
+
+    mAq→Pa 는 5-1 「압력 단위 규약 mAq」 상수 하나로만 환산한다(`PASCAL_PER_MAQ`
+    — 절대 규칙 9). `Q_pump_Lps` 는 「샘」에서 공급유량이 아닐 수 있다
+    (`massloss.MassLossResult.pump_flow_Lps` 규약 — 구조 자유도 ⓑ).
+
+    분기·밸브 몫은 랙마다 ΔP × Q 로 **따로** 잰다 — 5-1 이 그 자리를 이미
+    분해해 두었기 때문이다(순서 1번). 잔여저항 몫은 나머지로 잰다: 5-1 이
+    잔여저항의 분해를 금지하므로(미해결 #24) 따로 잴 자리가 없고, 나머지로
+    두면 **두 몫의 합이 P_hyd 와 항등**이 되어 열에 넣은 총량과 balance 에
+    넣은 총량이 어긋나지 않는다.
+    """
+    branch_valve_mAq_Lps = sum(
+        (
+            branch_dp_mAq(Q_Lps, K, T_property_C)
+            + valve_dp_mAq(
+                Q_Lps, case.valve_Kv_max_m3h, case.opening_fraction, T_property_C
+            )
+        )
+        * Q_Lps
+        for Q_Lps, K in zip(rack_flows_Lps, case.rack_branch_K, strict=True)
+    )
+    to_W = PASCAL_PER_MAQ * _M3S_PER_LPS
+    branch_valve_W = branch_valve_mAq_Lps * to_W
+    total_W = head_mAq * Q_pump_Lps * to_W
+    return PumpHydraulicPower(
+        branch_valve_W=branch_valve_W,
+        residual_W=total_W - branch_valve_W,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 헤더 압력평형 — fsolve
 # ─────────────────────────────────────────────────────────────────────────────
 def solve_flow_distribution(
