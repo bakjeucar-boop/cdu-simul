@@ -476,6 +476,12 @@ def hx_duty_identity_residual_percent(result: SteadyStateResult) -> float:
     에서 역산해 정의하므로, 같은 식으로 duty 를 되돌리면 부동소수점 반올림만
     남는다. 통과해도 아무것도 증명하지 못한다 — 게이트 판정에 쓰지 않고, 항등임을
     눈으로 확인하려고 남겨둔다(C7).
+
+    **펌프 일이 들어온 케이스에서는 항등이 Q_hx = Q_rack + P_hyd 로 바뀐다**
+    [5-1 「펌프 일의 노드 배분」 · 세션 7.61]. 이 함수는 P_hyd 를 빼지 않으므로
+    그런 케이스에서 P_hyd/Q_rack 만큼 뜬다. 지금 이 함수를 부르는 자리는
+    `default_cases()`(수력을 풀지 않아 P_hyd = 0)뿐이라 값은 그대로 0 이다 —
+    수력과 결합한 해에 이 함수를 쓰려면 그 항을 먼저 넣어야 한다.
     """
     q_rack_kW = result.case.total_load_kW
     if q_rack_kW == 0.0:
