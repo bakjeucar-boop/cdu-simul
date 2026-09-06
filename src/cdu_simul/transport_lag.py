@@ -64,6 +64,7 @@ from cdu_simul.fluid import coolant_cp_Jkg_K, coolant_density_kgm3
 from cdu_simul.hydraulics import (
     HydraulicCase,
     apply_leak_to_rack,
+    pump_hydraulic_power_W,
     solve_flow_distribution,
 )
 from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
@@ -234,6 +235,18 @@ def integrate_leak_step_n_cstr(
         )
         Q_hx_W = effectiveness * C_min_W_K * (T_return_C - case.T_secondary_supply_C)
 
+        # 펌프 수력동력 [5-1 「펌프 일의 노드 배분」 · 세션 7.61] — 한 다리의 몫을
+        # 그 다리의 탱크에 **균등 배분**한다(5-1 이 탱크 배분을 정하지 않으므로
+        # 추가 파라미터가 0인 배분을 고른다). 균등이면 다리 전체 몫이 N 에
+        # 불변이라 「정상상태가 노드 수에 불변」이라는 성질이 유지된다.
+        pump_heat = pump_hydraulic_power_W(
+            flow.pump_head_mAq,
+            flow.total_flow_Lps,
+            flow.rack_flows_Lps,
+            hydraulic_after,
+            T_property_C,
+        )
+
         # 경계 열원 — 보유량 0. 랙은 환수 다리 입구를, HX 는 공급 다리 입구를 만든다.
         return_inlet_C = T_supply_C + Q_rack_W / C_W_K
         supply_inlet_C = T_return_C - Q_hx_W / C_W_K
@@ -241,13 +254,13 @@ def integrate_leak_step_n_cstr(
         d_supply = (
             C_W_K
             * (np.concatenate(([supply_inlet_C], supply[:-1])) - supply)
-            / (tank_supply_kg * cp_Jkg_K)
-        )
+            + pump_heat.supply_node_W / per_leg
+        ) / (tank_supply_kg * cp_Jkg_K)
         d_return = (
             C_W_K
             * (np.concatenate(([return_inlet_C], ret[:-1])) - ret)
-            / (tank_return_kg * cp_Jkg_K)
-        )
+            + pump_heat.return_node_W / per_leg
+        ) / (tank_return_kg * cp_Jkg_K)
         return np.concatenate([d_supply, d_return])
 
     y0 = np.concatenate(

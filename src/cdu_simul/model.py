@@ -55,6 +55,7 @@ from cdu_simul.hydraulics import (
     FlowDistributionResult,
     HydraulicCase,
     bulk_mean_temperature_C,
+    pump_hydraulic_power_W,
     solve_flow_distribution,
 )
 from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
@@ -95,6 +96,14 @@ class SteadyStateCase:
     #: 세션 5 C4 가 드러낸 오류다(5장 「1:1」은 부피유량비이지 Cr 이 아니다).
     secondary_flow_Lps: float = HEAT_EXCHANGER.secondary_flow_Lps
     cp_rule: CpRule = DEFAULT_CP_RULE
+    #: 펌프 수력동력 중 **공급 노드**에 얹히는 몫 [kW]
+    #: [규약: 프로젝트정리 5-1 「펌프 일의 노드 배분」 · 세션 7.61].
+    #: 기본 0 은 「펌프가 없다」가 아니라 **수력을 풀지 않는 케이스**라는 뜻이다 —
+    #: `default_cases()`(세션 1-B 4케이스)가 그 자리이고, 수력과 결합한 경로는
+    #: `cdu_thermal_case_at` 이 `hydraulics.pump_hydraulic_power_W` 로 채운다.
+    pump_heat_supply_node_kW: float = 0.0
+    #: 펌프 수력동력 중 **환수 노드**에 얹히는 몫 [kW] (위와 같은 규약).
+    pump_heat_return_node_kW: float = 0.0
 
     def __post_init__(self) -> None:
         if len(self.rack_loads_kW) != len(self.rack_flows_Lps):
@@ -263,8 +272,13 @@ def _state_at_property_temperature(
 
     정상상태이므로 총 발열량 = 열교환기 방열량이다. 그 조건에서
 
-        T_return = T_2차공급 + Q_총 / (ε · C_총)   (ε-NTU 관계)
-        T_supply = T_return - Q_총 / C_총          (현열 상승)
+        T_return = T_2차공급 + (Q_총 + P_hyd) / (ε · C_총)   (ε-NTU 관계)
+        T_supply = T_return - (Q_총 + P_환수) / C_총          (현열 상승)
+
+    **펌프 수력동력이 두 자리에 나뉘어 들어간다** [5-1 「펌프 일의 노드 배분」 ·
+    세션 7.61]: 랙 다리에는 환수 노드 몫 P_환수 만 얹히고, 열교환기가 버려야 할
+    양에는 P_hyd = P_공급 + P_환수 전량이 얹힌다 — 정상상태 전체 balance 가
+    Q_hx = Q_rack + P_hyd 이기 때문이다.
 
     여기서 C_총 = m_dot_총 · cp [W/K] 이다. **T_return 을 위 첫 식으로 정의하므로
     ε-NTU duty 와 랙 발열량의 차는 구조상 항등적으로 0이 된다** — 그 성질은
@@ -283,13 +297,21 @@ def _state_at_property_temperature(
         case.secondary_flow_Lps,
     )
     Q_W = case.total_load_kW * _W_PER_KW
+    P_supply_W = case.pump_heat_supply_node_kW * _W_PER_KW
+    P_return_W = case.pump_heat_return_node_kW * _W_PER_KW
 
-    T_return_C = case.T_secondary_supply_C + Q_W / (effectiveness * C_min_W_K)
-    T_supply_C = T_return_C - Q_W / C_W_K
+    T_return_C = case.T_secondary_supply_C + (Q_W + P_supply_W + P_return_W) / (
+        effectiveness * C_min_W_K
+    )
+    T_supply_C = T_return_C - (Q_W + P_return_W) / C_W_K
 
+    # 환수 노드 몫은 랙 유량에 **비례**해 랙에 나눈다 — m_i ∝ Q_i 이므로 랙마다
+    # 같은 온도 상승 P_환수/C_총 이 되고, 유량가중 혼합이 위 T_return 과 정확히
+    # 일치한다(추가 파라미터 0).
     rack_return_temps_C = tuple(
         T_supply_C
         + load_kW * _W_PER_KW / (flow_Lps * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K)
+        + P_return_W / C_W_K
         for load_kW, flow_Lps in zip(
             case.rack_loads_kW, case.rack_flows_Lps, strict=True
         )
@@ -539,6 +561,13 @@ def cdu_thermal_case_at(
     `plant.py` 가 비공개 이름을 import 하지 않도록 공개해 둔다.
     """
     flow = solve_flow_distribution(case.hydraulic, T_property_C)
+    pump_heat = pump_hydraulic_power_W(
+        flow.pump_head_mAq,
+        flow.total_flow_Lps,
+        flow.rack_flows_Lps,
+        case.hydraulic,
+        T_property_C,
+    )
     thermal_case = SteadyStateCase(
         T_secondary_supply_C=case.T_secondary_supply_C,
         ntu=case.ntu,
@@ -546,6 +575,8 @@ def cdu_thermal_case_at(
         rack_flows_Lps=flow.rack_flows_Lps,
         secondary_flow_Lps=secondary_flow_Lps,
         cp_rule=case.cp_rule,
+        pump_heat_supply_node_kW=pump_heat.supply_node_W / _W_PER_KW,
+        pump_heat_return_node_kW=pump_heat.return_node_W / _W_PER_KW,
     )
     return thermal_case, flow
 

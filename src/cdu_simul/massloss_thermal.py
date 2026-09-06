@@ -79,6 +79,7 @@ from cdu_simul.fluid import (
 from cdu_simul.hydraulics import (
     HydraulicCase,
     bulk_mean_temperature_C,
+    pump_hydraulic_power_W,
     rated_property_temperature_C,
 )
 from cdu_simul.massloss import (
@@ -210,9 +211,14 @@ def _steady_at_property_temperature(
 
     dT/dt = 0 을 모듈 docstring 의 두 식에 넣으면 닫힌 형태가 된다::
 
-        ΔT    = Q_rack / (ṁ_sup·cp)
-        T_ret = T_2차 + ṁ_ret·cp·ΔT / (ε·C_min)
+        ΔT    = (Q_rack + P_환수) / (ṁ_sup·cp)
+        T_ret = T_2차 + (ṁ_ret·cp·ΔT + P_공급) / (ε·C_min)
         T_sup = T_ret − ΔT
+
+    P_공급·P_환수 는 펌프 수력동력의 노드 배분이다 [5-1 「펌프 일의 노드 배분」 ·
+    세션 7.61]. 랙 다리(공급유량)에는 P_환수 가, 열교환기가 버려야 할 양에는
+    P_공급 이 더 얹힌다 — 환수 다리에서 열교환기 하류에 P_공급 이 들어가기
+    때문이다.
     """
     flow = solve_massloss(case.hydraulic, massloss_flow_Lps, topology, T_property_C)
     rho_kgm3 = coolant_density_kgm3(T_property_C)
@@ -227,12 +233,20 @@ def _steady_at_property_temperature(
         C_return_W_K, case.ntu, case.T_secondary_supply_C, secondary_flow_Lps
     )
     Q_rack_W = case.rack_load_kW * case.hydraulic.n_racks * _W_PER_KW
-
-    dT_C = Q_rack_W / C_supply_W_K
-    T_return_C = (
-        case.T_secondary_supply_C
-        + C_return_W_K * dT_C / (effectiveness * C_min_W_K)
+    # 펌프 수력동력 [5-1 「펌프 일의 노드 배분」 · 세션 7.61]. Q_pump 는 「샘」에서
+    # 공급유량이 아닐 수 있다 — `MassLossResult.pump_flow_Lps` 규약을 그대로 쓴다.
+    pump_heat = pump_hydraulic_power_W(
+        flow.pump_head_mAq,
+        flow.pump_flow_Lps,
+        flow.rack_flows_Lps,
+        case.hydraulic,
+        T_property_C,
     )
+
+    dT_C = (Q_rack_W + pump_heat.return_node_W) / C_supply_W_K
+    T_return_C = case.T_secondary_supply_C + (
+        C_return_W_K * dT_C + pump_heat.supply_node_W
+    ) / (effectiveness * C_min_W_K)
     T_supply_C = T_return_C - dT_C
 
     rack_outlet_temps_C = tuple(
@@ -240,6 +254,7 @@ def _steady_at_property_temperature(
         + case.rack_load_kW
         * _W_PER_KW
         / (Q_i * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K)
+        + pump_heat.return_node_W / C_supply_W_K
         for Q_i in flow.rack_flows_Lps
     )
     Q_hx_W = effectiveness * C_min_W_K * (T_return_C - case.T_secondary_supply_C)
@@ -439,9 +454,27 @@ def integrate_massloss_step(
             C_return_W_K, case.ntu, case.T_secondary_supply_C, secondary_flow_Lps
         )
         Q_hx_W = effectiveness * C_min_W_K * (T_ret_C - case.T_secondary_supply_C)
+        # 펌프 수력동력 [5-1 「펌프 일의 노드 배분」 · 세션 7.61].
+        pump_heat = pump_hydraulic_power_W(
+            flow.pump_head_mAq,
+            flow.pump_flow_Lps,
+            flow.rack_flows_Lps,
+            case.hydraulic,
+            T_prop_C,
+        )
         return [
-            (C_return_W_K * (T_ret_C - T_sup_C) - Q_hx_W) / (mass_cold_kg * cp_Jkg_K),
-            (C_supply_W_K * (T_sup_C - T_ret_C) + Q_rack_W) / (mass_hot_kg * cp_Jkg_K),
+            (
+                C_return_W_K * (T_ret_C - T_sup_C)
+                - Q_hx_W
+                + pump_heat.supply_node_W
+            )
+            / (mass_cold_kg * cp_Jkg_K),
+            (
+                C_supply_W_K * (T_sup_C - T_ret_C)
+                + Q_rack_W
+                + pump_heat.return_node_W
+            )
+            / (mass_hot_kg * cp_Jkg_K),
         ]
 
     solution = solve_ivp(

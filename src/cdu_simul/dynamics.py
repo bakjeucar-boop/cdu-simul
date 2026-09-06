@@ -66,6 +66,7 @@ from cdu_simul.fluid import coolant_cp_Jkg_K, coolant_density_kgm3
 from cdu_simul.hydraulics import (
     HydraulicCase,
     apply_leak_to_rack,
+    pump_hydraulic_power_W,
     solve_flow_distribution,
 )
 from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
@@ -351,13 +352,21 @@ def _derivative(
     )
     Q_rack_W = load_kW * _W_PER_KW
     Q_hx_W = effectiveness * C_min_W_K * (T_return_C - case.T_secondary_supply_C)
+    # 펌프 수력동력 [5-1 「펌프 일의 노드 배분」 · 세션 7.61] — 두 노드에 나눠 얹는다.
+    pump_heat = pump_hydraulic_power_W(
+        flow.pump_head_mAq,
+        flow.total_flow_Lps,
+        flow.rack_flows_Lps,
+        hydraulic_case,
+        T_property_C,
+    )
 
-    dT_return_dt = (C_W_K * (T_supply_C - T_return_C) + Q_rack_W) / (
-        mass_hot_kg * cp_Jkg_K
-    )
-    dT_supply_dt = (C_W_K * (T_return_C - T_supply_C) - Q_hx_W) / (
-        mass_cold_kg * cp_Jkg_K
-    )
+    dT_return_dt = (
+        C_W_K * (T_supply_C - T_return_C) + Q_rack_W + pump_heat.return_node_W
+    ) / (mass_hot_kg * cp_Jkg_K)
+    dT_supply_dt = (
+        C_W_K * (T_return_C - T_supply_C) - Q_hx_W + pump_heat.supply_node_W
+    ) / (mass_cold_kg * cp_Jkg_K)
     return dT_supply_dt, dT_return_dt, flow.total_flow_Lps
 
 
