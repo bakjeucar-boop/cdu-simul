@@ -22,6 +22,7 @@ from functools import partial
 
 from cdu_simul.assumptions import (
     ASSUMPTION_TAG,
+    HEAT_TERMS_CAVEAT,
     LEAK,
     LOAD_PROFILE,
     PLANT,
@@ -572,7 +573,9 @@ SCHEMA_DRAFT: tuple[tuple[str, str, str], ...] = (
 
 #: 출처·한계 표기 — **행마다 반복하는 안(A)** 에서 추가되는 열.
 PROVENANCE_COLUMNS: tuple[tuple[str, str], ...] = (
-    ("assumption_tag", ASSUMPTION_TAG),
+    # 열수지 문언은 기구와 무관해 **이 열 하나에만** 싣는다 [세션 7.64] —
+    # 다른 caveat 열 넷과 「샘」 변형 셋은 건드리지 않는다. 새 열도 만들지 않는다.
+    ("assumption_tag", f"{ASSUMPTION_TAG} · {HEAT_TERMS_CAVEAT}"),
     (
         "signal_sign_caveat",
         "이 행의 이상 기구는 「막힘」(K값 증가 근사 · 5장)이거나 없다(정상). "

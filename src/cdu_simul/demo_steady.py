@@ -35,6 +35,7 @@ from typing import Any
 from cdu_simul.assumptions import (
     ASSUMPTION_TAG,
     HEAT_EXCHANGER,
+    HEAT_TERMS_CAVEAT,
     LOAD_PROFILE,
     PIPING,
     PLANT,
@@ -181,7 +182,9 @@ def _leak_level_for(level: ResistanceLevel) -> LeakLevel:
 # 표기 — 케이스마다 반복해서 싣는다 (5-1 스키마 규약과 같은 취지)
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_CAVEATS: dict[str, str] = {
-    "assumption_tag": ASSUMPTION_TAG,
+    # 열수지 문언은 **이 항목 안에** 넣는다 [세션 7.64] — 새 키(= 화면의 새 행)를
+    # 만들지 않는다. `pfd.html:paintCaveats` 가 키를 <dt> 로 그대로 낸다.
+    "assumption_tag": f"{ASSUMPTION_TAG} · {HEAT_TERMS_CAVEAT}",
     "steady_only": (
         "정상상태 해다. 케이스 배열은 **시간축이 아니다** — 화면에서 케이스가 "
         "바뀌는 것은 케이스 전환의 표시이지 시간 경과가 아니다. 전이는 돌리지 "
