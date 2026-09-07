@@ -95,7 +95,8 @@ def _component_map() -> list[tuple[str, str, str]]:
         (
             "열교환기",
             "model.hx_capacity_terms · hx_effectiveness_counterflow",
-            "대향류 ε-NTU · Cr 은 양측 물성에서 유도(세션 5-B)",
+            "대향류 ε-NTU · Cr 은 양측 물성에서 유도(세션 5-B) · "
+            "UA 고정 · NTU = UA/C_min 은 운전점에서(세션 7.72)",
         ),
         (
             "계통 열용량",
@@ -358,9 +359,11 @@ OPEN_LIMITS: tuple[tuple[str, str], ...] = (
         "`rack{i}_flow_Lps`·`rack{i}_outlet_C` 는 이 불확실성에 해당하지 않는다",
     ),
     (
-        "고정 NTU 가정 — 유량이 크게 변하면 UA 가 따라 변해야 한다",
-        "`ntu` 열이 5장 값으로 고정이다. 「막힘」으로 유량이 −9.7% 까지 움직이는 행에서 "
-        "`T_supply_C`·`T_return_C`·`hx_duty_kW` 가 그만큼 어긋난다",
+        "UA 가 5장에 없다 — 정격점 역산값이다 (세션 7.72 · 미해결 #70 은 닫혔다)",
+        "고정인 것은 **UA** 이고 운전 NTU = UA / C_min 은 행마다 다시 낸다. "
+        "`ntu` 열은 **정격 NTU**(5장 축값)이고 운전 NTU 는 데이터셋에 없다. "
+        "남은 한계 둘 — UA 는 5장이 준 값이 아니라 정격점에서 역산한 값이며, "
+        "**2차측이 C_min 인 행은 1차측 유량이 변해도 ε 가 안 움직인다**",
     ),
     (
         "2차측 온도 고정 — CDU 간 열 경로 결합이 없다",
