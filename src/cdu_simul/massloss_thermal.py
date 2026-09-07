@@ -125,7 +125,7 @@ class MassLossThermal:
     pump_head_mAq: float
     property_eval_T_C: float
     hx_duty_kW: float
-    #: ε (열교환기 유효도) — 데이터셋의 `heat_capacity_ratio` 열이 읽는다
+    #: ε (열교환기 유효도) — 데이터셋의 `hx_effectiveness` 열이 읽는다
     #: [세션 7.39]. `model.ThermalResult.hx_effectiveness` 와 같은 양이다.
     hx_effectiveness: float
     rack_load_kW: float

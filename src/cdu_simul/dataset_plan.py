@@ -524,7 +524,13 @@ SCHEMA_DRAFT: tuple[tuple[str, str, str], ...] = (
     ("pump_head_rated_mAq", "mAq", "5장 범위 축 — 20 또는 30"),
     ("branch_dp_rated_mAq", "mAq", "5장 범위 축 — 2 또는 3"),
     ("valve_dp_rated_mAq", "mAq", "5장 범위 축 — 3 또는 5"),
-    ("ntu", "-", "5장 범위 축 — 2 또는 3"),
+    (
+        "ntu",
+        "-",
+        "5장 범위 축 — 2 또는 3. **정격 NTU 다** — UA = NTU_정격 × C_min,정격 "
+        "으로 고정하므로 운전 NTU = UA / C_min 은 행마다 다르고 이 열에 없다 "
+        "(5-1 「열교환기 UA — 정격점 역산」 · 세션 7.72)",
+    ),
     ("T_secondary_supply_C", "℃", "5장 범위 축 — 27 또는 30 (고정 경계조건)"),
     ("holdup_mass_kg", "kg", "5-1 M 하한/상한. **transient 행에만 의미가 있다**"),
     ("t_s", "s", "전이 시각. steady 행은 비운다"),
@@ -554,7 +560,14 @@ SCHEMA_DRAFT: tuple[tuple[str, str, str], ...] = (
     ("T_return_C", "℃", "1차측 환수온도 (유량가중 혼합)"),
     ("hx_duty_kW", "kW", "열교환기 방열량"),
     ("secondary_share_Lps", "L/s", "공유 2차측 배분 (단일 CDU 는 정격 15.5)"),
-    ("heat_capacity_ratio", "-", "Cr — **유도값**이다(세션 5-B). 선언값이 아니다"),
+    (
+        "hx_effectiveness",
+        "-",
+        "ε (열교환기 유효도) — **유도값**이다. 세션 7.71 까지 이 열의 이름이 "
+        "`heat_capacity_ratio` 였으나 싣는 값은 처음부터 ε 였다(미해결 #41 · "
+        "세션 7.72 에 이름을 내용에 맞췄다 · 열 수는 그대로다). **Cr 은 이 "
+        "데이터셋에 없다** — 필요하면 새 열이고, 이 판은 늘리지 않았다",
+    ),
     (
         "energy_balance_residual_percent",
         "%",

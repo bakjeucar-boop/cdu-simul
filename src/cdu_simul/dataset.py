@@ -575,7 +575,7 @@ def steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
             T_return_C=result.thermal.T_return_C,
             hx_duty_kW=result.thermal.hx_duty_kW,
             secondary_share_Lps=share,
-            heat_capacity_ratio=result.thermal.hx_effectiveness,
+            hx_effectiveness=result.thermal.hx_effectiveness,
             energy_balance_residual_percent=energy_balance_residual_percent(
                 result.thermal
             ),
@@ -719,7 +719,7 @@ def _transient_rows_from(
                 T_return_C=float(return_series[cdu_index][sample_index]),
                 hx_duty_kW="",
                 secondary_share_Lps=shares[cdu_index],
-                heat_capacity_ratio="",
+                hx_effectiveness="",
                 energy_balance_residual_percent="",
                 hydraulic_solver_ier=1 if hydraulic_ok else 0,
                 thermal_solver_converged=hydraulic_ok,
@@ -788,7 +788,7 @@ def massloss_steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
             T_return_C=result.T_return_C,
             hx_duty_kW=result.hx_duty_kW,
             secondary_share_Lps=share,
-            heat_capacity_ratio=result.hx_effectiveness,
+            hx_effectiveness=result.hx_effectiveness,
             energy_balance_residual_percent=result.energy_balance_residual_percent,
             hydraulic_solver_ier=1 if result.hydraulic_solver_converged else 0,
             thermal_solver_converged=result.outer_solver_ier == 1,
