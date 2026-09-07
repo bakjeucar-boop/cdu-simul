@@ -200,8 +200,11 @@ python -m venv .venv
 .venv/Scripts/python.exe -m cdu_simul.model
 
 # lint · 타입검사 (세션 1-C 도입 — 안 쓰기로 하면 이 두 줄과 규칙 12의 ruff·mypy를 지운다)
+# mypy 범위에 scripts/ 가 들어간다(세션 7.69 · #77) — 판마다 따로 돌리지 않는다.
+# 한꺼번에 돌리려면 pyproject.toml 의 `explicit_package_bases = true` 가 있어야 한다
+# (없으면 scripts/ 파일이 두 이름으로 잡혀 해석 단계에서 멈춘다).
 .venv/Scripts/python.exe -m ruff check .
-.venv/Scripts/python.exe -m mypy src tests
+.venv/Scripts/python.exe -m mypy src tests scripts
 
 # 아침 브리핑 (PROCEED.md 「현재 상태」 표 + 마지막 세션 로그)
 git pull
@@ -232,7 +235,7 @@ git pull
 1. `pytest` — **전부 통과**. 실패를 남긴 채 끝내지 않는다. 「명령어」 절의
    **조각 분할대로 나눠 전경으로** 돌린다 — 백그라운드로 넘기지 않는다(#57).
    조각 합이 전 시험을 덮는지 건수로 확인한다(빠진 조각을 통과로 읽지 않는다)
-2. `.venv/Scripts/python.exe -m ruff check .` · `-m mypy src tests` — 통과
+2. `.venv/Scripts/python.exe -m ruff check .` · `-m mypy src tests scripts` — 통과
 3. `PROCEED.md` 갱신 — 완료 항목 · 만든/바꾼 파일 · 미해결과 이유 · 다음 세션 결정사항
 4. 계층별 커밋 분리(절대 규칙 14)
 5. `git push` — 올리지 않으면 이 PC에만 남는다

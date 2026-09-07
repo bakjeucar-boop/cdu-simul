@@ -48,4 +48,7 @@ select = ["E", "F", "I"]
 python_version = "3.12"
 # CoolProp·scipy 에 타입 스텁이 없다.
 ignore_missing_imports = true
+# scripts/ 는 패키지가 아니어서 파일이 두 이름으로 잡힌다 —
+# 저장소 루트를 기준으로 삼아 한 이름으로 고정한다 (세션 7.69).
+explicit_package_bases = true
 # strict 모드로 시작하지 않는다 — 이 판의 목적은 검사기 도입이다.
