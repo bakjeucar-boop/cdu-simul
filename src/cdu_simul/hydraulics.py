@@ -411,18 +411,19 @@ class PumpHydraulicPower:
     def supply_node_W(self) -> float:
         """공급 노드로 가는 몫 [W] — 잔여저항 몫의 50% 다.
 
-        50/50 은 5-1 「계통 보유수량 M의 노드 배분」이 쓴 것과 **같은 규약**이라
-        `assumptions.PIPING` 의 그 값을 그대로 읽는다(절대 규칙 2 — 숫자를 여기
-        새로 적지 않는다). 두 배분은 근거가 같을 뿐 물리적으로 같은 양이 아니다.
+        배분비는 `PUMP.heat_residual_supply_node_fraction` 에서 읽는다(절대 규칙 2
+        — 숫자를 여기 새로 적지 않는다). 5-1 「계통 보유수량 M의 노드 배분」과
+        근거가 같고 값이 같으나 **같은 양이 아니어서** 세션 7.63 이 상수를 갈랐다
+        — M 배분을 바꾸는 결정이 펌프 열 배분을 따라 움직이지 않게 하기 위해서다.
         """
-        return PIPING.holdup_supply_node_fraction * self.residual_W
+        return PUMP.heat_residual_supply_node_fraction * self.residual_W
 
     @property
     def return_node_W(self) -> float:
         """환수 노드로 가는 몫 [W] — 분기·밸브 전량 + 잔여저항 몫의 50%."""
         return (
             self.branch_valve_W
-            + PIPING.holdup_return_node_fraction * self.residual_W
+            + (1.0 - PUMP.heat_residual_supply_node_fraction) * self.residual_W
         )
 
 
