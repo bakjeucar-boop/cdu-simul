@@ -8,10 +8,14 @@
 박지 않는다. 세션 1-B 는 랙 1개였고, 그때의 식은 N=1 의 특수경우로 그대로 남아
 있다(랙이 동일하면 합류식이 1랙 식과 같아진다 — `_state_at_property_temperature`).
 
-**열교환기 규모에 대한 해석**: NTU 는 무차원이므로 5장 값(2~3)을 그대로 쓴다.
-유량이 N배가 되면 UA 도 함께 커지는 것으로 읽는 것이며, 5장이 NTU 를 무차원으로
-준 이상 새 가정치가 아니다. 그 결과 **동일 랙 N개의 온도해는 1랙 해와 같다** —
-Q 와 C 가 같은 배수로 커지기 때문이다.
+**열교환기 규모에 대한 해석**: 5장 NTU 2~3 을 **정격점의 NTU** 로 읽고, 거기서
+UA = NTU_정격 · C_min,정격 을 역산해 **UA 를 고정한다**. 운전 NTU = UA / C_min 은
+유량을 따라 움직인다 [5-1 「열교환기 UA — 정격점 역산」 · 세션 7.72 · 미해결 #70].
+새 가정치는 0개다 — UA 는 5장 NTU 와 이미 확정된 정격점에서 역산한 값이다.
+세션 7.71 까지는 NTU 를 상수로 두었고(「유량이 N배면 UA 도 N배」로 읽었다), 그때는
+**동일 랙 N개의 온도해가 1랙 해와 같았다** — Q 와 C 가 같은 배수로 커져도 ε 가
+그대로였기 때문이다. **UA 고정에서는 그 성질이 더는 성립하지 않는다**: C 가 커지면
+NTU 가 작아져 ε 가 따라 내려간다.
 
 **압력-유량은 `hydraulics.py` 가 푼다**(절대 규칙 4 — 하이브리드 구조).
 `solve_cdu_steady_state` 가 물성 온도 고정점 안에서 매번 헤더 압력평형을
@@ -41,6 +45,7 @@ from cdu_simul.assumptions import (
     ASSUMPTION_TAG,
     HEAT_EXCHANGER,
     LOAD_PROFILE,
+    PUMP,
     SCENARIO,
     SESSION_3B_CAVEAT,
     SESSION_5B_CAVEAT,
@@ -56,6 +61,7 @@ from cdu_simul.hydraulics import (
     HydraulicCase,
     bulk_mean_temperature_C,
     pump_hydraulic_power_W,
+    rated_property_temperature_C,
     solve_flow_distribution,
 )
 from cdu_simul.hydraulics import default_cases as default_hydraulic_cases
@@ -205,6 +211,35 @@ class _PrimaryState:
     hx_duty_W: float
 
 
+def _capacity_rate_W_K(flow_Lps: float, T_C: float) -> float:
+    """부피유량과 물성 평가온도에서 열용량유량 C = Q·ρ(T)·cp(T) [W/K] 를 낸다."""
+    return (
+        flow_Lps * _M3_PER_LITRE * coolant_density_kgm3(T_C) * coolant_cp_Jkg_K(T_C)
+    )
+
+
+def _rated_C_min_W_K(T_secondary_supply_C: float) -> float:
+    """정격점의 C_min [W/K] — UA 역산의 분모다 (순수 함수).
+
+    정격점 넷은 5-1 「열교환기 UA — 정격점 역산」이 정한 그대로다
+    [규약: 프로젝트정리 5-1 · 세션 7.72 확정] — **새 숫자가 0개다**:
+    1차측 유량 = 5장 펌프 정격 · 2차측 유량 = 5-1 「2차측 유체」 ·
+    1차측 물성 평가온도 = `hydraulics.rated_property_temperature_C()` ·
+    NTU 는 부르는 쪽이 넘기는 행의 5장 축값.
+
+    2차측 물성은 **그 행의 2차측 공급온도**에서 본다 — 5-1 이 2차측 물성을
+    공급온도에서만 볼 수 있게 하므로(`hx_capacity_terms` 아래쪽 참조) 정격점
+    이라고 달리 볼 근거가 없다. 부피유량이 같을 때 (ρcp)₂₇ < (ρcp)₃₇ 이므로
+    **정격점에서는 2차측이 C_min** 이지만, 그것을 가정하지 않고 매번 판정한다.
+    """
+    return min(
+        _capacity_rate_W_K(PUMP.rated_flow_Lps, rated_property_temperature_C()),
+        _capacity_rate_W_K(
+            HEAT_EXCHANGER.secondary_flow_Lps, T_secondary_supply_C
+        ),
+    )
+
+
 def hx_capacity_terms(
     C_primary_W_K: float,
     ntu: float,
@@ -215,6 +250,17 @@ def hx_capacity_terms(
 
     **물리를 한 곳에만 적는다**(collaboration.md ④) — 정상상태(`model`)와
     시간적분(`dynamics`)이 둘 다 이 함수를 쓴다.
+
+    **고정인 것은 UA 이고 NTU 는 매 시점 다시 낸다**
+    [규약: 프로젝트정리 5-1 「열교환기 UA — 정격점 역산」 · 세션 7.72 확정]::
+
+        UA  = NTU_정격 · C_min,정격      (정격점에서 역산 · `_rated_C_min_W_K`)
+        NTU = UA / C_min                 (운전점에서 매번)
+
+    인자 `ntu` 는 **정격 NTU**(5장 축값 2 또는 3)이지 운전 NTU 가 아니다.
+    세션 1-B~7.71 은 이것을 상수 NTU 로 그대로 썼고, 그래서 유량이 바뀌어도
+    ε 가 움직이지 않았다(미해결 #70). 물리적으로 고정인 것은 전열면적·총괄
+    열전달계수의 곱 UA 이므로 유량이 줄면 NTU 는 커진다.
 
     **Cr 을 선언하지 않고 매번 유도한다**
     [규약: 프로젝트정리 5-1 「2차측 유체」 · 세션 5-B 확정]::
@@ -240,16 +286,12 @@ def hx_capacity_terms(
     (5-1 「2차측 공급온도」 — 냉각탑을 모델링하지 않는다) 벌크평균을 만들 수 없다.
     선택이 아니라 강제다. 5-1 의 cp·ρ 벌크평균 규약은 1차측에만 적용된다.
     """
-    C_secondary_W_K = (
-        secondary_flow_Lps
-        * _M3_PER_LITRE
-        * coolant_density_kgm3(T_secondary_supply_C)
-        * coolant_cp_Jkg_K(T_secondary_supply_C)
-    )
+    C_secondary_W_K = _capacity_rate_W_K(secondary_flow_Lps, T_secondary_supply_C)
     C_min_W_K = min(C_primary_W_K, C_secondary_W_K)
     C_max_W_K = max(C_primary_W_K, C_secondary_W_K)
+    UA_W_K = ntu * _rated_C_min_W_K(T_secondary_supply_C)
     return (
-        hx_effectiveness_counterflow(ntu, C_min_W_K / C_max_W_K),
+        hx_effectiveness_counterflow(UA_W_K / C_min_W_K, C_min_W_K / C_max_W_K),
         C_min_W_K,
     )
 
