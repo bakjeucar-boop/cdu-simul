@@ -26,6 +26,7 @@ from cdu_simul.assumptions import PIPING, PUMP, SCENARIO, VALVE
 from cdu_simul.fluid import coolant_density_kgm3
 from cdu_simul.hydraulics import (
     HydraulicCase,
+    PumpHydraulicPower,
     branch_dp_mAq,
     branch_K_from_rated_dP,
     bulk_mean_temperature_C,
@@ -188,6 +189,23 @@ def test_assumptions_are_transcribed_not_derived() -> None:
     assert (
         PIPING.holdup_supply_node_fraction + PIPING.holdup_return_node_fraction == 1.0
     )
+
+
+def test_pump_heat_node_split_is_pinned_independently_of_M_split() -> None:
+    """펌프 열의 노드 배분을 고정한다 [세션 7.64].
+
+    5-1 「펌프 일의 노드 배분」 ⓑ 가 잔여저항 몫을 공급 50% · 환수 50% 로 둔다.
+    세션 7.63 이 이 값을 `PIPING.holdup_*_node_fraction`(= 열용량의 공간 배분)
+    에서 **떼어** `PUMP` 로 옮겼으나 지키는 시험이 없어 값을 바꿔도 아무 게이트가
+    잡지 못했다(7.63 D8-3).
+
+    **`PIPING` 값과 같은지는 일부러 견주지 않는다** — 견주면 7.63 이 뗀 뜻이
+    없어진다. 두 배분은 근거가 같고 값이 같으나 **같은 양이 아니다**.
+    """
+    assert PUMP.heat_residual_supply_node_fraction == 0.5
+    # 잔여저항 몫만 넣어 두 노드 몫이 그 전량으로 갈리는지 본다 — 합이 1.0 이다.
+    split = PumpHydraulicPower(branch_valve_W=0.0, residual_W=1.0)
+    assert split.supply_node_W + split.return_node_W == 1.0
 
 
 def test_valve_Kv_and_branch_K_are_not_hardcoded_constants() -> None:
