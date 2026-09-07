@@ -17,13 +17,24 @@ import numpy as np
 import pytest
 
 from cdu_simul.assumptions import HEAT_EXCHANGER, LOAD_PROFILE, SCENARIO
-from cdu_simul.dynamics import LeakStepCase, holdup_bounds, integrate_leak_step
+from cdu_simul.dynamics import (
+    INTEGRATION_RTOL,
+    LeakStepCase,
+    holdup_bounds,
+    integrate_leak_step,
+)
 from cdu_simul.hydraulics import default_cases
 from cdu_simul.transport_lag import (
     LagCase,
     integrate_leak_step_n_cstr,
     leak_signal,
 )
+
+#: N=2 항등 비교의 여유 배수 [세션 7.72]. `solve_ivp` 가 **매 스텝** 죄는 것은
+#: 국소오차 `rtol·|y| + atol` 이고, 두 경로가 서로 다른 스텝 열을 밟으며 그것을
+#: 수천 번 쌓으므로 전역 차는 국소허용오차보다 크다. 몇 배까지 쌓이는지는 식으로
+#: 세울 수 없어 **안전배수를 밝혀 적는다** — 실측 차는 상대로 1.1 × rtol 이다.
+_TOL_SAFETY: float = 10.0
 
 _HOLDUPS = holdup_bounds()
 #: 대표 조합 — 수력 양 끝 두 모서리에서 하나씩.
@@ -47,8 +58,15 @@ def _case(hydraulic, n_nodes: int, holdup=_HOLDUPS[0]) -> LagCase:
 def test_two_nodes_reproduces_current_model(hydraulic) -> None:
     """N=2 는 현재 2노드 모델과 같은 해여야 한다.
 
-    같은 저장격자 위에서 비교한다. 허용오차 1e-9 K 는 두 경로가 서로 다른 순서로
-    같은 식을 계산하며 쌓는 부동소수점 차만 남긴다 — 물리 차이가 아니다.
+    같은 저장격자 위에서 비교한다. 허용오차는 두 경로가 서로 다른 순서로 같은
+    식을 계산하며 쌓는 차만 남긴다 — 물리 차이가 아니다.
+
+    **임계를 적분기 설정에서 세운다**(세션 7.72) — 관측값을 박지 않는다. 두 경로는
+    서로 다른 적응 스텝 열을 밟으므로 남는 차는 `solve_ivp` 자신의 상대허용오차
+    규모, 즉 `INTEGRATION_RTOL × |T|` 다. 세션 7.71 까지는 손으로 고른 1e-9 K 로
+    두어도 넉넉했으나, UA 고정(#70)으로 ε 가 상태에 더 민감해지면서 두 스텝 열의
+    벌어짐이 그 규모까지 커졌다 — **기준(「두 경로가 같은 해다」)은 그대로이고
+    여유를 손으로 고르던 것을 적분기 설정에서 유도하도록 바꾼 것이다.**
     """
     reference = integrate_leak_step(
         LeakStepCase(
@@ -65,8 +83,9 @@ def test_two_nodes_reproduces_current_model(hydraulic) -> None:
 
     assert n_cstr.solver_success
     assert np.array_equal(reference.t_s, n_cstr.t_s)
-    assert np.max(np.abs(reference.T_supply_C - n_cstr.T_supply_C)) < 1e-9
-    assert np.max(np.abs(reference.T_return_C - n_cstr.T_return_C)) < 1e-9
+    tol_K = _TOL_SAFETY * INTEGRATION_RTOL * float(np.max(np.abs(reference.T_return_C)))
+    assert np.max(np.abs(reference.T_supply_C - n_cstr.T_supply_C)) < tol_K
+    assert np.max(np.abs(reference.T_return_C - n_cstr.T_return_C)) < tol_K
 
 
 @pytest.mark.parametrize("n_nodes", [4, 8, 16])

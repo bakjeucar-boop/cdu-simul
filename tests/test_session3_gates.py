@@ -108,8 +108,9 @@ def test_gate_zero_load_steady_state_matches_prediction(case: CduCase) -> None:
 
     **세션 7.61 이전의 예상은 「둘 다 2차측 공급온도 · ΔT = 0」이었다.** 그때는
     펌프 일이 모델 밖이었다 — 예상을 바꾼 것이 아니라 같은 두 식에 이제 0 이
-    아닌 항이 하나 더 들어간다. 실측 이동은 T_supply +0.0429 K · ΔT +3.06e-02 K
-    (H22.4/dPb2/dPv3 · T2nd=27C) 이며, 아래 검사는 **그 두 식을 그대로 대조**한다
+    아닌 항이 하나 더 들어간다. 실측 이동은 T_supply +0.0428 K · ΔT +3.06e-02 K
+    (H22.4/dPb2/dPv3 · T2nd=27C · 세션 7.72 UA 고정 뒤 재측 — 그 전은 +0.0429 K
+    였고 ΔT 는 그대로다) 이며, 아래 검사는 **그 두 식을 그대로 대조**한다
     — 관측값을 기대값으로 박지 않는다.
 
     상대 잔차(`energy_balance_residual_percent`)는 Q=0 에서 정의되지 않는다 —

@@ -138,6 +138,14 @@ def test_eight_racks_match_single_rack_model(case: CduCase) -> None:
     P 는 CDU 1대분 양이므로 1랙 모델에는 1/8 만 들어가야 8랙과 같은 온도해가
     나온다. 나누지 않으면 두 모델이 다른 열원을 보게 되고, 그것은 랙 축을 나누는
     것이 아니라 계통을 바꾸는 것이다.
+
+    **정격 NTU 도 같은 배수로 나눈다**(세션 7.72). 2차측 유량·펌프 일과 **같은
+    이유이며 식에서 따라 나온다** — UA = NTU_정격 · C_min,정격 이 이제 고정이고
+    `_rated_C_min_W_K` 가 쓰는 정격 유량은 CDU 1대분이므로, `ntu` 인자를 나누지
+    않으면 1랙 모델이 **8배 큰 열교환기**를 달게 된다. 나누면 UA 가 1/8 · C_min
+    이 1/8 이라 운전 NTU = UA/C_min 과 Cr 이 둘 다 그대로여서 ε 가 같아지고,
+    온도해도 같아진다. 세션 7.71 까지는 NTU 가 상수(세기 변수)라 나눌 것이
+    없었다 — **바뀐 것은 이 검사의 기준이 아니라 무엇이 크기 변수인가다.**
     """
     result = solve_cdu_steady_state(case)
     assert result.solver_converged, f"{case.label}: 결합 해 미수렴"
@@ -146,7 +154,7 @@ def test_eight_racks_match_single_rack_model(case: CduCase) -> None:
     single = solve_steady_state(
         SteadyStateCase(
             T_secondary_supply_C=case.T_secondary_supply_C,
-            ntu=case.ntu,
+            ntu=case.ntu / SCENARIO.racks_per_cdu,
             rack_loads_kW=(case.rack_load_kW,),
             rack_flows_Lps=(result.flow.mean_rack_flow_Lps,),
             secondary_flow_Lps=(
@@ -195,8 +203,11 @@ def test_energy_balance_residual_undefined_at_zero_load() -> None:
     펌프 일이 남아 계통이 2차측보다 위에서 멎고 열교환기가 그것을 그대로 버린다 —
     **분모만 0 이다.** 예외는 그대로 던져진다: 두 함수 모두 분모를 먼저 보기
     때문이다. 관측(H22.4/dPb2/dPv3 · NTU=2 · T2nd=27C · load=0%): T_supply
-    27.042873 ℃ · T_return 27.073509 ℃ · ΔT +3.064e-02 K · HX duty 3.035836 kW
-    = P_hyd. 아래에서 그 값이 실제로 P_hyd 와 같은지 함께 잰다 — 부하 0 은 펌프
+    27.042829 ℃ · T_return 27.073464 ℃ · ΔT +3.064e-02 K · HX duty 3.035836 kW
+    = P_hyd (세션 7.72 UA 고정으로 앞의 둘이 −4.4e-05 K 씩 옮겼다 — 이 자리는
+    총유량이 15.4717 L/s 라 **1차측이 C_min** 이고, 그래서 운전 NTU 가 2.0036 으로
+    커진다. ΔT 와 duty 는 펌프 일이 정하므로 그대로다).
+    아래에서 그 값이 실제로 P_hyd 와 같은지 함께 잰다 — 부하 0 은 펌프
     일만 남는 자리라 이 등식이 **펌프 항이 살아 있는지**를 가장 곧게 말한다.
     """
     zero_case = default_cdu_cases(load_percent=0.0)[0]
