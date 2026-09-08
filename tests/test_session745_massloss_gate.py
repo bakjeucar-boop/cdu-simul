@@ -5,11 +5,17 @@
 `docs/session745-massloss-gate-criteria.md` 에 계산보다 먼저 적었다(커밋
 `3001588`).
 
-**그러나 이 파일이 그 게이트를 판정하지는 않는다.** 여기서는 그 기준을 코드가
-**정의대로 셌는지**만 본다 — 통과 건수를 요구하지 않는다(결과를 시험에 박으면
-기준을 결과에 맞추는 것이 된다). 게이트 판정은 `python -m cdu_simul.massloss_gate`
-가 낸다. 통과 건수를 이 파일이 assert 하게 할 것인지는 코드 판이 정한다 —
-세션 7.78 은 문서 판이라 시험 코드를 건드리지 않았다.
+**이 파일이 그 게이트를 판정한다**(세션 7.79 부터). 두 가지를 한다.
+
+⑴ 기준을 코드가 **정의대로 셌는지** — 작은 표로 판정식과 여유 식을 고정한다.
+   건수를 박지 않는다(결과를 시험에 박으면 기준을 결과에 맞추는 것이 된다).
+⑵ **게이트 자체** — 「이상 기구를 진 CDU」 전수에서 A·B·C 통과율이 100 % 인가
+   (`test_massloss_gate_passes_on_every_leak_cdu_pair`). 합격선도 모집단도
+   `CLAUDE.md` 게이트 표 세션 4 줄의 문언 그대로이고, 이 파일이 새로 정하지
+   않는다. 모집단은 `massloss_gate.leak_side` 로 고르고 — 리포트가 쓰는 바로 그
+   함수다 — 「해당 없음」은 분모에서 뺀다. 건수는 시험이 스스로 센다.
+
+사람이 읽는 판정 전문은 여전히 `python -m cdu_simul.massloss_gate` 가 낸다.
 
 판정 시험은 물리 모델을 부르지 않는다 — `results/cdu_dataset.csv` 를 읽는 시험
 하나만 파일에 닿고, 나머지는 순수 함수를 작은 표로 확인한다.
@@ -34,12 +40,19 @@ from cdu_simul.massloss import massloss_topologies
 from cdu_simul.massloss_gate import (
     FAIL,
     NA,
+    NOISE_THRESHOLD,
+    PAIR_COLUMNS,
     PASS,
     SIGNALS,
+    TOPOLOGY_COLUMNS,
     criterion_a,
     criterion_b,
+    criterion_b_margin,
     criterion_c,
     format_report,
+    leak_side,
+    pair_table_ac,
+    pair_table_b,
     read_dataset,
     signal_deltas,
 )
@@ -134,6 +147,152 @@ def test_criterion_b_is_strict_monotone_in_magnitude() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 여유 식 셋 — 정의를 작은 표로 고정한다 (미해결 #89 · 세션 7.79)
+#
+# 여유는 **임계까지의 거리**이지 새 임계가 아니다. 기대값을 데이터셋에서 가져오지
+# 않는다 — 전부 여유 식과 판정식의 정의에서 손으로 세운 수다.
+# ─────────────────────────────────────────────────────────────────────────────
+def test_criterion_b_margin_is_the_smallest_neighbour_gap() -> None:
+    """여유 = 수준 오름차순 |Δ| 의 **이웃 차 최소**. 원단위 · 부호 있는 수다.
+
+    통과 조건이 「이웃 차가 전부 > 0」이므로 그 최소가 임계까지의 거리다.
+    """
+    long = _long(
+        [
+            {"g": "오름", "signal": _FLOW, "level": 1, "delta_abs": 1.0, **_LIVE},
+            {"g": "오름", "signal": _FLOW, "level": 2, "delta_abs": 3.0, **_LIVE},
+            {"g": "오름", "signal": _FLOW, "level": 3, "delta_abs": 4.0, **_LIVE},
+            {"g": "내림", "signal": _FLOW, "level": 1, "delta_abs": 4.0, **_LIVE},
+            {"g": "내림", "signal": _FLOW, "level": 2, "delta_abs": 1.0, **_LIVE},
+        ]
+    )
+    margin = criterion_b_margin(long, ("g",))
+    assert margin[("오름", _FLOW)] == pytest.approx(1.0), "min(3-1, 4-3)"
+    assert margin[("내림", _FLOW)] == pytest.approx(-3.0), "떨어지면 음수다"
+
+
+def test_criterion_b_margin_sign_decides_the_verdict() -> None:
+    """여유의 부호가 곧 기준 B 의 판정이다 — 경계는 0 이고 0 은 통과가 아니다.
+
+    · 「멈춤」 — 이웃 차가 0 이면 여유도 0 이고, 「엄격」 단조라 실패다.
+      **새 임계가 아니다**: 0 은 `criterion_b` 의 `>` 에서 그대로 나온다.
+    · 「음수」 — 여유는 |Δ| 로 잰다. Δ 가 내려가도 크기가 커지면 양수다.
+    · 「퇴화」 — 배치로 갈린 「해당 없음」 무리는 여유의 부호와 무관하다.
+    """
+    long = _long(
+        [
+            {"g": "멈춤", "signal": _FLOW, "level": 1, "delta_abs": 3.0, **_LIVE},
+            {"g": "멈춤", "signal": _FLOW, "level": 2, "delta_abs": 3.0, **_LIVE},
+            {"g": "음수", "signal": _FLOW, "level": 1, "delta_abs": -1.0, **_LIVE},
+            {"g": "음수", "signal": _FLOW, "level": 2, "delta_abs": -2.0, **_LIVE},
+            {"g": "퇴화", "signal": _FLOW, "level": 1, "delta_abs": 1.0, **_DEGENERATE},
+            {"g": "퇴화", "signal": _FLOW, "level": 2, "delta_abs": 2.0, **_DEGENERATE},
+        ]
+    )
+    margin = criterion_b_margin(long, ("g",))
+    verdict = criterion_b(long, ("g",))
+
+    assert margin[("멈춤", _FLOW)] == 0.0
+    assert verdict[("멈춤", _FLOW)] == FAIL, "경계값 0 은 통과쪽이 아니다"
+    assert margin[("음수", _FLOW)] == pytest.approx(1.0)
+    assert verdict[("음수", _FLOW)] == PASS
+
+    judged = verdict[verdict != NA]
+    assert ((margin[judged.index] > 0.0) == (judged == PASS)).all()
+    assert verdict[("퇴화", _FLOW)] == NA and margin[("퇴화", _FLOW)] > 0.0
+
+
+def _ac_long() -> pd.DataFrame:
+    """기준 A·C 짝표용 최소 표 — 수준 둘 · 단위 둘 · 퇴화 배치 하나."""
+    return _long(
+        [
+            # 통과/통과 — 부호가 맞고 Δ 가 잡음(1e-3 %) 위에 있다.
+            {
+                "scenario_id": 1, "cdu_index": 0, "signal": _FLOW, "leak_cdu": True,
+                "level": 1.0, "unit": "%", "delta_abs": +2.0, "expected_sign": +1,
+                "delta_judged": 2.0e-3, **_LIVE,
+            },
+            # 실패/실패 — 부호가 어긋나고 Δ 가 잡음 아래다.
+            {
+                "scenario_id": 2, "cdu_index": 0, "signal": _FLOW, "leak_cdu": True,
+                "level": 1.0, "unit": "%", "delta_abs": -2.0, "expected_sign": +1,
+                "delta_judged": -5.0e-4, **_LIVE,
+            },
+            # 가장 작은 수준이 아니라 C 에 실리지 않는다.
+            {
+                "scenario_id": 3, "cdu_index": 0, "signal": _TEMP, "leak_cdu": False,
+                "level": 2.0, "unit": "K", "delta_abs": -1.0, "expected_sign": -1,
+                "delta_judged": -1.0, **_LIVE,
+            },
+            # 퇴화 배치의 수력 신호 — A·C 둘 다 해당 없음.
+            {
+                "scenario_id": 4, "cdu_index": 0, "signal": _FLOW, "leak_cdu": True,
+                "level": 1.0, "unit": "%", "delta_abs": -1.0, "expected_sign": +1,
+                "delta_judged": -1.0, **_DEGENERATE,
+            },
+        ]
+    )
+
+
+def test_pair_table_ac_margin_is_the_distance_to_its_own_threshold() -> None:
+    """A 는 원단위 · 임계 0, C 는 판정단위 · 임계 `NOISE_THRESHOLD[unit]`.
+
+    C 는 **가장 작은 수준의 짝만** 싣는다 — `criterion_c` 와 같은 모집단이다.
+    """
+    long = _ac_long()
+    table = pair_table_ac(long)
+    a = table[table["criterion"] == "A"]
+    c = table[table["criterion"] == "C"]
+
+    assert len(a) == len(long)
+    assert len(c) == int((long["level"] == long["level"].min()).sum())
+    assert set(c["scenario_id"]) == {1, 2, 4}, "수준 2 인 3번 짝은 대상이 아니다"
+
+    assert (a["threshold"] == 0.0).all() and (a["margin_unit"] == "원단위").all()
+    assert list(a["margin"]) == pytest.approx([+2.0, -2.0, +1.0, -1.0])
+
+    assert (c["margin_unit"] == "판정단위").all()
+    assert list(c["threshold"]) == pytest.approx([NOISE_THRESHOLD["%"]] * 3)
+    assert list(c["margin"]) == pytest.approx([1.0e-3, -5.0e-4, 1.0 - 1.0e-3])
+
+
+def test_pair_table_ac_margin_sign_decides_the_verdict() -> None:
+    """여유가 양수면 통과쪽이다 — 「해당 없음」 짝은 판정에서 빠진다.
+
+    경계(여유 0)는 이 표에 없다. 기준 C 는 `|Δ| > threshold` 라 여유 0 이 실패로
+    떨어지지만, 기준 A 는 Δ 를 `> 0` 으로만 읽어 Δ = 0 에서 기대 부호가 −1 이면
+    여유 0 인 채 통과가 된다 — 그 한 점에서만 「여유 > 0 = 통과」가 성립하지
+    않는다. 그래서 여기서는 여유 ≠ 0 인 짝만 본다.
+    """
+    table = pair_table_ac(_ac_long())
+    judged = table[table["verdict"] != NA]
+    assert len(judged) == len(table) - 2, "퇴화 배치의 A·C 짝 둘이 빠진다"
+    assert (judged["margin"] != 0.0).all()
+    assert ((judged["margin"] > 0.0) == (judged["verdict"] == PASS)).all()
+
+
+def test_pair_table_b_carries_the_group_verdict_and_its_margin() -> None:
+    """(무리 · 신호) 짝마다 한 줄이고, 판정·여유가 판정식이 낸 것 그대로다."""
+    long = _long(
+        [
+            {"g": "오름", "signal": _FLOW, "level": 1, "delta_abs": -1.0, **_LIVE},
+            {"g": "오름", "signal": _FLOW, "level": 2, "delta_abs": -2.0, **_LIVE},
+            {"g": "멈춤", "signal": _TEMP, "level": 1, "delta_abs": 3.0, **_LIVE},
+            {"g": "멈춤", "signal": _TEMP, "level": 2, "delta_abs": 3.0, **_LIVE},
+        ]
+    )
+    table = pair_table_b(long, ("g",)).set_index(["g", "signal"])
+    verdict = criterion_b(long, ("g",))
+    margin = criterion_b_margin(long, ("g",))
+
+    assert len(table) == len(verdict)
+    assert (table["criterion"] == "B").all()
+    assert (table["threshold"] == 0.0).all() and (table["margin_unit"] == "원단위").all()
+    assert (table["verdict"] == verdict[table.index]).all()
+    assert table["margin"].to_numpy() == pytest.approx(margin[table.index].to_numpy())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CSV 를 읽는 시험 — 파일이 없으면 건너뛴다(데이터셋은 재생성 산출물이다)
 # ─────────────────────────────────────────────────────────────────────────────
 CSV_PATH = DEFAULT_OUTPUT_DIR / "cdu_dataset.csv"
@@ -172,6 +331,35 @@ def test_verdict_counts_add_up(dataset: pd.DataFrame) -> None:
     smallest = float(long["level"].min())
     verdict_c = criterion_c(long, smallest)
     assert len(verdict_c) == int((long["level"] == smallest).sum())
+
+
+def test_massloss_gate_passes_on_every_leak_cdu_pair(dataset: pd.DataFrame) -> None:
+    """**게이트** — 「샘」의 A·B·C 가 이상 기구를 진 CDU 전수에서 통과율 100 %.
+
+    합격선·모집단은 `CLAUDE.md` 게이트 표 세션 4 줄의 문언 그대로다(사람이
+    2026-09-08 에 정했다). 이 시험이 새로 정하는 것은 없다.
+
+    · 모집단 — `leak_side` 가 고른다. 리포트의 통과율이 쓰는 바로 그 함수라
+      둘이 갈리지 않는다. 이웃 CDU 는 여기 들지 않는다(기준 문서 2-4).
+    · 「해당 없음」 — 분모에서 뺀다(세션 7.47 규정). 건수는 시험이 스스로 센다.
+
+    **깨지면 기대값을 고치지 않는다.** 여유가 얇다(세션 7.77 이 잰 기준 B
+    8.711e-07) — 깨진 것이 게이트가 일한 것인지 먼저 가른다.
+    """
+    long = signal_deltas(dataset, LEAK_MODEL_MASSLOSS)
+    verdicts = {
+        "A": criterion_a(long),
+        "B": criterion_b(long, (*PAIR_COLUMNS, *TOPOLOGY_COLUMNS)),
+        "C": criterion_c(long, float(long["level"].min())),
+    }
+    for name, verdict in verdicts.items():
+        leak = leak_side(verdict, long)
+        decided = leak[leak != NA]
+        assert len(decided) > 0, f"기준 {name} — 판정된 짝이 0 이면 통과가 아니다"
+        assert (decided == PASS).all(), (
+            f"기준 {name} — 실패 {int((decided == FAIL).sum()):,}짝 / "
+            f"판정 {len(decided):,}짝 (해당 없음 {int((leak == NA).sum()):,}짝)"
+        )
 
 
 def test_report_carries_the_assumption_notice(dataset: pd.DataFrame) -> None:
