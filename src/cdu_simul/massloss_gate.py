@@ -112,6 +112,9 @@ LEVEL_COLUMN: dict[str, str] = {
 }
 
 _READ_COLUMNS: list[str] = [
+    #: 짝의 식별자. 판정에는 쓰이지 않고 실패·통과 짝을 되살릴 때만 쓴다 —
+    #: `scenario_id` 와 `cdu_index` 둘이면 데이터셋 행이 유일하다(미해결 #84).
+    "scenario_id",
     "scenario_kind",
     "anomaly_mechanism",
     "blockage_level_percent",
@@ -164,7 +167,13 @@ def signal_deltas(frame: pd.DataFrame, anomaly_mechanism: str) -> pd.DataFrame:
         before = merged[f"base_{signal.column}"]
         delta = after - before
         piece = merged[
-            [*PAIR_COLUMNS, *TOPOLOGY_COLUMNS, "anomaly_cdu_index", level_column]
+            [
+                "scenario_id",
+                *PAIR_COLUMNS,
+                *TOPOLOGY_COLUMNS,
+                "anomaly_cdu_index",
+                level_column,
+            ]
         ].copy()
         piece["signal"] = signal.label
         piece["unit"] = signal.unit
