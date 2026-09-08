@@ -201,7 +201,7 @@ class MassLossThermal:
     def balance_residual_with_massloss_percent(self) -> float:
         """「샘」 항을 **넣고** 본 잔차 [%] — 판정 기준 D.
 
-        `Q_hx` 는 ε-NTU 경로, `Q_rack` 은 5장 입력, 누출 엔탈피는 **CoolProp 직접
+        `Q_hx` 는 ε-NTU 경로, `Q_rack` 은 5장 입력, 「샘」 엔탈피는 **CoolProp 직접
         조회**다. 세 경로가 다르므로 항등식이 아니다.
 
         **펌프 수력동력 전량이 여기 들어간다** [5-1 「펌프 일의 노드 배분」 ·
