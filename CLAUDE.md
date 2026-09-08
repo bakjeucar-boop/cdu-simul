@@ -177,15 +177,15 @@ python -m venv .venv
 #   · 무거운 파일은 단독 조각으로 뺀다.
 #   · **백그라운드로 넘기지 않는다**(#57) — 상한을 넘으면 도구가 자동으로 넘긴다.
 #
-#   세션 7.39 실측 (「샘」 행이 얹힌 뒤) · 조각 합 **1,344건**
+#   세션 7.39 실측 (「샘」 행이 얹힌 뒤) · 조각 합 **1,350건**
 #   (세션 7.53 — 그때까지 목록에서 빠져 있던 test_session745_massloss_gate.py
 #    10건 · 6 s 를 뒤 조각에 넣어 15파일 전수가 된 수다. 시간은 다시 재지 않았다.
-#    건수는 세션 7.78 이 `pytest --collect-only -q` 로 조각별로 다시 셌다 —
-#    393 + 781 + 170 = 1,344 이고 `pytest --collect-only -q` 전수도 1,344 라
+#    건수는 세션 7.83 이 `pytest --collect-only -q` 로 조각별로 다시 셌다 —
+#    393 + 787 + 170 = 1,350 이고 `pytest --collect-only -q` 전수도 1,350 라
 #    조각 셋이 전수를 덮는다. **건수는 시험이 늘면 움직인다** — 어긋나면
 #    문서가 아니라 이 자리를 다시 세어 고친다):
 .venv/Scripts/python.exe -m pytest tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 7파일 · 393건 · 89 s (×1.25 = 111 s)
-.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py tests/test_session745_massloss_gate.py   # 뒤 7파일 · 781건 · 157 s (×1.25 = 196 s)
+.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py tests/test_session745_massloss_gate.py   # 뒤 7파일 · 787건 · 157 s (×1.25 = 196 s)
 .venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 · 324 s (×1.25 = 405 s) — 단독 조각
 #
 #   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다**(세션 7.39 재측) — 조각별 최대가
