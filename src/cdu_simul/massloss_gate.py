@@ -265,6 +265,24 @@ def criterion_b(
     )
 
 
+def criterion_b_margin(
+    long: pd.DataFrame, group_columns: tuple[str, ...]
+) -> pd.Series:  # type: ignore[type-arg]
+    """기준 B 의 여유 — 수준 오름차순 |Δ| 의 **이웃 차 최소**. 원단위.
+
+    `criterion_b` 의 통과 조건이 「이웃 차가 전부 > 0」이므로 그 최소가 곧 임계
+    까지의 거리다. **새 임계를 만들지 않는다** — 경계는 0 이고, 그 0 은
+    「엄격 단조」라는 기준 문서의 말에서 그대로 나온다.
+    """
+
+    def margin(group: pd.DataFrame) -> float:
+        values = group.sort_values("level")["delta_abs"].abs().to_numpy()
+        return float(min(values[i] - values[i - 1] for i in range(1, len(values))))
+
+    keys = [*group_columns, "signal"]
+    return long.groupby(keys, dropna=False)[["level", "delta_abs"]].apply(margin)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 표 만들기
 # ─────────────────────────────────────────────────────────────────────────────
@@ -659,12 +677,164 @@ def _summary_lines(
     return lines
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 짝 목록 — 판 사이에 대조할 수 있게 파일로 남긴다 (미해결 #84)
+# ─────────────────────────────────────────────────────────────────────────────
+#: 남기는 자리. 사람이 2026-09-08 에 `docs/` 로 정했다 — `results/` 는
+#: `.gitignore:17` 이라 다른 PC 로 가지 않고, 화면 출력은 남지 않는다
+#: (세션 7.76 G0 의 후보 ㉠~㉣ 중 ㉡).
+PAIRS_DIR = Path(__file__).resolve().parents[2] / "docs"
+PAIRS_AC_NAME = "session777-massloss-pairs-ac.csv"
+PAIRS_B_NAME = "session777-massloss-pairs-b.csv"
+
+#: 짝을 가리키는 식별자. `scenario_id` 와 `cdu_index` 둘이면 데이터셋 행이
+#: 유일하고(세션 7.76 G0 · 이 판이 다시 셌다 · 중복 0건), 거기에 신호 이름을
+#: 더하면 (행 · 신호) 짝이 유일해진다.
+PAIR_IDENTIFIER: tuple[str, ...] = ("scenario_id", "cdu_index", "signal")
+
+
+def pair_table_ac(long: pd.DataFrame) -> pd.DataFrame:
+    """기준 A·C 의 (행 · 신호) 짝마다 한 줄 — 판정과 임계까지의 여유.
+
+    여유의 뜻은 기준마다 다르다. **둘 다 새 임계를 만들지 않는다.**
+
+    · A(부호 일관성) — `delta_abs × expected_sign`. 원단위. 경계는 0 이고,
+      그 0 은 `criterion_a` 의 `(delta_abs > 0) == (expected_sign > 0)` 에서
+      그대로 나온다.
+    · C(잡음 대비) — `|delta_judged| − threshold`. 판정단위. `threshold` 는
+      `NOISE_THRESHOLD`(세션 4 가 쓴 값)이고 이 판이 고르지 않았다.
+
+    「해당 없음」 짝의 여유도 싣는다 — 판정에 쓰이지 않는 값이지만, 그 짝이
+    무엇이었는지 되살리려면 자리가 있어야 한다.
+    """
+    verdict_a = criterion_a(long)
+    smallest = float(long["level"].min())
+    verdict_c = criterion_c(long, smallest)
+
+    a = long[[*PAIR_IDENTIFIER, "leak_cdu", "level", "unit"]].copy()
+    a.insert(0, "criterion", "A")
+    a["verdict"] = verdict_a
+    a["threshold"] = 0.0
+    a["value"] = long["delta_abs"] * long["expected_sign"]
+    a["margin"] = a["value"] - a["threshold"]
+    a["margin_unit"] = "원단위"
+
+    rows = long.loc[verdict_c.index]
+    c = rows[[*PAIR_IDENTIFIER, "leak_cdu", "level", "unit"]].copy()
+    c.insert(0, "criterion", "C")
+    c["verdict"] = verdict_c
+    c["threshold"] = rows["unit"].map(NOISE_THRESHOLD)
+    c["value"] = rows["delta_judged"].abs()
+    c["margin"] = c["value"] - c["threshold"]
+    c["margin_unit"] = "판정단위"
+
+    return pd.concat([a, c], ignore_index=True)
+
+
+def pair_table_b(long: pd.DataFrame, group_columns: tuple[str, ...]) -> pd.DataFrame:
+    """기준 B 의 (무리 · 신호) 짝마다 한 줄.
+
+    **무리는 `scenario_id` 로 가리킬 수 없다** — 한 무리가 크기 4수준에 걸쳐
+    있어 `scenario_id` 가 넷이다. 무리를 가리키는 것은 무리 키(짝짓는 열 여덟 +
+    구조 자유도 셋)와 신호 이름이고, 그 축을 열로 그대로 싣는다.
+    """
+    verdict = criterion_b(long, group_columns).rename("verdict")
+    margin = criterion_b_margin(long, group_columns).rename("margin")
+    table = pd.concat([verdict, margin], axis=1).reset_index()
+    table.insert(0, "criterion", "B")
+    table["threshold"] = 0.0
+    table["margin_unit"] = "원단위"
+    return table
+
+
+def _pairs_header(
+    table_name: str, kept: int, dropped: int, leak_cdu_only: bool
+) -> list[str]:
+    """파일 머리 — 무엇이 내는가 · 무엇을 뺐는가 · 나머지는 어떻게 내는가."""
+    return [
+        f"「샘」(질량손실) 게이트 판정 — {table_name} (미해결 #84 · 세션 7.77)",
+        ASSUMPTION_TAG,
+        "가정값 기반 — 실측 아님.",
+        "",
+        "내는 명령: .venv/Scripts/python.exe -m cdu_simul.massloss_gate --pairs",
+        "  (읽는 것은 results/cdu_dataset.csv 하나다. 판정 기준·임계는 이 파일이",
+        "   만들지 않는다 — docs/session745-massloss-gate-criteria.md 의 것을 쓴다.)",
+        "",
+        *(
+            [
+                f"실린 짝: 이상 기구를 진 CDU 만 {kept:,}. 뺀 짝 {dropped:,} —",
+                "  이웃 CDU 다. 뺀 근거는 기준 문서 2-4: 기대 부호는 기구를 진",
+                "  CDU 에서 나온 것이라 이웃 CDU 의 통과·실패가 무엇을 뜻하는지",
+                "  정해지지 않았다. 리포트의 통과율도 같은 모집단으로 내므로,",
+                "  목록과 통과율이 같은 모집단을 봐야 합격선을 그을 때 어긋나지",
+                "  않는다.",
+                "  **이 파일은 전 짝이 아니다.** 이웃 CDU 짝까지 내려면 같은",
+                "  명령에 --all-cdu 를 붙인다 (--pairs --all-cdu) — 그러면 같은",
+                "  두 파일이 전 짝으로 다시 쓰인다. 세션 7.77 은 붙이지 않았다.",
+            ]
+            if leak_cdu_only
+            else [
+                f"실린 짝: 전 짝 {kept:,} (이웃 CDU 포함). 뺀 짝 {dropped:,}.",
+                "  이웃 CDU 짝의 통과·실패는 뜻이 정해지지 않았다(기준 문서 2-4) —",
+                "  리포트의 통과율에도 섞이지 않는다. leak_cdu 열로 가른다.",
+            ]
+        ),
+        "",
+        "여유(margin) = value − threshold. **> 0 이면 통과쪽 여유다.**",
+        "  A: value = delta_abs × expected_sign · threshold = 0 (원단위)",
+        "  C: value = |delta_judged| · threshold = NOISE_THRESHOLD[unit] (판정단위)",
+        "  B: margin = 수준 오름차순 |Δ| 의 이웃 차 최소 · threshold = 0 (원단위)",
+        "  「해당 없음」 짝의 여유는 판정에 쓰이지 않는다 — 자리만 채운다.",
+        "  unit 열은 **신호의 판정단위**(리포트와 같다)이고, A 의 value·margin 은",
+        "  그것과 달리 원단위다 — 어느 쪽인지는 margin_unit 열이 말한다.",
+    ]
+
+
+def _write_with_header(path: Path, table: pd.DataFrame, header: list[str]) -> None:
+    comment = "".join(f"#{' ' + line if line else ''}\n" for line in header)
+    path.write_text(comment + table.to_csv(index=False), encoding="utf-8")
+
+
+def write_pair_tables(
+    frame: pd.DataFrame, *, leak_cdu_only: bool = True, out_dir: Path = PAIRS_DIR
+) -> list[Path]:
+    """짝 목록 두 벌을 낸다. 판정 기준·임계는 건드리지 않는다."""
+    long = signal_deltas(frame, LEAK_MODEL_MASSLOSS)
+    ac = pair_table_ac(long)
+    b = pair_table_b(long, (*PAIR_COLUMNS, *TOPOLOGY_COLUMNS))
+    written: list[Path] = []
+    for name, table, keep, title in (
+        (PAIRS_AC_NAME, ac, ac["leak_cdu"], "기준 A·C · (행 · 신호) 짝"),
+        (
+            PAIRS_B_NAME,
+            b,
+            b["cdu_index"] == LEAK_CDU_INDEX,
+            "기준 B · (무리 · 신호) 짝",
+        ),
+    ):
+        kept = table[keep] if leak_cdu_only else table
+        path = out_dir / name
+        _write_with_header(
+            path,
+            kept,
+            _pairs_header(title, len(kept), len(table) - len(kept), leak_cdu_only),
+        )
+        written.append(path)
+    return written
+
+
 def main() -> int:
     import sys
 
     if hasattr(sys.stdout, "reconfigure"):  # Windows 콘솔 기본 인코딩 대비
         sys.stdout.reconfigure(encoding="utf-8")
     frame = read_dataset(DEFAULT_OUTPUT_DIR / "cdu_dataset.csv")
+    if "--pairs" in sys.argv[1:]:
+        for path in write_pair_tables(
+            frame, leak_cdu_only="--all-cdu" not in sys.argv[1:]
+        ):
+            print(f"{path} · {path.stat().st_size:,} B")
+        return 0
     print(format_report(frame))
     return 0
 
