@@ -622,10 +622,15 @@ def format_report(frame: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-def _leak_side(
+def leak_side(
     verdicts: pd.Series, long: pd.DataFrame  # type: ignore[type-arg]
 ) -> pd.Series:  # type: ignore[type-arg]
-    """이상 기구를 진 CDU 의 판정만 남긴다 — 기준 B 는 무리 키로 가른다."""
+    """이상 기구를 진 CDU 의 판정만 남긴다 — 기준 B 는 무리 키로 가른다.
+
+    **공개 이름이다**(세션 7.79) — 게이트 시험이 리포트와 **같은 모집단**을 봐야
+    하기 때문이다. 모집단 규정(기준 문서 2-4)이 옮겨 적히면 둘이 갈린다.
+    판정식은 건드리지 않았다 — 이름만 `_leak_side` 에서 바꿨다.
+    """
     if isinstance(verdicts.index, pd.MultiIndex):
         level = verdicts.index.get_level_values("cdu_index")
         return verdicts[level == LEAK_CDU_INDEX]
@@ -660,8 +665,8 @@ def _summary_lines(
     )
     for name, massloss_verdict, blockage_verdict in pairs:
         sides = (
-            ("샘", _leak_side(massloss_verdict, massloss_long)),
-            ("막힘", _leak_side(blockage_verdict, blockage_long)),
+            ("샘", leak_side(massloss_verdict, massloss_long)),
+            ("막힘", leak_side(blockage_verdict, blockage_long)),
         )
         for mechanism, verdicts in sides:
             counts = verdicts.value_counts()
