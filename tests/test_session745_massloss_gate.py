@@ -42,6 +42,7 @@ from cdu_simul.massloss_gate import (
     NA,
     NOISE_THRESHOLD,
     PAIR_COLUMNS,
+    PAIR_IDENTIFIER,
     PASS,
     SIGNALS,
     TOPOLOGY_COLUMNS,
@@ -333,6 +334,40 @@ def test_verdict_counts_add_up(dataset: pd.DataFrame) -> None:
     assert len(verdict_c) == int((long["level"] == smallest).sum())
 
 
+#: 실패 메시지에 식별자를 싣는 짝 수 상한. 깨졌을 때 알아야 하는 것은 「어디를
+#: 볼지」뿐이고 전수는 짝표(`write_pair_tables`)가 이미 갖고 있으므로 앞 몇 개면
+#: 족하다. 3 인 까닭은 기준 B 의 무리 키가 12축이라 한 짝이 한 줄을 넘기 때문이다
+#: — 세 개면 A·C 도 B 도 pytest 출력 안에서 읽힌다. 나머지는 건수로만 낸다.
+FAIL_SAMPLE = 3
+
+
+def _failed_pairs(verdicts: pd.Series, long: pd.DataFrame) -> str:  # type: ignore[type-arg]
+    """실패한 짝의 식별자 — 몇 건 중 몇 개를 보였는지 함께 낸다 (세션 7.82).
+
+    · A·C — 판정 단위가 (행 · 신호) 짝이라 `PAIR_IDENTIFIER` 셋으로 유일하다.
+    · B — 판정 단위가 (무리 · 신호) 짝이고 한 무리가 크기 4수준에 걸쳐 있어
+      `scenario_id` 로 못 가리킨다. 무리 키(MultiIndex) 를 그대로 싣는다
+      (`pair_table_b` 와 같은 축이다).
+
+    **판정에 끼어들지 않는다** — 실패했을 때만 불린다(assert 메시지는 조건이
+    거짓일 때만 계산된다).
+    """
+    failed = verdicts[verdicts == FAIL]
+    shown = failed.index[:FAIL_SAMPLE]
+    if isinstance(failed.index, pd.MultiIndex):
+        labels = [
+            " · ".join(f"{name}={value}" for name, value in zip(failed.index.names, key))
+            for key in shown
+        ]
+    else:
+        rows = long.loc[shown, list(PAIR_IDENTIFIER)]
+        labels = [
+            " · ".join(f"{column}={row[column]}" for column in PAIR_IDENTIFIER)
+            for _, row in rows.iterrows()
+        ]
+    return f"실패 {len(failed):,}짝 중 앞 {len(labels)}개 — " + " | ".join(labels)
+
+
 def test_massloss_gate_passes_on_every_leak_cdu_pair(dataset: pd.DataFrame) -> None:
     """**게이트** — 「샘」의 A·B·C 가 이상 기구를 진 CDU 전수에서 통과율 100 %.
 
@@ -358,7 +393,8 @@ def test_massloss_gate_passes_on_every_leak_cdu_pair(dataset: pd.DataFrame) -> N
         assert len(decided) > 0, f"기준 {name} — 판정된 짝이 0 이면 통과가 아니다"
         assert (decided == PASS).all(), (
             f"기준 {name} — 실패 {int((decided == FAIL).sum()):,}짝 / "
-            f"판정 {len(decided):,}짝 (해당 없음 {int((leak == NA).sum()):,}짝)"
+            f"판정 {len(decided):,}짝 (해당 없음 {int((leak == NA).sum()):,}짝) · "
+            f"{_failed_pairs(decided, long)}"
         )
 
 
