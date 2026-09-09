@@ -58,7 +58,7 @@ _M3_PER_LITRE = 1.0e-3
 #: UA 역산도 같은 성격의 역산이라 기준점을 새로 고르지 않는다.
 _RATED_PROPERTY_T_C = rated_property_temperature_C()
 
-#: 이 판이 읽어야 하는 열만 읽는다 — 58열 15,104행을 통째로 올리지 않는다.
+#: 이 판이 읽어야 하는 열만 읽는다 — 59열 15,104행을 통째로 올리지 않는다.
 _COLUMNS = [
     "scenario_kind",
     "regime",
