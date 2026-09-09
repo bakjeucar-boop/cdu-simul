@@ -172,6 +172,9 @@ class SteadyStateResult:
     property_eval_T_C: float
     cp_Jkg_K: float
     hx_effectiveness: float
+    #: 운전 NTU = UA / C_min [-] — 데이터셋의 `ntu_operating` 열이 읽는다
+    #: [세션 7.86]. `case.ntu` 는 **정격** NTU 다(`hx_capacity_terms` 참조).
+    ntu_operating: float
     hx_duty_kW: float
     solver_converged: bool
     solver_message: str
@@ -208,6 +211,7 @@ class _PrimaryState:
     m_dot_kgs: float
     cp_Jkg_K: float
     effectiveness: float
+    ntu_operating: float
     hx_duty_W: float
 
 
@@ -245,8 +249,12 @@ def hx_capacity_terms(
     ntu: float,
     T_secondary_supply_C: float,
     secondary_flow_Lps: float,
-) -> tuple[float, float]:
-    """열교환기 유효도 ε 와 C_min 을 낸다 (순수 함수). 반환: (ε, C_min [W/K]).
+) -> tuple[float, float, float]:
+    """열교환기 유효도 ε·C_min·운전 NTU 를 낸다 (순수 함수).
+
+    반환: (ε, C_min [W/K], 운전 NTU [-]). 셋째 값은 아래 `NTU = UA / C_min` 이
+    ε 를 내려고 이미 계산하는 그 수 그대로다 — 데이터셋의 `ntu_operating` 열이
+    읽는다 [세션 7.86]. 새로 계산하는 값이 아니다.
 
     **물리를 한 곳에만 적는다**(collaboration.md ④) — 정상상태(`model`)와
     시간적분(`dynamics`)이 둘 다 이 함수를 쓴다.
@@ -290,9 +298,11 @@ def hx_capacity_terms(
     C_min_W_K = min(C_primary_W_K, C_secondary_W_K)
     C_max_W_K = max(C_primary_W_K, C_secondary_W_K)
     UA_W_K = ntu * _rated_C_min_W_K(T_secondary_supply_C)
+    ntu_operating = UA_W_K / C_min_W_K
     return (
-        hx_effectiveness_counterflow(UA_W_K / C_min_W_K, C_min_W_K / C_max_W_K),
+        hx_effectiveness_counterflow(ntu_operating, C_min_W_K / C_max_W_K),
         C_min_W_K,
+        ntu_operating,
     )
 
 
@@ -332,7 +342,7 @@ def _state_at_property_temperature(
     m_dot_kgs = case.total_flow_Lps * _M3_PER_LITRE * rho_kgm3
     C_W_K = m_dot_kgs * cp_Jkg_K
 
-    effectiveness, C_min_W_K = hx_capacity_terms(
+    effectiveness, C_min_W_K, ntu_operating = hx_capacity_terms(
         C_W_K,
         case.ntu,
         case.T_secondary_supply_C,
@@ -367,6 +377,7 @@ def _state_at_property_temperature(
         m_dot_kgs=m_dot_kgs,
         cp_Jkg_K=cp_Jkg_K,
         effectiveness=effectiveness,
+        ntu_operating=ntu_operating,
         hx_duty_W=hx_duty_W,
     )
 
@@ -438,6 +449,7 @@ def solve_steady_state(case: SteadyStateCase) -> SteadyStateResult:
         property_eval_T_C=T_prop_C,
         cp_Jkg_K=state.cp_Jkg_K,
         hx_effectiveness=state.effectiveness,
+        ntu_operating=state.ntu_operating,
         hx_duty_kW=state.hx_duty_W / _W_PER_KW,
         solver_converged=(ier == 1),
         solver_message=str(message).strip(),

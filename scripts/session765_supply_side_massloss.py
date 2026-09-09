@@ -121,7 +121,7 @@ def _supply_side_at_property_temperature(
 
     Q_racks_Lps = flow.supply_flow_Lps  # = 환수유량. 여기가 원본과 갈리는 자리다
     C_W_K = Q_racks_Lps * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K
-    effectiveness, C_min_W_K = hx_capacity_terms(
+    effectiveness, C_min_W_K, _ = hx_capacity_terms(
         C_W_K, case.ntu, case.T_secondary_supply_C, secondary_flow_Lps
     )
     Q_rack_W = case.rack_load_kW * case.hydraulic.n_racks * _W_PER_KW

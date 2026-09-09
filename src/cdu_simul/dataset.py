@@ -120,7 +120,8 @@ LEAK_CDU_INDEX: int = 0
 #: 다음 판본은 자기 세션 번호를 붙여 그대로 이어붙이면 된다. 앞선 두 판본은 이
 #: 열 자체가 없다 — **열의 부재가 곧 5.7 이전**이라는 표지이며, 열 수로도 갈린다
 #: (48열본 = 세션 5.5-B · 49열본 = 세션 5.5-D · 52열본 = 세션 5.7 ·
-#: **58열본 = 세션 7.39** — 「샘」 행이 처음 들어온 판본이다).
+#: **59열본 = 세션 7.39** — 「샘」 행이 처음 들어온 판본이다. 58열로 나갔다가
+#: 세션 7.86 이 `ntu_operating` 을 더해 59열이 됐다 · 판본 이름은 그대로다).
 #: 파일명은 바꾸지 않는다(`cdu_dataset.csv`) — 판본은 파일 안에서 읽는다.
 DATASET_VERSION: str = "session-7.39"
 
@@ -576,6 +577,7 @@ def steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
             hx_duty_kW=result.thermal.hx_duty_kW,
             secondary_share_Lps=share,
             hx_effectiveness=result.thermal.hx_effectiveness,
+            ntu_operating=result.thermal.ntu_operating,
             energy_balance_residual_percent=energy_balance_residual_percent(
                 result.thermal
             ),
@@ -720,6 +722,9 @@ def _transient_rows_from(
                 hx_duty_kW="",
                 secondary_share_Lps=shares[cdu_index],
                 hx_effectiveness="",
+                # 전이 행은 ε 를 비우므로 운전 NTU 도 비운다 [세션 7.86] —
+                # 같은 호출에서 나오는 값이라 한쪽만 채우면 갈린다.
+                ntu_operating="",
                 energy_balance_residual_percent="",
                 hydraulic_solver_ier=1 if hydraulic_ok else 0,
                 thermal_solver_converged=hydraulic_ok,
@@ -789,6 +794,7 @@ def massloss_steady_rows(spec: ScenarioSpec) -> list[dict[str, object]]:
             hx_duty_kW=result.hx_duty_kW,
             secondary_share_Lps=share,
             hx_effectiveness=result.hx_effectiveness,
+            ntu_operating=result.ntu_operating,
             energy_balance_residual_percent=result.energy_balance_residual_percent,
             hydraulic_solver_ier=1 if result.hydraulic_solver_converged else 0,
             thermal_solver_converged=result.outer_solver_ier == 1,

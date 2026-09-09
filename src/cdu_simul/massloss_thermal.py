@@ -128,6 +128,10 @@ class MassLossThermal:
     #: ε (열교환기 유효도) — 데이터셋의 `hx_effectiveness` 열이 읽는다
     #: [세션 7.39]. `model.ThermalResult.hx_effectiveness` 와 같은 양이다.
     hx_effectiveness: float
+    #: 운전 NTU = UA / C_min [-] — 데이터셋의 `ntu_operating` 열이 읽는다
+    #: [세션 7.86]. `model.SteadyStateResult.ntu_operating` 과 같은 양이고,
+    #: 「샘」에서는 C_min 을 **환수유량**에서 잡는다(위 ε 와 같은 호출이다).
+    ntu_operating: float
     rack_load_kW: float
     massloss_enthalpy_kW: float
     #: 펌프 수력동력 중 **랙 다리(환수 노드)** 에 얹힌 몫 [kW]
@@ -231,7 +235,7 @@ def _steady_at_property_temperature(
     secondary_flow_Lps: float,
 ) -> tuple[
     float, float, tuple[float, ...], tuple[float, ...], float, float, float, float,
-    float, PumpHydraulicPower,
+    float, float, PumpHydraulicPower,
 ]:
     """물성 온도가 주어졌을 때의 온도들 (순수 함수).
 
@@ -258,7 +262,7 @@ def _steady_at_property_temperature(
     C_supply_W_K = Q_supply_Lps * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K
     C_return_W_K = Q_return_Lps * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K
 
-    effectiveness, C_min_W_K = hx_capacity_terms(
+    effectiveness, C_min_W_K, ntu_operating = hx_capacity_terms(
         C_return_W_K, case.ntu, case.T_secondary_supply_C, secondary_flow_Lps
     )
     Q_rack_W = case.rack_load_kW * case.hydraulic.n_racks * _W_PER_KW
@@ -297,6 +301,7 @@ def _steady_at_property_temperature(
         Q_hx_W,
         rho_kgm3,
         effectiveness,
+        ntu_operating,
         pump_heat,
     )
 
@@ -343,6 +348,7 @@ def solve_massloss_steady(
         Q_hx_W,
         rho_kgm3,
         effectiveness,
+        ntu_operating,
         pump_heat,
     ) = _steady_at_property_temperature(
         T_prop_C, case, massloss_flow_Lps, topology, secondary_flow_Lps
@@ -364,6 +370,7 @@ def solve_massloss_steady(
         property_eval_T_C=T_prop_C,
         hx_duty_kW=Q_hx_W / _W_PER_KW,
         hx_effectiveness=effectiveness,
+        ntu_operating=ntu_operating,
         rack_load_kW=case.rack_load_kW * case.hydraulic.n_racks,
         massloss_enthalpy_kW=m_massloss_kgs * dh_Jkg / _W_PER_KW,
         pump_heat_return_node_kW=pump_heat.return_node_W / _W_PER_KW,
@@ -483,7 +490,7 @@ def integrate_massloss_step(
         C_return_W_K = (
             (Q_supply_Lps - massloss_flow_Lps) * _M3_PER_LITRE * rho_kgm3 * cp_Jkg_K
         )
-        effectiveness, C_min_W_K = hx_capacity_terms(
+        effectiveness, C_min_W_K, _ = hx_capacity_terms(
             C_return_W_K, case.ntu, case.T_secondary_supply_C, secondary_flow_Lps
         )
         Q_hx_W = effectiveness * C_min_W_K * (T_ret_C - case.T_secondary_supply_C)

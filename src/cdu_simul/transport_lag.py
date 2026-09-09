@@ -230,7 +230,7 @@ def integrate_leak_step_n_cstr(
         m_dot_kgs = flow.total_flow_Lps * _M3_PER_LITRE * rho_kgm3
         C_W_K = m_dot_kgs * cp_Jkg_K
 
-        effectiveness, C_min_W_K = hx_capacity_terms(
+        effectiveness, C_min_W_K, _ = hx_capacity_terms(
             C_W_K, case.ntu, case.T_secondary_supply_C, HEAT_EXCHANGER.secondary_flow_Lps
         )
         Q_hx_W = effectiveness * C_min_W_K * (T_return_C - case.T_secondary_supply_C)

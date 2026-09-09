@@ -321,8 +321,9 @@ def measure_repeat_effect(repeats: int = 3) -> TimingSample:
 # C5. 산출물 크기 추정
 # ─────────────────────────────────────────────────────────────────────────────
 #: 스키마 초안의 열 수 (아래 `SCHEMA_DRAFT` 참조 · 표기 열은 아래에서 따로 센다).
-#: 세션 7.39 에서 「샘」 열 여섯이 늘어 **53** 이 됐다(전체 58열 − 표기 5).
-SCHEMA_COLUMN_COUNT: int = 53
+#: 세션 7.39 에서 「샘」 열 여섯이 늘어 53 이 됐고, 세션 7.86 에서 `ntu_operating`
+#: 이 하나 늘어 **54** 다(전체 59열 − 표기 5).
+SCHEMA_COLUMN_COUNT: int = 54
 #: 출처·한계 표기를 **행마다** 반복할 때의 추가 열 수와 바이트.
 INLINE_PROVENANCE_COLUMNS: int = 5
 INLINE_PROVENANCE_BYTES_PER_ROW: int = 210
@@ -527,9 +528,9 @@ SCHEMA_DRAFT: tuple[tuple[str, str, str], ...] = (
     (
         "ntu",
         "-",
-        "5장 범위 축 — 2 또는 3. **정격 NTU 다** — UA = NTU_정격 × C_min,정격 "
-        "으로 고정하므로 운전 NTU = UA / C_min 은 행마다 다르고 이 열에 없다 "
-        "(5-1 「열교환기 UA — 정격점 역산」 · 세션 7.72)",
+        "5장 범위 축 — 2 또는 3. **정격점 값이다** — UA = NTU_정격 × C_min,정격 "
+        "으로 고정하므로 운전 NTU 는 행마다 다르고 그 값은 `ntu_operating` 열에 "
+        "있다 (5-1 「열교환기 UA — 정격점 역산」 · 세션 7.72 · 열 신설 7.86)",
     ),
     ("T_secondary_supply_C", "℃", "5장 범위 축 — 27 또는 30 (고정 경계조건)"),
     ("holdup_mass_kg", "kg", "5-1 M 하한/상한. **transient 행에만 의미가 있다**"),
@@ -567,6 +568,14 @@ SCHEMA_DRAFT: tuple[tuple[str, str, str], ...] = (
         "`heat_capacity_ratio` 였으나 싣는 값은 처음부터 ε 였다(미해결 #41 · "
         "세션 7.72 에 이름을 내용에 맞췄다 · 열 수는 그대로다). **Cr 은 이 "
         "데이터셋에 없다** — 필요하면 새 열이고, 이 판은 늘리지 않았다",
+    ),
+    (
+        "ntu_operating",
+        "-",
+        "**운전점 NTU** = UA / C_min — **유도값**이고 행마다 다르다. `ntu` 열이 "
+        "**정격점 값**인 것과 갈린다(UA 고정 · 세션 7.72). ε 와 같은 호출에서 "
+        "나온 그 수 그대로다(`model.hx_capacity_terms`) — 새 숫자가 아니다. "
+        "전이 행은 ε 와 함께 비운다 [열 신설 · 세션 7.86]",
     ),
     (
         "energy_balance_residual_percent",
