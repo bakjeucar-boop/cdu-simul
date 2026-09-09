@@ -28,6 +28,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# `daily_brief.py` 는 저장소 루트에 있고 패키지가 아니다 — `python -m pytest` 는
+# 현재 디렉터리를 넣어 주지만 `pytest` 는 넣지 않아 import 가 갈린다 (세션 7.94).
+pythonpath = ["."]
 
 # ── lint · 타입검사 (세션 1-C 도입) ───────────────────────────────────────────
 # 설정 파일을 늘리지 않기 위해 pyproject.toml 한 곳에 둔다.
