@@ -27,7 +27,11 @@
 **PROCEED.md 파싱 규칙 — 세션 5.5-C 에서 바뀐 것**
 
 - (기존) `## 현재 상태` · `## 세션 로그` · `## 미해결 목록` 절을 `## ` 경계로 자른다.
-- (기존) 세션 로그 절의 마지막 `### ` 블록을 마지막 세션으로 본다.
+  **단 `## ` 로 적힌 판 제목은 경계로 세지 않는다**(세션 7.91).
+- (세션 7.91) 세션 로그 절의 **마지막 판 제목** 블록을 마지막 세션으로 본다.
+  판 제목인지는 **수준(`## `·`### `)이 아니라 꼴**(`세션` 뒤가 숫자)로 가린다 —
+  로그 제목의 수준이 판마다 흔들려 왔고(#91), 판 로그는 그 시점 기록이라
+  뒤에서 고치지 않기로 했다(사람 · 2026-09-09).
 - (신규) 「현재 상태」 표의 **행을 셀 단위로 읽는다** — `| 세션 | 단계 | 게이트 |
   다음 세션 첫 작업 |` 4칸. 셀 안의 `\\|`(escape 된 파이프, 예 `\\|잔차\\|`)는
   구분자로 세지 않는다.
@@ -76,25 +80,36 @@ WRAP_WIDTH = 88
 #: `| a | b |` 행을 셀로 쪼갤 때 escape 된 `\|` 는 구분자가 아니다.
 _CELL_SPLIT = re.compile(r"(?<!\\)\|")
 
+#: 세션 로그의 **판 제목**. 수준이 판마다 흔들리므로(`### ` 113건 · `## ` 7건)
+#: 수준에 기대지 않고 **꼴**로 가린다 — `세션` 뒤가 숫자인 것만 판 제목이다.
+#: 세션 7.91 에 `PROCEED.md` 전체를 세어 정했다: 이 꼴이 무는 120건이 전부 판
+#: 제목이고 오탐 0. 절 제목 `## 세션 로그`(뒤가 숫자가 아니다)와 하위 제목
+#: `#### 세션 5.7 …`(`#` 넷)을 물지 않는 것이 이 꼴을 고른 까닭이다.
+_SESSION_HEADING = re.compile(r"^#{2,3} 세션 \d")
+
 
 def _section(lines: list[str], heading: str) -> list[str]:
-    """`heading` 으로 시작하는 `## ` 절을 다음 `## ` 절 직전까지 잘라낸다."""
+    """`heading` 으로 시작하는 `## ` 절을 다음 `## ` 절 직전까지 잘라낸다.
+
+    **판 제목은 경계가 아니다** — `## ` 로 적힌 판 제목에서 로그 절이 끊기면
+    그 뒤의 판들이 통째로 사라진다(세션 7.91).
+    """
     try:
         start = lines.index(heading)
     except ValueError:
         return []
     end = len(lines)
     for i in range(start + 1, len(lines)):
-        if lines[i].startswith("## "):
+        if lines[i].startswith("## ") and not _SESSION_HEADING.match(lines[i]):
             end = i
             break
     return lines[start:end]
 
 
 def _last_session_block(lines: list[str]) -> list[str]:
-    """세션 로그 절에서 마지막 `### ` 블록만 잘라낸다."""
+    """세션 로그 절에서 마지막 **판 제목** 블록만 잘라낸다(수준을 보지 않는다)."""
     log = _section(lines, SESSION_LOG_HEADING)
-    starts = [i for i, line in enumerate(log) if line.startswith("### ")]
+    starts = [i for i, line in enumerate(log) if _SESSION_HEADING.match(line)]
     if not starts:
         return []
     return log[starts[-1] :]
@@ -254,7 +269,7 @@ def build_web_brief(text: str) -> str:
     rows = current_state_rows(lines)
     items = open_unresolved_items(lines)
 
-    head = _strip_markup(block[0].removeprefix("### ")) if block else ""
+    head = _strip_markup(block[0].lstrip("# ")) if block else ""
     out = _wrap(f"현재: {head}" if head else "현재: 세션 로그를 읽지 못했다.")
 
     out += ["", f"열린 미해결 {len(items)}건 (번호·제목만 — 본문은 PROCEED.md):"]
