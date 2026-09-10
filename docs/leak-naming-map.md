@@ -98,7 +98,7 @@
 | `apply_leak_to_rack()` · `injection_rack_index` | `hydraulics.py`·`assumptions.py` | 「막힘」 | 「샘」 모듈이 **빌려 쓴다** — 아래 「빌려 쓰는 자리」 |
 | `leak_case` · `leak_signal` · `LeakSteadySignal` · `leak_rack_*_percent` | `leak.py` | 「막힘」 | 「막힘」 전용이라 오독이 없다. (가)에서 함께 간다 |
 | `LeakStepCase` · `integrate_leak_step` · `LeakTransientResult` · `STIMULUS_LEAK_STEP` | `dynamics.py`·`dataset.py` | 「막힘」 | 같음. `STIMULUS_LEAK_STEP` 은 **열 값**이다 |
-| `LEAK_MODEL_K_APPROX` · `leak_model` | `dataset.py` · 데이터셋 열 (58열본) | **상위(누출)** | 어느 기구로 모사했는지 밝히는 태그라 상위가 맞다 — 규약 위반이 아니다. 세션 7.52 가 나머지 세 열을 바꿀 때 **이것만 남겼다**: 시연 화면 셋에 411자리로 박혀 있어(7.51 D2 (라)) 시연 화면 판으로 미뤘다 |
+| `LEAK_MODEL_K_APPROX` · `leak_model` | `dataset.py` · 데이터셋 열 (58열본) | **상위(누출)** | 어느 기구로 모사했는지 밝히는 태그라 상위가 맞다 — 규약 위반이 아니다. 세션 7.52 가 나머지 세 열을 바꿀 때 **이것만 남겼다**: 시연 화면 셋에 411자리로 박혀 있어(7.51 D2 (라)) 시연 화면 판으로 미뤘다. **[닫힘 · 세션 7.55]** 열 이름은 세션 7.55 가 `anomaly_mechanism` 으로 바꿨다 — 이 행에서 열려 있던 것은 그 열 이름이었고, 지금 남는 것은 상수 이름 `LEAK_MODEL_K_APPROX` 뿐이다(닫힘을 여기 옮겨 적은 것은 세션 7.110) |
 | 시험 이름 `test_*leak*` (9파일) | `tests/` | 「막힘」 | 전부 「막힘」 경로다. 이름을 바꾸면 수집 시험 603건의 ID 가 바뀐다 |
 
 ## 빌려 쓰는 자리 — 끊지 않았다
@@ -137,13 +137,18 @@
    닫았다.** docstring 32 · 주석 6 = **56자리 중 나머지 38 은 열려 있다**
    (범위를 사람이 「표시 문언」으로 정했다 — 7.51 D8-8). 미해결 **#59** 에 남는다.
 4. **`resistance_proxy`** (`demo_steady.py` 의 JSON 키) — 새 규칙 8 은 「막힘」이
-   「샘」의 대용(proxy)이 **아니라고** 한다. 값 문언은 고쳤지만 **키는 그대로 두었다**
-   — `demo/`·`dist/` HTML 이 그 키로 읽는다. **세션 7.33 이 산출물을 재생성해
-   고친 값 문언이 `demo/demo_steady.json` · `dist/` 에 실렸다 — 키는 여전히 열려
-   있다.**
+   「샘」의 대용(proxy)이 **아니라고** 한다. 값 문언은 세션 7.33 이 산출물을
+   재생성해 `demo/demo_steady.json` · `dist/` 에 실었고, **키도 세션 7.55 가
+   `resistance_blockage` 로 바꿨다 — 닫혔다.** 여기 적혀 있던 미룸의 근거
+   「`demo/`·`dist/` HTML 이 그 키로 읽는다」는 **틀린 기록이었다**:
+   `paintCaveats` 는 `Object.entries(cav)` 로 **키를 세지 않고 훑어** 특정 키
+   이름을 읽는 자리가 **0** 이다(세션 7.55 D4-(다)·D8-1ⓐ 실측 · 이 기록을 고친
+   것은 세션 7.110).
 
-**남은 것은 3 의 잔여(docstring·주석 38자리)와 4 다.** 4 는 `demo/`·`dist/`
-재빌드가 걸리므로 `leak_model` 411자리와 함께 **시연 화면 판**에서 본다.
+**남은 것은 3 의 잔여(docstring·주석 38자리)다.** 4 는 위와 같이 닫혔고,
+`leak_model` 411자리도 세션 7.55 가 열 이름을 `anomaly_mechanism` 으로 바꾸며
+닫혔다(표 2 의 그 행). 그 「411자리」는 **산출물 셋만 센 수**이고 7.55 가 실측한
+전수는 **540자리**다(7.55 D3).
 
 ## 관련
 
