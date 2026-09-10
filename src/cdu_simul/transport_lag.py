@@ -746,3 +746,38 @@ def format_counterexample_table(run: CounterexampleRun) -> str:
         f"  t63 비  {min(run.t63_ratios):.4f} ~ {max(run.t63_ratios):.4f}",
     ]
     return "\n".join(lines)
+
+
+#: 2단 반례 확인의 고운 격자. **세션 5.8 이 쓴 값이고 이 판이 고른 것이 아니다**
+#: (PROCEED.md 세션 5.8 행 — 「N=2 와 N=16 이 같은 부호」). 새 숫자 0개.
+_SESSION58_N_FINE: int = 16
+
+
+def main() -> int:
+    """세션 5.8 관측을 다시 낸다 — 1단 수렴 스윕 · 2단 반례 스윕 · 표 셋.
+
+    세션 7.111(#72). 죽은 코드를 지우지 않고 진입점만 붙였다. 관측 판의
+    재현 경로이지 게이트가 아니다 — 판정하지 않는다.
+    """
+    print(note())
+    runs = run_convergence_sweep()
+    print(format_convergence_table(runs), end="\n\n")
+    print(format_m_consistency_table(runs), end="\n\n")
+
+    counterexample = run_counterexample_sweep(_SESSION58_N_FINE)
+    print(format_counterexample_table(counterexample), end="\n\n")
+
+    failures = [
+        f"{run.case_label} / N={metric.n_nodes}"
+        for run in runs
+        for metric in run.metrics
+        if not metric.solver_success
+    ] + list(counterexample.solver_failures)
+    print(f"solver 실패 조합: {len(failures)}건")
+    for failure in failures:
+        print(f"  - {failure}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
