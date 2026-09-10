@@ -177,22 +177,24 @@ python -m venv .venv
 #   · 무거운 파일은 단독 조각으로 뺀다.
 #   · **백그라운드로 넘기지 않는다**(#57) — 상한을 넘으면 도구가 자동으로 넘긴다.
 #
-#   세션 7.39 실측 (「샘」 행이 얹힌 뒤) · 조각 합 **1,350건**
-#   (세션 7.53 — 그때까지 목록에서 빠져 있던 test_session745_massloss_gate.py
-#    10건 · 6 s 를 뒤 조각에 넣어 15파일 전수가 된 수다. 시간은 다시 재지 않았다.
-#    건수는 세션 7.83 이 `pytest --collect-only -q` 로 조각별로 다시 셌다 —
-#    393 + 787 + 170 = 1,350 이고 `pytest --collect-only -q` 전수도 1,350 라
-#    조각 셋이 전수를 덮는다. **건수는 시험이 늘면 움직인다** — 어긋나면
+#   세션 7.95 실측 · 조각 합 **1,359건**
+#   (잰 자리: 세션 7.95 · 2026-09-10 · BOOK-DC2VCGD99B · Python 3.12.10 ·
+#    같은 조각을 두 번 재고 큰 쪽(#62 규약). **다른 작업 PC 에서는 재지 않았다.**
+#    건수 내력 — 세션 7.53 이 그때까지 목록에서 빠져 있던
+#    test_session745_massloss_gate.py 10건을 뒤 조각에 넣어 15파일 전수로 만들었고,
+#    세션 7.83 이 `pytest --collect-only -q` 로 조각별로 다시 셌다. 세션 7.96 이
+#    tests/test_daily_brief.py 를 앞 조각에 실어 16파일 전수가 됐다 —
+#    402 + 787 + 170 = 1,359 다. **건수는 시험이 늘면 움직인다** — 어긋나면
 #    문서가 아니라 이 자리를 다시 세어 고친다):
-.venv/Scripts/python.exe -m pytest tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 7파일 · 393건 · 89 s (×1.25 = 111 s)
-.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py tests/test_session745_massloss_gate.py   # 뒤 7파일 · 787건 · 157 s (×1.25 = 196 s)
-.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 · 324 s (×1.25 = 405 s) — 단독 조각
+.venv/Scripts/python.exe -m pytest tests/test_daily_brief.py tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 8파일 · 402건 · 54.94 s (×1.25 = 68.7 s)
+.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py tests/test_session745_massloss_gate.py   # 뒤 7파일 · 787건 · 82.40 s (×1.25 = 103.0 s)
+.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 · 165.83 s (×1.25 = 207.3 s) — 단독 조각
 #
-#   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다**(세션 7.39 재측) — 조각별 최대가
-#   324 s 이고 25 % 를 얹어도 405 s 로 상한 580 s 에 여유 30 % 다. 「샘」이 늘린 것은
+#   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다** — 조각별 최대가 165.83 s 이고
+#   25 % 를 얹어도 207.3 s 로 상한 580 s 에 여유 64 % 다. 「샘」이 늘린 것은
 #   `test_session55_gates.py` 의 **건수**(45 → 170)이지 시간이 아니다 — 표본이
 #   시나리오 수(1,792 → 9,472)를 따라가 기준 B·D 의 파라미터가 는 것이고,
-#   「샘」 정상상태 해가 전이 해보다 훨씬 싸서 시간은 324 s 로 거의 그대로다.
+#   「샘」 정상상태 해가 전이 해보다 훨씬 싸서 시간이 거의 그대로였다(세션 7.39 재측).
 #
 #   **모르는 것**: 「샘」 **전이** 행(#40 이 열린 채라 이 판이 붙이지 않았다)이
 #   얹히면 다시 걸릴 수 있다 — 전이는 케이스당 비용이 정상상태의 수십 배다.
@@ -241,6 +243,11 @@ git pull
    조각 합이 전 시험을 덮는지 건수로 확인한다(빠진 조각을 통과로 읽지 않는다)
 2. `.venv/Scripts/python.exe -m ruff check .` · `-m mypy src tests scripts` — 통과
 3. `PROCEED.md` 갱신 — 완료 항목 · 만든/바꾼 파일 · 미해결과 이유 · 다음 세션 결정사항
+   - `PROCEED.md` 「현재 상태」 행에 가운뎃점으로 이어지는 나열을 넣지 않는다 —
+     `daily_brief.py` 의 추출 규칙이 첫 가운뎃점에서 자른다. 여러 항목을 적어야
+     하면 다른 칸이나 판 로그에 적는다(겪은 자리: 세션 7.92)
+   - `PROCEED.md` 판 제목은 우물 정 둘 또는 셋에 세션과 번호를 잇는 꼴로 적는다 —
+     `daily_brief.py` 가 수준이 아니라 그 꼴로 마지막 판을 가린다(겪은 자리: 세션 7.91)
 4. 계층별 커밋 분리(절대 규칙 14)
 5. `git push` — 올리지 않으면 이 PC에만 남는다
 6. 보고 마지막과 `PROCEED.md` 세션 로그에 한 줄을 남긴다:
