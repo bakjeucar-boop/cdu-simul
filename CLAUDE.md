@@ -180,18 +180,22 @@ python -m venv .venv
 #   세션 7.95 실측 · 조각 합 **1,359건**
 #   (잰 자리: 세션 7.95 · 2026-09-10 · BOOK-DC2VCGD99B · Python 3.12.10 ·
 #    같은 조각을 두 번 재고 큰 쪽(#62 규약). **다른 작업 PC 에서는 재지 않았다.**
+#    단독 조각만은 세션 7.96 F7 실행이 그 두 번보다 크게 나왔고(325.12 s), 문서가
+#    쓰는 값은 그 큰 쪽이다.
 #    건수 내력 — 세션 7.53 이 그때까지 목록에서 빠져 있던
 #    test_session745_massloss_gate.py 10건을 뒤 조각에 넣어 15파일 전수로 만들었고,
 #    세션 7.83 이 `pytest --collect-only -q` 로 조각별로 다시 셌다. 세션 7.96 이
 #    tests/test_daily_brief.py 를 앞 조각에 실어 16파일 전수가 됐다 —
 #    402 + 787 + 170 = 1,359 다. **건수는 시험이 늘면 움직인다** — 어긋나면
 #    문서가 아니라 이 자리를 다시 세어 고친다):
+#   (아래 앞 두 조각은 세션 7.96 F7 실행에서 따로 재지 않았다 — 시간은 7.95 것 그대로다.)
 .venv/Scripts/python.exe -m pytest tests/test_daily_brief.py tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 8파일 · 402건 · 54.94 s (×1.25 = 68.7 s)
 .venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py tests/test_session745_massloss_gate.py   # 뒤 7파일 · 787건 · 82.40 s (×1.25 = 103.0 s)
-.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 · 165.83 s (×1.25 = 207.3 s) — 단독 조각
+.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 · 관측 165.83 s(7.95 · 두 번 재고 큰 쪽) ~ 325.12 s(7.96 F7 실행) · 쓰는 값은 큰 쪽 325.12 s (×1.25 = 406.4 s) — 단독 조각
 #
-#   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다** — 조각별 최대가 165.83 s 이고
-#   25 % 를 얹어도 207.3 s 로 상한 580 s 에 여유 64 % 다. 「샘」이 늘린 것은
+#   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다** — 조각별 최대가 325.12 s 이고
+#   25 % 를 얹어도 406.4 s 로 상한 580 s 안이다. 여유는 **약 30 %** — 이것은 잰
+#   값이 아니라 (580 − 406.4)/580 을 셈한 값이다. 「샘」이 늘린 것은
 #   `test_session55_gates.py` 의 **건수**(45 → 170)이지 시간이 아니다 — 표본이
 #   시나리오 수(1,792 → 9,472)를 따라가 기준 B·D 의 파라미터가 는 것이고,
 #   「샘」 정상상태 해가 전이 해보다 훨씬 싸서 시간이 거의 그대로였다(세션 7.39 재측).
