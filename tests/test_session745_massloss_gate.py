@@ -378,8 +378,11 @@ def test_massloss_gate_passes_on_every_leak_cdu_pair(dataset: pd.DataFrame) -> N
       둘이 갈리지 않는다. 이웃 CDU 는 여기 들지 않는다(기준 문서 2-4).
     · 「해당 없음」 — 분모에서 뺀다(세션 7.47 규정). 건수는 시험이 스스로 센다.
 
-    **깨지면 기대값을 고치지 않는다.** 여유가 얇다(세션 7.77 이 잰 기준 B
-    8.711e-07) — 깨진 것이 게이트가 일한 것인지 먼저 가른다.
+    **깨지면 기대값을 고치지 않는다.** 기준 B 의 판정된 짝(이상 기구를 진 CDU ·
+    「해당 없음」 제외) 가운데 `criterion_b_margin` 최소는 3.654e-04 이고 신호는
+    ⑶ 주입랙 통과유량 · ⑷ 타 랙 유량이다(세션 7.119 · 7.123 이
+    `results/cdu_dataset.csv` 로 잰 값) — 깨진 것이 게이트가 일한 것인지 먼저
+    가른다.
     """
     long = signal_deltas(dataset, LEAK_MODEL_MASSLOSS)
     verdicts = {
