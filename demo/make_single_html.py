@@ -78,6 +78,19 @@ def extract_payload(html_text: str) -> Any:
     return json.loads(html_text[start:end])
 
 
+def visible_of(html_out: str) -> str:
+    """HTML 주석과 `<script>`·`<style>` 안을 지운 것 — 화면에 보이는 자리다.
+
+    JS 주석과 넣은 데이터는 `<script>` 안에 있다(세션 7.122 · #116).
+    """
+    return re.sub(
+        r"<!--.*?-->|<script\b.*?</script>|<style\b.*?</style>",
+        "",
+        html_out,
+        flags=re.DOTALL,
+    )
+
+
 def verify(html_out: str, data: Any) -> None:
     """세 가지를 검사한다. 하나라도 어긋나면 예외를 던진다."""
     # ⑴ 다시 뽑은 데이터가 원본과 완전히 같다 (케이스 수도 센다)
@@ -95,13 +108,16 @@ def verify(html_out: str, data: Any) -> None:
     if leftover is not None:
         raise RuntimeError("검사 ⑵ 실패: demo_steady.json 을 읽는 fetch 가 남아 있다")
 
-    # ⑶ 「가정값 기반 — 실측 아님」 표기가 그대로 있다
-    if DISCLAIMER not in html_out:
-        raise RuntimeError(f"검사 ⑶ 실패: {DISCLAIMER!r} 표기가 사라졌다")
+    # ⑶ 「가정값 기반 — 실측 아님」이 화면에 보이는 자리에 최소 한 번 있다
+    if DISCLAIMER not in visible_of(html_out):
+        raise RuntimeError(
+            f"검사 ⑶ 실패: {DISCLAIMER!r} 표기가 보이는 자리에 없다"
+            "(주석·script·style 제외)"
+        )
 
     print(f"  검사 ⑴ 데이터 동일 · 케이스 {n_cases}개")
     print("  검사 ⑵ demo_steady.json fetch 잔존 없음")
-    print(f"  검사 ⑶ 「{DISCLAIMER}」 표기 유지")
+    print(f"  검사 ⑶ 「{DISCLAIMER}」 표기 유지 (주석·script·style 제외)")
 
 
 def main() -> None:
