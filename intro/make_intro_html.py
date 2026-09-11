@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -33,11 +34,14 @@ SLOT = "{{DEMO_SRCDOC}}"
 DEMO_BEGIN = "<!--DEMO-BEGIN-->"
 DEMO_END = "<!--DEMO-END-->"
 
-#: 모든 화면에 있어야 하는 표기 (절대 규칙 11)
+#: 표지에 있어야 하는 표기 (절대 규칙 11)
 DISCLAIMER = "가정값 기반 — 실측 아님"
 
 #: 절 하나를 여는 표식
 SCREEN_TAG = '<section class="screen"'
+
+#: 표지 절을 여는 표식 — 검사 ⑶ 은 이 절 안의 표기만 센다
+COVER_TAG = '<section class="screen" id="s01"'
 
 #: 자료에 나가면 안 되는 말 (사람이 정한 어휘 통제)
 BANNED = {
@@ -71,6 +75,12 @@ def shell_of(html_out: str) -> str:
     return head + tail
 
 
+def cover_of(shell: str) -> str:
+    """표지 절에서 HTML 주석을 지운 것 — 표지에 실제로 보이는 자리다."""
+    cover = shell.partition(COVER_TAG)[2].partition("</section>")[0]
+    return re.sub(r"<!--.*?-->", "", cover, flags=re.DOTALL)
+
+
 def verify(html_out: str, demo_html: str) -> tuple[int, int]:
     """세 가지를 검사한다. 하나라도 어긋나면 예외를 던진다.
 
@@ -85,6 +95,11 @@ def verify(html_out: str, demo_html: str) -> tuple[int, int]:
     절대 규칙 11 이 요구하는 「산출물에 표시가 있다」이고, 그것은 자료에
     한 번 있으면 성립한다. 자리를 표지로 정하는 것은 사람의 판단이라
     검사가 개수를 세지 않는다.
+
+    세션 7.120 이 검사 ⑶ 이 세는 자리를 **표지 절 안, HTML 주석 밖**으로
+    좁혔다(#107). 전에는 산출물 머리 주석 속 표기 하나로도 통과해, 표지의
+    표기가 빠져도 막지 못했다 — 주석은 화면에 나오지 않는다. 표지를 유일한
+    자리로 둔 것은 사람의 결정이다(2026-09-11).
     """
     # ⑴ 넣은 시연 화면이 원본과 완전히 같다 (한 글자도 고치지 않았다)
     embedded = html_out.partition(DEMO_BEGIN)[2].partition(DEMO_END)[0]
@@ -101,17 +116,21 @@ def verify(html_out: str, demo_html: str) -> tuple[int, int]:
         if hits:
             raise RuntimeError(f"검사 ⑵ 실패: 「{word}」 {hits}회 — {why}")
 
-    # ⑶ 「가정값 기반 — 실측 아님」이 자료에 최소 한 번 있다 (절대 규칙 11)
+    # ⑶ 「가정값 기반 — 실측 아님」이 표지에 보이게 최소 한 번 있다 (절대 규칙 11)
     screens = shell.count(SCREEN_TAG)
-    marks = shell.count(DISCLAIMER)
+    marks = cover_of(shell).count(DISCLAIMER)
     if marks < 1:
         raise RuntimeError(
-            f"검사 ⑶ 실패: 「{DISCLAIMER}」 0회 — 최소 한 번은 있어야 한다"
+            f"검사 ⑶ 실패: 「{DISCLAIMER}」 표지에 0회(주석 제외)"
+            " — 최소 한 번은 있어야 한다"
         )
 
     print(f"  검사 ⑴ 시연 화면 원본과 동일 ({len(demo_html):,} 자)")
     print(f"  검사 ⑵ 금지어 0회 — {' · '.join(BANNED)} (iframe 안은 대상 아님)")
-    print(f"  검사 ⑶ 「{DISCLAIMER}」 {marks}회 (최소 1) · 절 {screens}개")
+    print(
+        f"  검사 ⑶ 「{DISCLAIMER}」 표지에 {marks}회 (최소 1 · 주석 제외)"
+        f" · 절 {screens}개"
+    )
     return screens, marks
 
 
