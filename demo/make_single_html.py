@@ -51,6 +51,9 @@ def embed_payload(json_text: str) -> str:
     payload = json_text
     for char in UNSAFE_CHARS:
         payload = payload.replace(char, f"\\u{ord(char):04x}")
+    # 이 가드는 막는 쪽을 시험으로 볼 수 없다 — 바로 위 루프가 UNSAFE_CHARS 를 전부
+    # 바꾼 뒤에 검사하므로 이 줄에 닿는 입력이 지금 코드에 없다(세션 7.122 · #117).
+    # 사람이 2026-09-11 에 지우지 않고 두기로 정했다 — 위 루프가 바뀌면 그때 일한다.
     for char in UNSAFE_CHARS:
         if char in payload:
             raise RuntimeError(f"이스케이프가 남긴 문자가 있다: {char!r}")
