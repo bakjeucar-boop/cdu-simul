@@ -203,14 +203,23 @@ python -m venv .venv
 #    전수가 됐다 — 426 + 787 + 170 = 1,383 이고 `pytest --collect-only -q` 전수와
 #    같다. **건수는 시험이 늘면 움직인다** — 어긋나면
 #    문서가 아니라 이 자리를 다시 세어 고친다):
-#   (아래 뒤 조각은 세션 7.96 F7 실행에서 따로 재지 않았다 — 시간은 7.95 것 그대로다.)
-.venv/Scripts/python.exe -m pytest tests/test_build_checks.py tests/test_daily_brief.py tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 9파일 · 426건 · 관측 46.09 s(7.123) ~ 47.67 s(7.122 · 한 번) · 쓰는 값은 큰 쪽 47.67 s (×1.25 = 59.6 s)
-.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py tests/test_session745_massloss_gate.py   # 뒤 7파일 · 787건 · 82.40 s (×1.25 = 103.0 s)
-.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 · 관측 165.83 s(7.95 · 두 번 재고 큰 쪽) ~ 325.12 s(7.96 F7 실행) · 쓰는 값은 큰 쪽 325.12 s (×1.25 = 406.4 s) — 단독 조각
+#   (아래 세 조각은 **두 PC 관측**을 범위로 적는다 — 앞머리 `BOOK` 은
+#    `BOOK-DC2VCGD99B` · `DESKTOP` 은 `DESKTOP-L8O0EG1` 이다. 뒤 조각은 세션 7.96 F7
+#    에서 따로 재지 않았고, 세션 7.123 이 `BOOK-DC2VCGD99B` 에서 두 번,
+#    세션 7.126 이 `DESKTOP-L8O0EG1` 에서 한 번 쟀다.)
+.venv/Scripts/python.exe -m pytest tests/test_build_checks.py tests/test_daily_brief.py tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 9파일 · 426건 · BOOK 46.09 s(7.123) ~ 47.67 s(7.122 · 한 번) · DESKTOP 108.11 s(7.126 · 한 번) · 쓰는 값은 두 PC 관측 중 큰 쪽 108.11 s
+.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py tests/test_session745_massloss_gate.py   # 뒤 7파일 · 787건 · BOOK 82.40 s(7.95) ~ 86.25 s(7.123 · 두 번 재고 큰 쪽) · DESKTOP 175.94 s(7.126 · 한 번) · 쓰는 값은 두 PC 관측 중 큰 쪽 175.94 s
+.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 · BOOK 165.83 s(7.95 · 두 번 재고 큰 쪽) ~ 325.12 s(7.96 F7 · 한 번) · DESKTOP 412.67 s(7.126 · 한 번) · 쓰는 값은 두 PC 관측 중 큰 쪽 412.67 s — 단독 조각
 #
-#   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다** — 조각별 최대가 325.12 s 이고
-#   25 % 를 얹어도 406.4 s 로 상한 580 s 안이다. 여유는 **약 30 %** — 이것은 잰
-#   값이 아니라 (580 − 406.4)/580 을 셈한 값이다. 「샘」이 늘린 것은
+#   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다** — 조각별로 **두 PC 관측 중
+#   큰 쪽**이 412.67 s(DESKTOP · 세션 7.126 · 한 번)로 상한 580 s 안이다.
+#   「두 PC 관측 중 큰 쪽을 쓴다」는 위 #62 규약(같은 조각을 두 번 재고 큰 쪽)을
+#   **PC 축까지 그대로 적용**한 것이고 새 규칙이 아니다. 여유는 **약 29 %** —
+#   잰 값이 아니라 (580 − 412.67)/580 = 28.85 % 를 셈한 값이다. **잣대에 배수를
+#   얹지 않는다**: ×1.25 는 세션 7.39 가 넣었다가 **세션 7.40 C2 가 규칙에서 뺀**
+#   배수다. 더 큰 관측이 나오면 그 값으로 갈아 끼운다. **지금 412.67 s 는 한 PC
+#   에서 한 번 잰 값이라 「두 번 재고 큰 쪽」을 아직 못 지켰다**(#126 ⑹).
+#   「샘」이 늘린 것은
 #   `test_session55_gates.py` 의 **건수**(45 → 170)이지 시간이 아니다 — 표본이
 #   시나리오 수(1,792 → 9,472)를 따라가 기준 B·D 의 파라미터가 는 것이고,
 #   「샘」 정상상태 해가 전이 해보다 훨씬 싸서 시간이 거의 그대로였다(세션 7.39 재측).
@@ -337,11 +346,29 @@ git pull
 - 세션을 커밋만 하고 `git push` 없이 마치기
 - `PROCEED.md` 기록 없이 세션을 마치기
 - **셸로 파일을 만들거나 고치기.** 편집 도구를 쓴다 — 임시·일회성
-  스크립트도 그렇다. heredoc·here-string 으로 긴 문자열을 셸에
-  싣지 않는다
+  스크립트도 그렇다. **[결정·사람·2026-09-12]** 아래 ㉠㉡㉢ 의 범위는
+  사람이 정한 것이다(#124).
+  **규약의 본래 근거는 출력이 되돌아와 컨텍스트를 먹는 것이다** — 세션 7.5 ·
+  커밋 `40a57da` 가 그 근거로 이 줄을 넣었다
   (세션 7.2-B 는 커밋 메시지 here-string 으로 amend 왕복을 한 번 더
    했고, 세션 7.4 는 셸 python 편집 때문에 파일 전문을 두 번 되받아
-   그 판의 컨텍스트 1위가 됐다. 프롬프트에 같은 지시가 있었는데도 그랬다)
+   그 판의 컨텍스트 1위가 됐다. 프롬프트에 같은 지시가 있었는데도 그랬다).
+  **근거는 둘이다** — ㉡ 만 근거가 다르고, 그것은 세션 7.5 의 근거가 아니라
+  세션 7.129 가 새로 적은 근거다. 문언이 이름을 들지 않아 판마다 달리 읽힌
+  자리라(#124) 셋을 이름으로 못 박는다:
+  ㉠ **heredoc·here-string** 으로 파일을 만들지 않는다 — 긴 문자열을 셸에
+     싣지 않는다(근거: 출력이 되돌아온다).
+  ㉡ **`cp`** 로 파일을 만들지 않는다 — **근거가 다르다.** 출력을 되받지
+     않더라도 **편집 이력에 남지 않기** 때문이다(세션 7.129 가 새로 적었다).
+  ㉢ **셸 리디렉션(`>` · `>>`)** 으로 파일을 만들지 않는다(근거: ㉠ 과 같다).
+     **예외는 자리 이름으로만 열린다 — 지금 열린 이름은 하나다**:
+     `dataset_report` 를 `results/dataset_summary.txt` 로 받는 자리.
+     그 자리가 예외인 까닭은 그 모듈이 표준출력으로만 찍고 파일을 쓰는 코드가
+     없어 리디렉션이 산출물 생성 절차 자체이기 때문이고(세션 7.127 B3), 그
+     자리를 없애는 것(모듈이 스스로 파일을 쓰게 하는 것)은 **#114 의 몫**이다.
+     **까닭이 같은 명령이 새로 생겨도 자동으로 예외가 되지 않는다** — 예외는
+     **사람이 정하면 이 목록에 이름으로 더해지는 것**이고, 이름이 없는 자리는
+     금지다.
   **대신 무엇을 쓸지(#48)**: 커밋 메시지가 여러 줄이면 스크래치패드 파일에
   쓰고 `git commit -F <파일>` 로 한다 — 그 파일도 편집 도구로 만든다
   (겪은 자리: 세션 7.5 는 이 금지를 적어 넣은 직후 `CLAUDE.md` 커밋 메시지를
