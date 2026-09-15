@@ -187,15 +187,44 @@ python -m venv .venv
 #     왕복 마흔 번 넘게 되받아 그 판의 컨텍스트 1위가 됐다(세션 7.22 는 타임아웃을
 #     늘려 왕복 1 회로 끝냈다).
 #
-#   세션 7.95 실측(앞 조각만 세션 7.123 재측) · 조각 합 **1,383건**
-#   (잰 자리: 세션 7.95 · 2026-09-10 · BOOK-DC2VCGD99B · Python 3.12.10 ·
-#    같은 조각을 두 번 재고 큰 쪽(#62 규약). **다른 작업 PC 에서는 재지 않았다.**
-#    단독 조각만은 세션 7.96 F7 실행이 그 두 번보다 크게 나왔고(325.12 s), 문서가
-#    쓰는 값은 그 큰 쪽이다. 앞 조각은 파일이 늘어 세션 7.123 이 다시 쟀다 —
-#    2026-09-11 · BOOK-DC2VCGD99B · Python 3.12.10 에서 세 번(46.64 s · 46.15 s · 46.09 s)이고,
-#    세션 7.122 가 같은 9파일을 한 번 잰 47.67 s(PC 는 그 판 로그에 적혀 있지 않다)가
-#    더 커서 쓰는 값은 그 큰 쪽이다.
-#    건수 내력 — 세션 7.53 이 그때까지 목록에서 빠져 있던
+#   **조각 시간 — 판·조각별 실측을 그대로 적는다.** [결정·사람·2026-09-15]
+#   범위로 적지 않고, 「쓰는 값」을 하나 고르지 않으며, 어느 판도 이상치로 빼지
+#   않는다. **범위를 정하지 않는 까닭**: 아래 실측처럼 판 사이에서 값이 크게
+#   움직이고, 여유 셈의 분모인 도구 전경 상한(위 「실측 580 s」)의 잰 기록이
+#   이력에서 찾아지지 않았다(#126). **범위는 그 분모를 잰 뒤에 정한다.**
+#   위 불릿 「시간은 단일값으로 적지 않고 관측 범위로 적는다」와 이 자리가 다르게
+#   적는 것은 이 결정 때문이고, 그 불릿은 세션 7.148 이 고치지 않았다.
+#
+#   표기: 조각은 「앞」 = 앞 9파일 · 「뒤」 = 뒤 7파일 · 「단독」 =
+#   test_session55_gates.py. PC 앞머리 `BOOK` 은 `BOOK-DC2VCGD99B` · `DESKTOP` 은
+#   `DESKTOP-L8O0EG1` 이다. 잣대 「pytest」 = pytest 가 찍은 시간 · 「real」 =
+#   `time` 의 real · 「잣대 안 적힘」 = 이 문서가 그 값의 잣대를 적지 않았고
+#   세션 7.148 이 확인하지 않았다. 세션 7.126 까지의 값은 이 문서에 앞서 적혀
+#   있던 것을 출처 그대로 옮겼다(세션 7.148 이 판 로그와 다시 대조하지 않았다).
+#   · 세션 7.95(2026-09-10 · BOOK · Python 3.12.10 · 잣대 안 적힘 · 「같은 조각을
+#     두 번 재고 큰 쪽」만 적혀 있다): 뒤 82.40 s · 단독 165.83 s
+#   · 세션 7.96 F7(BOOK · 잣대 안 적힘 · 한 번): 단독 325.12 s
+#   · 세션 7.122(PC 는 그 판 로그에 적혀 있지 않다 · 잣대 안 적힘 · 한 번): 앞 47.67 s
+#   · 세션 7.123(2026-09-11 · BOOK · Python 3.12.10 · 잣대 안 적힘): 앞 세 번
+#     46.64 s · 46.15 s · 46.09 s · 뒤 86.25 s(「두 번 재고 큰 쪽」만 적혀 있다)
+#   · 세션 7.126(DESKTOP · 잣대 안 적힘 · 조각마다 한 번): 앞 108.11 s ·
+#     뒤 175.94 s · 단독 412.67 s
+#   · 세션 7.145 E(2026-09-15 · BOOK · 조각마다 한 번): 앞 pytest 53.31 s(real 은
+#     재지 못했다 · 첫 실행에 `-p no:cacheprovider` 를 붙여 이 절 명령과 다른 명령으로
+#     돌았다) · 뒤 pytest 95.35 s · real 95.73 s · 단독 pytest 183.65 s · real 183.95 s
+#   · 세션 7.146 E(2026-09-15 · BOOK · 조각마다 한 번 · 이 절 명령 그대로): 앞 pytest
+#     49.17 s · real 49.571 s · 뒤 pytest 158.84 s · real 159.474 s · 단독 pytest
+#     296.11 s · real 296.793 s
+#   · 세션 7.147 D(2026-09-15 · BOOK · 조각마다 두 번 · 이 절 명령 그대로):
+#     첫째 — 앞 pytest 44.01 s · real 44.643 s · 뒤 pytest 91.42 s · real 91.828 s ·
+#     단독 pytest 178.88 s · real 179.184 s /
+#     둘째 — 앞 pytest 47.14 s · real 47.515 s · 뒤 pytest 88.51 s · real 88.862 s ·
+#     단독 pytest 180.35 s · real 180.724 s
+#   (세션 7.145 · 7.146 · 7.147 의 수는 세션 7.148 이 그 판 로그에서 옮겼다 — 7.148 은
+#    새로 재지 않았다. DESKTOP 에서 잰 판은 세션 7.126 하나뿐이다.)
+#
+#   조각 합 **1,383건**
+#   (건수 내력 — 세션 7.53 이 그때까지 목록에서 빠져 있던
 #    test_session745_massloss_gate.py 10건을 뒤 조각에 넣어 15파일 전수로 만들었고,
 #    세션 7.83 이 `pytest --collect-only -q` 로 조각별로 다시 셌다. 세션 7.96 이
 #    tests/test_daily_brief.py 를 앞 조각에 실어 16파일 전수가 됐다. 세션 7.123 이
@@ -203,22 +232,18 @@ python -m venv .venv
 #    전수가 됐다 — 426 + 787 + 170 = 1,383 이고 `pytest --collect-only -q` 전수와
 #    같다. **건수는 시험이 늘면 움직인다** — 어긋나면
 #    문서가 아니라 이 자리를 다시 세어 고친다):
-#   (아래 세 조각은 **두 PC 관측**을 범위로 적는다 — 앞머리 `BOOK` 은
-#    `BOOK-DC2VCGD99B` · `DESKTOP` 은 `DESKTOP-L8O0EG1` 이다. 뒤 조각은 세션 7.96 F7
-#    에서 따로 재지 않았고, 세션 7.123 이 `BOOK-DC2VCGD99B` 에서 두 번,
-#    세션 7.126 이 `DESKTOP-L8O0EG1` 에서 한 번 쟀다.)
-.venv/Scripts/python.exe -m pytest tests/test_build_checks.py tests/test_daily_brief.py tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 9파일 · 426건 · BOOK 46.09 s(7.123) ~ 47.67 s(7.122 · 한 번) · DESKTOP 108.11 s(7.126 · 한 번) · 쓰는 값은 두 PC 관측 중 큰 쪽 108.11 s
-.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py tests/test_session745_massloss_gate.py   # 뒤 7파일 · 787건 · BOOK 82.40 s(7.95) ~ 86.25 s(7.123 · 두 번 재고 큰 쪽) · DESKTOP 175.94 s(7.126 · 한 번) · 쓰는 값은 두 PC 관측 중 큰 쪽 175.94 s
-.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 · BOOK 165.83 s(7.95 · 두 번 재고 큰 쪽) ~ 325.12 s(7.96 F7 · 한 번) · DESKTOP 412.67 s(7.126 · 한 번) · 쓰는 값은 두 PC 관측 중 큰 쪽 412.67 s — 단독 조각
+#   (아래 세 줄의 시간은 위 판별 실측에 있다 — 명령 줄에는 건수만 적는다.)
+.venv/Scripts/python.exe -m pytest tests/test_build_checks.py tests/test_daily_brief.py tests/test_dynamics.py tests/test_energy_balance.py tests/test_environment.py tests/test_gates_after_leak.py tests/test_gates_after_plant.py tests/test_holdup_split_sensitivity.py tests/test_hydraulics.py   # 앞 9파일 · 426건
+.venv/Scripts/python.exe -m pytest tests/test_session3_gates.py tests/test_session4_gates.py tests/test_session55d_gates.py tests/test_session57d_massloss_thermal.py tests/test_session58_transport_lag.py tests/test_session5_gates.py tests/test_session745_massloss_gate.py   # 뒤 7파일 · 787건
+.venv/Scripts/python.exe -m pytest tests/test_session55_gates.py   # 170건 — 단독 조각
 #
-#   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다** — 조각별로 **두 PC 관측 중
-#   큰 쪽**이 412.67 s(DESKTOP · 세션 7.126 · 한 번)로 상한 580 s 안이다.
-#   「두 PC 관측 중 큰 쪽을 쓴다」는 위 #62 규약(같은 조각을 두 번 재고 큰 쪽)을
-#   **PC 축까지 그대로 적용**한 것이고 새 규칙이 아니다. 여유는 **약 29 %** —
-#   잰 값이 아니라 (580 − 412.67)/580 = 28.85 % 를 셈한 값이다. **잣대에 배수를
+#   **「샘」 행이 얹힌 뒤에도 이 가름이 성립한다** — 위 판별 실측 가운데 가장 큰
+#   값은 412.67 s(단독 · DESKTOP · 세션 7.126 · 한 번)이고 상한 580 s 안이다.
+#   그 차를 셈하면 (580 − 412.67)/580 = 28.85 % 이나 **잰 여유가 아니고, 분모
+#   580 s 의 잰 기록이 이력에서 찾아지지 않았다**(#126). **잣대에 배수를
 #   얹지 않는다**: ×1.25 는 세션 7.39 가 넣었다가 **세션 7.40 C2 가 규칙에서 뺀**
-#   배수다. 더 큰 관측이 나오면 그 값으로 갈아 끼운다. **지금 412.67 s 는 한 PC
-#   에서 한 번 잰 값이라 「두 번 재고 큰 쪽」을 아직 못 지켰다**(#126 ⑹).
+#   배수다. **412.67 s 는 한 PC 에서 한 번 잰 값이라 「두 번 재고 큰 쪽」을 아직
+#   못 지켰다**(#126 ⑹).
 #   「샘」이 늘린 것은
 #   `test_session55_gates.py` 의 **건수**(45 → 170)이지 시간이 아니다 — 표본이
 #   시나리오 수(1,792 → 9,472)를 따라가 기준 B·D 의 파라미터가 는 것이고,
@@ -361,6 +386,11 @@ git pull
   ㉡ **`cp`** 로 파일을 만들지 않는다 — **근거가 다르다.** 출력을 되받지
      않더라도 **편집 이력에 남지 않기** 때문이다(세션 7.129 가 새로 적었다).
   ㉢ **셸 리디렉션(`>` · `>>`)** 으로 파일을 만들지 않는다(근거: ㉠ 과 같다).
+     **[결정·사람·2026-09-15] 범위**: 금지하는 것은 **파일을 만들거나 고치는**
+     리디렉션이다. `/dev/null` 처럼 파일이 생기지도 고쳐지지도 않는 자리는 범위
+     밖이다 — 금지를 푸는 것이 아니라 범위를 밝힌 것이다. 이 결정은 예외 목록을
+     늘리지 않는다 — 예외는 아래 이름 하나 그대로다(결정의 자리: `PROCEED.md`
+     세션 7.141 판 로그 F 「사람의 결정 둘」).
      **예외는 자리 이름으로만 열린다 — 지금 열린 이름은 하나다**:
      `dataset_report` 를 `results/dataset_summary.txt` 로 받는 자리.
      그 자리가 예외인 까닭은 그 모듈이 표준출력으로만 찍고 파일을 쓰는 코드가
