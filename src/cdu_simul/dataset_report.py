@@ -429,8 +429,8 @@ def format_report() -> str:
         "※ **이 문서는 판정하지 않는다.** 판정 주체는 사람이다",
         "   (`project-overview.md` 「파일럿 종료 조건」).",
         "",
-        f"데이터셋: 시나리오 {len(specs):,}개 "
-        f"(정상상태 {steady:,} · 전이 {len(specs) - steady:,}) · "
+        f"데이터셋: 시나리오 {steady:,}개 실림 "
+        f"(계획 {len(specs):,} = 정상상태 {steady:,} + 전이 {len(specs) - steady:,}) · "
         f"열 {len(column_names())}개 · 판본 `{DATASET_VERSION}`",
         "",
         "─" * 78,
